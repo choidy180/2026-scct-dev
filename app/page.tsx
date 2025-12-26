@@ -8,7 +8,7 @@ import { useState } from "react";
 
 const ScctDevPage = () => {
   // 1. 현재 보고 있는 탭의 상태를 여기서 관리합니다. (초기값: AI 생산관리)
-  const [currentView, setCurrentView] = useState("AI 생산관리");
+  const [currentView, setCurrentView] = useState("AI 운송관리");
   const [loading, setLoading] = useState(true);
 
   return (
