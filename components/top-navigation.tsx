@@ -7,17 +7,25 @@ import { FiBell, FiSettings, FiGrid } from 'react-icons/fi';
 const NavContainer = styled.nav`
   background: #fff;
   height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
   border-bottom: 1px solid #eee;
   position: sticky;
   top: 0;
   z-index: 100;
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  display: flex;
+  justify-content: center; 
 `;
-// ... LogoArea, MenuArea, MenuGlider, MenuItem, IconActions 등 기존 스타일 그대로 유지 ...
+
+const NavInner = styled.div`
+  width: 100%;
+  max-width: 1680px; 
+  padding: 0 24px;   
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`;
+
 const LogoArea = styled.div`
   display: flex;
   align-items: center;
@@ -72,6 +80,7 @@ const MenuItem = styled.button<{ $isActive?: boolean }>`
   transition: color 0.3s ease;
   font-family: inherit;
   height: 36px; 
+  white-space: nowrap; /* 텍스트 줄바꿈 방지 */
 
   &:hover {
     color: ${props => props.$isActive ? '#D31145' : '#333'};
@@ -96,26 +105,19 @@ const IconActions = styled.div`
   }
 `;
 
-
-// --------------------------------------------------------------------------
-// Component Logic
-// --------------------------------------------------------------------------
-
-// Props 타입 정의
 interface TopNavigationProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
 }
 
 export default function TopNavigation({ activeTab, onTabChange }: TopNavigationProps) {
-  // 내부 state 제거하고 props인 activeTab을 사용
   const [gliderStyle, setGliderStyle] = useState({ left: 0, width: 0 });
   const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
   const menus = ["AI 자재관리", "AI 생산관리", "AI 운송관리"];
 
-  useEffect(() => {
-    // activeTab이 변경될 때마다 Glider 위치 재계산
+  // ✅ 핵심 수정: 위치 계산 로직을 함수로 분리
+  const updateGliderPosition = () => {
     const activeIndex = menus.indexOf(activeTab);
     const currentTab = tabsRef.current[activeIndex];
 
@@ -125,33 +127,54 @@ export default function TopNavigation({ activeTab, onTabChange }: TopNavigationP
         width: currentTab.offsetWidth
       });
     }
-  }, [activeTab]); // 의존성 배열에 activeTab (prop)
+  };
+
+  useEffect(() => {
+    // 1. 최초 실행
+    updateGliderPosition();
+
+    // 2. 폰트 로딩 완료 후 재계산 (Pretendard 로딩 시점 차이 해결)
+    if (document.fonts) {
+      document.fonts.ready.then(() => {
+        updateGliderPosition();
+      });
+    }
+
+    // 3. 윈도우 리사이즈 시 재계산 (반응형 대응)
+    window.addEventListener("resize", updateGliderPosition);
+
+    return () => {
+      window.removeEventListener("resize", updateGliderPosition);
+    };
+  }, [activeTab]); // activeTab이 바뀔 때마다 실행
 
   return (
     <NavContainer>
-      <LogoArea>
-        <div className="logo-icon"><FiGrid /></div>
-        AI-Driven 공정 최적화 및 설비 지능형 관제
-      </LogoArea>
-      <MenuArea>
-        <MenuGlider style={{ left: gliderStyle.left, width: gliderStyle.width }} />
-        
-        {menus.map((menu, index) => (
-          <MenuItem 
-            key={menu}
-            ref={(el) => { tabsRef.current[index] = el }}
-            $isActive={activeTab === menu}
-            onClick={() => onTabChange(menu)} // 부모에게 변경 알림
-          >
-            {menu}
-          </MenuItem>
-        ))}
+      <NavInner>
+        <LogoArea>
+          <div className="logo-icon"><FiGrid /></div>
+          AI-Driven 공정 최적화 및 설비 지능형 관제
+        </LogoArea>
+        <MenuArea>
+          <MenuGlider style={{ left: gliderStyle.left, width: gliderStyle.width }} />
+          
+          {menus.map((menu, index) => (
+            <MenuItem 
+              key={menu}
+              ref={(el) => { tabsRef.current[index] = el }}
+              $isActive={activeTab === menu}
+              onClick={() => onTabChange(menu)}
+            >
+              {menu}
+            </MenuItem>
+          ))}
 
-        <IconActions>
-          <FiBell size={20} />
-          <FiSettings size={20} />
-        </IconActions>
-      </MenuArea>
+          <IconActions>
+            <FiBell size={20} />
+            <FiSettings size={20} />
+          </IconActions>
+        </MenuArea>
+      </NavInner>
     </NavContainer>
   );
 }

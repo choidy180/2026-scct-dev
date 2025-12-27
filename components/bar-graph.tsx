@@ -1,20 +1,16 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { 
-  FiBell, 
-  FiSettings, 
   FiCheck, 
   FiAlertTriangle, 
   FiActivity, 
   FiThermometer, 
   FiClock, 
   FiBox,
-  FiGrid,
   FiRefreshCw,
-  FiX,            
-  FiInfo          
+  FiX
 } from 'react-icons/fi';
 
 // --------------------------------------------------------------------------
@@ -39,20 +35,29 @@ const METRIC_DATA: GaugeData[] = [
   { id: 5, label: '가조립무게', unit: 'g', icon: <FiBox />, min: 2375, max: 12530, value: 6952.1 },
 ];
 
+interface AlertItemData {
+  id: number;
+  type: 'error' | 'warning';
+  title: string;
+  desc: string;
+  time: string;
+  value?: string;
+}
+
 // --------------------------------------------------------------------------
-// 2. Keyframes (Animations)
+// 2. Keyframes
 // --------------------------------------------------------------------------
 
 const pulseGreen = keyframes`
   0% { box-shadow: 0 0 0 0 rgba(0, 200, 150, 0.7); }
-  70% { box-shadow: 0 0 0 20px rgba(0, 200, 150, 0); }
+  70% { box-shadow: 0 0 0 15px rgba(0, 200, 150, 0); }
   100% { box-shadow: 0 0 0 0 rgba(0, 200, 150, 0); }
 `;
 
 const pulseRed = keyframes`
   0% { box-shadow: 0 0 0 0 rgba(238, 70, 72, 0.7); transform: scale(1); }
-  50% { transform: scale(1.05); }
-  70% { box-shadow: 0 0 0 25px rgba(238, 70, 72, 0); }
+  50% { transform: scale(1.02); }
+  70% { box-shadow: 0 0 0 20px rgba(238, 70, 72, 0); }
   100% { box-shadow: 0 0 0 0 rgba(238, 70, 72, 0); transform: scale(1); }
 `;
 
@@ -72,7 +77,7 @@ const slideInRight = keyframes`
 `;
 
 // --------------------------------------------------------------------------
-// 3. Styled Components (Layout & Design System)
+// 3. Styled Components (Optimized Scaling Strategy)
 // --------------------------------------------------------------------------
 
 const PageContainer = styled.div`
@@ -81,59 +86,69 @@ const PageContainer = styled.div`
   padding-bottom: 40px;
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
   color: #111;
+  overflow-x: hidden;
+
+  /* 🔥 핵심 수정: QHD(2200px 이상) 감지 시 전체 비율 확대 (Zoom In) */
+  /* 모든 요소가 깨지지 않고 비율 그대로 커집니다 */
+  @media (min-width: 2200px) {
+    zoom: 1.35; 
+  }
 `;
 
 const ContentWrapper = styled.div`
-  max-width: 1680px;
+  max-width: 1600px; /* 기본 FHD 최적 너비 */
   margin: 0 auto;
   padding: 0 24px;
-  margin-top: 30px;
-  transform : scale(1.5) translateY(100px) ;
+  
+  /* QHD에서는 zoom이 적용되므로 max-width를 무리하게 늘리지 않아도 꽉 차 보입니다. */
+  width: 100%;
 `;
 
 const PageHeaderRow = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  margin: 60px 0 14px 0;
+  margin-bottom: 20px;
+  padding-top: 30px;
 `;
 
 const PageTitle = styled.h1`
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 800;
   margin: 0;
-  color: #111;
+  color: #1e293b;
   letter-spacing: -0.5px;
 `;
 
 const CurrentTime = styled.div`
   font-size: 14px;
-  color: #666;
+  color: #64748b;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
   background: #fff;
   padding: 8px 16px;
-  border-radius: 20px;
+  border-radius: 99px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 
-  /* Live Indicator */
   &::before {
     content: '';
     display: block;
-    width: 8px;
-    height: 8px;
-    background-color: #00C896;
+    width: 6px;
+    height: 6px;
+    background-color: #10b981;
     border-radius: 50%;
     animation: ${blink} 1.5s infinite ease-in-out;
   }
 `;
 
+// 그리드 레이아웃 견고하게 수정
 const DashboardGrid = styled.div`
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 14px;
+  grid-template-columns: 340px 1fr; /* 좌측 고정, 우측 가변 */
+  gap: 24px;
+  align-items: start; /* 높이 억지로 맞추지 않음 */
 
   @media (max-width: 1200px) {
     grid-template-columns: 1fr;
@@ -143,173 +158,85 @@ const DashboardGrid = styled.div`
 const LeftColumn = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 24px;
 `;
 
 const RightColumn = styled.div`
   background: #fff;
   border-radius: 20px;
-  padding: 30px;
-  box-shadow: rgba(50, 50, 93, 0.25) 0px 2px 5px -1px, rgba(0, 0, 0, 0.3) 0px 1px 3px -1px;
-  border: 1px solid #eaecf0;
+  padding: 32px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  border: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
+  min-height: 700px; /* 최소 높이 보장 */
 `;
 
 const SectionHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 32px;
+  border-bottom: 2px solid #f1f5f9;
+  padding-bottom: 16px;
 `;
 
 const SectionTitle = styled.h2`
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
+  color: #0f172a;
   margin: 0;
 `;
 
 const DateLabel = styled.span`
-  font-size: 12px;
-  color: #888;
+  font-size: 13px;
+  color: #64748b;
   display: flex;
   align-items: center;
   gap: 6px;
+  background: #f8fafc;
+  padding: 6px 12px;
+  border-radius: 6px;
   
   svg {
     font-size: 14px;
-    color: #bbb;
+    color: #94a3b8;
   }
 `;
 
 // --------------------------------------------------------------------------
-// 4. Components: Top Navigation (With Sliding Animation)
-// --------------------------------------------------------------------------
-
-const NavContainer = styled.nav`
-  background: #fff;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  border-bottom: 1px solid #eee;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-`;
-
-const LogoArea = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  font-size: 18px;
-  color: #333;
-
-  .logo-icon {
-    width: 32px;
-    height: 32px;
-    background: #D31145;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    box-shadow: 0 4px 10px rgba(211, 17, 69, 0.3);
-  }
-`;
-
-const MenuArea = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px; /* 간격 조정 */
-  position: relative; /* Glider 배치를 위한 relative */
-`;
-
-// 움직이는 배경 (Glider)
-const MenuGlider = styled.div`
-  position: absolute;
-  height: 36px; /* MenuItem 높이와 매칭 */
-  background-color: #FFF0F3;
-  border-radius: 8px;
-  z-index: 0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* 자연스러운 움직임 */
-  top: 50%;
-  transform: translateY(-50%);
-`;
-
-const MenuItem = styled.button<{ $isActive?: boolean }>`
-  border: none;
-  background: transparent; /* 배경은 Glider가 담당 */
-  color: ${props => props.$isActive ? '#D31145' : '#666'};
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  position: relative;
-  z-index: 1; /* Glider 위에 텍스트 표시 */
-  transition: color 0.3s ease;
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-  height: 36px; /* Glider와 높이 맞춤 */
-
-  &:hover {
-    color: ${props => props.$isActive ? '#D31145' : '#333'};
-  }
-`;
-
-const IconActions = styled.div`
-  display: flex;
-  gap: 16px;
-  margin-left: 24px;
-  padding-left: 24px;
-  border-left: 1px solid #ddd;
-  color: #666;
-
-  svg {
-    cursor: pointer;
-    transition: color 0.2s, transform 0.2s;
-    &:hover { 
-      color: #111; 
-      transform: rotate(15deg);
-    }
-  }
-`;
-
-// --------------------------------------------------------------------------
-// 5. Components: Status Card
+// 4. Status Card Components
 // --------------------------------------------------------------------------
 
 const CardBase = styled.div<{ $status: 'good' | 'error' }>`
   background: #fff;
   border-radius: 20px;
   padding: 24px;
-  height: 340px;
+  height: 338px; /* 높이 고정 */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  box-shadow: rgba(50, 50, 93, 0.25) 0px 2px 5px -1px, rgba(0, 0, 0, 0.3) 0px 1px 3px -1px;
-  border: 2px solid ${props => props.$status === 'good' ? '#4ADCB5' : '#FF9BA3'};
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  border: 2px solid ${props => props.$status === 'good' ? '#10b981' : '#ef4444'};
   position: relative;
   overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
+  transition: transform 0.2s ease;
+  
   &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
   }
 
+  /* 배경 그라데이션 은은하게 */
   &::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
-    height: 150px;
+    height: 120px;
     background: ${props => props.$status === 'good' 
-      ? 'linear-gradient(180deg, rgba(220,252,243,0.5) 0%, rgba(255,255,255,0) 100%)' 
-      : 'linear-gradient(180deg, rgba(255,241,240,0.5) 0%, rgba(255,255,255,0) 100%)'};
+      ? 'linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, rgba(255,255,255,0) 100%)' 
+      : 'linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, rgba(255,255,255,0) 100%)'};
     z-index: 0;
   }
 `;
@@ -317,35 +244,31 @@ const CardBase = styled.div<{ $status: 'good' | 'error' }>`
 const CardHeader = styled.div`
   width: 100%;
   text-align: left;
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
+  color: #334155;
   z-index: 1;
 `;
 
 const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
-  width: 120px;
-  height: 120px;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
-  background: ${props => props.$status === 'good' ? '#00C896' : '#EE4648'};
+  background: ${props => props.$status === 'good' ? '#10b981' : '#ef4444'};
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 60px;
-  box-shadow: 0 15px 35px ${props => props.$status === 'good' ? 'rgba(0, 200, 150, 0.3)' : 'rgba(238, 70, 72, 0.3)'};
+  font-size: 48px;
+  box-shadow: 0 10px 20px ${props => props.$status === 'good' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'};
   z-index: 1;
-  margin-top: -10px;
   animation: ${props => props.$status === 'good' ? pulseGreen : pulseRed} 2s infinite;
-
-  svg {
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-  }
 `;
 
 const StatusText = styled.div`
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 800;
-  color: #111;
+  color: #0f172a;
   z-index: 1;
 `;
 
@@ -354,39 +277,37 @@ const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
+  border-radius: 99px;
+  font-size: 13px;
   font-weight: 600;
   z-index: 1;
   
   ${props => props.$status === 'good' ? css`
-    background-color: #E6F9F3;
-    color: #00A87E;
+    background-color: #ecfdf5;
+    color: #059669;
   ` : css`
-    background-color: #FFF1F0;
-    color: #E03E3E;
+    background-color: #fef2f2;
+    color: #dc2626;
   `}
 `;
 
 const LegendContainer = styled.div`
   width: 100%;
-  background: #faf9f9;
-  border: 1px solid #f0f0f0;
+  background: #f8fafc;
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px;
   display: flex;
   justify-content: center;
   gap: 16px;
   z-index: 1;
-  margin-top: 20px;
 `;
 
 const LegendItem = styled.div`
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-size: 12px;
-  color: #555;
+  color: #64748b;
   font-weight: 500;
 
   &::before {
@@ -400,15 +321,9 @@ const LegendItem = styled.div`
 `;
 
 const StatusCard = ({ 
-  type, 
-  title, 
-  mainText, 
-  subText 
+  type, title, mainText, subText 
 }: { 
-  type: 'good' | 'error', 
-  title: string, 
-  mainText: string, 
-  subText: string 
+  type: 'good' | 'error', title: string, mainText: string, subText: string 
 }) => {
   return (
     <CardBase $status={type}>
@@ -418,55 +333,51 @@ const StatusCard = ({
       </StatusCircle>
       <StatusText>{mainText}</StatusText>
       <StatusBadge $status={type}>
-        {type === 'good' ? <FiCheck size={16} /> : <FiAlertTriangle size={16} />}
+        {type === 'good' ? <FiCheck size={14} /> : <FiAlertTriangle size={14} />}
         {subText}
       </StatusBadge>
       <LegendContainer>
-        <LegendItem color="#00C896">{type === 'good' ? '양호' : '없음'}</LegendItem>
-        <LegendItem color="#FFC107">{type === 'good' ? '주의' : '1건 이상'}</LegendItem>
-        <LegendItem color="#EE4648">{type === 'good' ? '불량' : '3건 이상'}</LegendItem>
+        <LegendItem color="#10b981">{type === 'good' ? '양호' : '없음'}</LegendItem>
+        <LegendItem color="#f59e0b">{type === 'good' ? '주의' : '1건 이상'}</LegendItem>
+        <LegendItem color="#ef4444">{type === 'good' ? '불량' : '3건 이상'}</LegendItem>
       </LegendContainer>
     </CardBase>
   );
 };
 
 // --------------------------------------------------------------------------
-// 6. Components: Metric Row
+// 5. Metric Row (Fixed Layout to Prevent Stretching)
 // --------------------------------------------------------------------------
 
 const RowContainer = styled.div`
   display: flex;
   align-items: center;
-  padding: 24px 0;
-  border-bottom: 1px solid #f0f0f0;
-  
+  padding: 20px 0;
+  border-bottom: 1px solid #f1f5f9;
   &:last-child { border-bottom: none; }
-
-  transition: background-color 0.2s;
-  &:hover {
-    background-color: rgba(0,0,0,0.01);
-  }
+  
+  /* hover effect */
+  &:hover { background-color: #f8fafc; border-radius: 8px; }
 `;
 
 const MetricInfo = styled.div`
-  width: 220px;
+  width: 240px; /* 고정 너비 */
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-shrink: 0;
+  flex-shrink: 0; /* 줄어들지 않음 */
 `;
 
 const IconBox = styled.div`
-  width: 44px;
-  height: 44px;
-  background-color: #EDF1F5;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  background-color: #f1f5f9;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #778ca2;
-  font-size: 20px;
-  box-shadow: inset 0 2px 5px rgba(0,0,0,0.03);
+  color: #64748b;
+  font-size: 18px;
 `;
 
 const MetricLabelGroup = styled.div`
@@ -476,59 +387,49 @@ const MetricLabelGroup = styled.div`
 
 const MetricName = styled.span`
   font-weight: 700;
-  font-size: 17px;
-  color: #111;
+  font-size: 15px;
+  color: #1e293b;
   display: flex;
   align-items: center;
   gap: 4px;
 `;
 
 const MetricUnit = styled.span`
-  font-size: 13px;
-  color: #999;
+  font-size: 12px;
+  color: #94a3b8;
   font-weight: 400;
 `;
 
 const GaugeColumn = styled.div`
-  flex: 1;
+  flex: 1; /* 남은 공간 모두 차지 */
   padding: 0 40px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  height: 60px;
 `;
 
 const TrackArea = styled.div`
   position: relative;
   width: 100%;
-  height: 14px;
-  margin-top: 10px;
+  height: 10px; /* 얇고 세련되게 */
+  margin-top: 12px;
 `;
 
 const GaugeTrack = styled.div`
   width: 100%;
   height: 100%;
-  border-radius: 7px;
-  background: linear-gradient(90deg, 
-    #A2DDF8 0%, 
-    #BAF4D6 30%, 
-    #FDF3B6 70%, 
-    #FBC9BE 100%
-  );
+  border-radius: 99px;
+  background: linear-gradient(90deg, #e0f2fe 0%, #dcfce7 40%, #fef9c3 70%, #fee2e2 100%);
   position: relative;
   overflow: hidden;
 
+  /* 쉬머 효과 */
   &::after {
     content: '';
     position: absolute;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background: linear-gradient(
-      90deg, 
-      rgba(255,255,255,0) 0%, 
-      rgba(255,255,255,0.4) 50%, 
-      rgba(255,255,255,0) 100%
-    );
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 100%);
     background-size: 200% 100%;
     animation: ${shimmer} 3s infinite linear;
   }
@@ -537,65 +438,59 @@ const GaugeTrack = styled.div`
 const GaugeLabels = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-top: 8px;
-  font-size: 12px;
-  color: #888;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
   font-weight: 500;
   width: 100%;
 `;
 
 const GaugeMarker = styled.div<{ $percent: number }>`
   position: absolute;
-  top: -28px; 
+  top: -24px; 
   left: ${props => props.$percent}%; 
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   z-index: 10;
-  transition: left 0.8s cubic-bezier(0.4, 0, 0.2, 1); 
+  transition: left 1s cubic-bezier(0.4, 0, 0.2, 1); 
 
   .value-text {
-    font-size: 16px;
-    font-weight: 600;
-    color: #111;
-    margin-bottom: 2px;
-    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 4px;
   }
 
   .handle {
-    width: 28px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     background: #fff;
-    border: 3px solid #666;
-    border-radius: 14px;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    border: 4px solid #334155;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
 `;
 
 const ValueBox = styled.div`
-  width: 110px;
-  height: 48px;
-  background-color: #00C48C;
-  border-radius: 12px;
+  width: 100px;
+  height: 42px;
+  background-color: #10b981;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
-  box-shadow: 
-    0 4px 10px rgba(0, 196, 140, 0.3),
-    inset 0 2px 4px rgba(255,255,255,0.2),
-    inset 0 -2px 4px rgba(0,0,0,0.1);
-  flex-shrink: 0;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);
+  flex-shrink: 0; /* 줄어들지 않음 */
 `;
 
 const MetricRow = ({ data }: { data: GaugeData }) => {
   const range = data.max - data.min;
   let percent = ((data.value - data.min) / range) * 100;
-  
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
 
@@ -605,8 +500,7 @@ const MetricRow = ({ data }: { data: GaugeData }) => {
         <IconBox>{data.icon}</IconBox>
         <MetricLabelGroup>
           <MetricName>
-            {data.label} 
-            <MetricUnit>({data.unit})</MetricUnit>
+            {data.label} <MetricUnit>({data.unit})</MetricUnit>
           </MetricName>
         </MetricLabelGroup>
       </MetricInfo>
@@ -633,77 +527,60 @@ const MetricRow = ({ data }: { data: GaugeData }) => {
 };
 
 // --------------------------------------------------------------------------
-// 7. NEW: Notification System Components
+// 6. Notification (Fixed Position Fix)
 // --------------------------------------------------------------------------
 
-// Alert Data Interface
-interface AlertItemData {
-  id: number;
-  type: 'error' | 'warning';
-  title: string;
-  desc: string;
-  time: string;
-  value?: string;
-}
-
-// Fixed Container Top-Right
 const NotificationContainer = styled.div`
   position: fixed;
-  top: 80px; 
+  top: 90px; /* 헤더 아래로 확실히 내림 */
   right: 24px;
-  width: 440px;
+  width: 400px;
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  pointer-events: none; /* Allows clicking through gaps */
+  gap: 12px;
+  pointer-events: none; 
   font-family: 'Pretendard', sans-serif;
 `;
 
-// Summary Header (Red)
 const SummaryBanner = styled.div`
   pointer-events: auto;
-  /* 수정: opacity 제거하고 RGBA + backdrop-filter 적용 */
-  background-color: rgba(238, 70, 72, 0.9);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background-color: rgba(239, 68, 68, 0.95);
+  backdrop-filter: blur(4px);
   color: white;
-  padding: 16px 24px;
-  border-radius: 16px;
+  padding: 16px 20px;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 20px rgba(238, 70, 72, 0.25);
+  box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
   animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 
   .header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 18px;
-    font-weight: 800;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
     margin-bottom: 4px;
   }
 
   .sub-text {
-    font-size: 14px;
+    font-size: 13px;
     opacity: 0.9;
-    padding-left: 30px; /* Align with text start */
+    padding-left: 24px; 
   }
 `;
 
-// Individual Alert Card
 const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
   pointer-events: auto;
-  /* 수정: opacity 제거하고 RGBA + backdrop-filter 적용 */
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
   
-  border-radius: 16px;
-  padding: 18px 20px;
+  border-radius: 12px;
+  padding: 16px;
   position: relative;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-  border: 2px solid ${props => props.$type === 'error' ? '#FF9BA3' : '#FCD34D'};
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'};
   display: flex;
   flex-direction: column;
   animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
@@ -716,7 +593,7 @@ const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
   .top-row {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     margin-bottom: 8px;
   }
 
@@ -727,48 +604,45 @@ const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
   }
 
   .badge {
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
     font-weight: 700;
     color: white;
-    background-color: ${props => props.$type === 'error' ? '#EE4648' : '#F59E0B'};
+    background-color: ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'};
   }
 
   .title {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
-    color: #111;
+    color: #1e293b;
   }
 
   .time {
-    font-size: 12px;
-    color: #999;
-    background: #f5f5f5;
-    padding: 4px 8px;
-    border-radius: 4px;
-    margin-right: 8px;
+    font-size: 11px;
+    color: #94a3b8;
   }
 
   .close-btn {
     cursor: pointer;
-    color: #bbb;
+    color: #cbd5e1;
+    margin-left: 8px;
     transition: color 0.2s;
-    &:hover { color: #333; }
+    &:hover { color: #64748b; }
   }
 
   .desc {
-    font-size: 14px;
-    color: #444;
+    font-size: 13px;
+    color: #475569;
     line-height: 1.5;
-    font-weight: 500;
+    white-space: pre-wrap;
   }
 
   .value-highlight {
     display: block;
     margin-top: 4px;
     font-weight: 700;
-    color: #333;
+    color: #0f172a;
   }
 `;
 
@@ -799,10 +673,9 @@ const NotificationSystem = () => {
 
   return (
     <NotificationContainer>
-      {/* Summary Banner matches Image */}
       <SummaryBanner>
         <div className="header">
-          <FiAlertTriangle size={24} />
+          <FiAlertTriangle size={20} />
           WARNING - 특이사항 발생
         </div>
         <div className="sub-text">
@@ -810,7 +683,6 @@ const NotificationSystem = () => {
         </div>
       </SummaryBanner>
 
-      {/* Individual Alerts */}
       {alerts.map(alert => (
         <AlertCard key={alert.id} $type={alert.type}>
           <div className="top-row">
@@ -820,13 +692,11 @@ const NotificationSystem = () => {
             </div>
             <div style={{display:'flex', alignItems:'center'}}>
               <span className="time">{alert.time}</span>
-              <FiX className="close-btn" size={18} onClick={() => removeAlert(alert.id)} />
+              <FiX className="close-btn" size={16} onClick={() => removeAlert(alert.id)} />
             </div>
           </div>
           <div className="desc">
-            {alert.desc.split('\n').map((line, i) => (
-              <div key={i}>{line}</div>
-            ))}
+            {alert.desc}
             {alert.value && <span className="value-highlight">{alert.value}</span>}
           </div>
         </AlertCard>
@@ -836,14 +706,13 @@ const NotificationSystem = () => {
 };
 
 // --------------------------------------------------------------------------
-// 8. Main Page Component
+// 7. Main Page
 // --------------------------------------------------------------------------
 
 export default function ProcessMonitorPage() {
   return (
     <PageContainer>
       
-      {/* Add Notification System Here */}
       <NotificationSystem />
 
       <ContentWrapper>
@@ -855,7 +724,7 @@ export default function ProcessMonitorPage() {
         </PageHeaderRow>
 
         <DashboardGrid>
-          {/* Left: Status Cards (Animated) */}
+          {/* Left: Status Cards */}
           <LeftColumn>
             <StatusCard 
               type="good"
@@ -871,7 +740,7 @@ export default function ProcessMonitorPage() {
             />
           </LeftColumn>
 
-          {/* Right: Metrics List (Animated) */}
+          {/* Right: Metrics List */}
           <RightColumn>
             <SectionHeader>
               <SectionTitle>핵심 공정 지표 및 운영 범위</SectionTitle>

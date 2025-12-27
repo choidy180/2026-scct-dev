@@ -2,7 +2,6 @@ import { Metadata } from "next";
 import "./globals.css";
 import localFont from "next/font/local";
 import "flatpickr/dist/flatpickr.min.css";
-import ChatbotWidget from "@/components/chatbot-widget";
 
 const pretendard = localFont({
   src: [
@@ -34,7 +33,6 @@ export default function RootLayout({
     <html lang="ko" className={pretendard.variable} suppressHydrationWarning>
       <body suppressHydrationWarning>
         {children}
-        <ChatbotWidget/>
       </body>
     </html>
   );
