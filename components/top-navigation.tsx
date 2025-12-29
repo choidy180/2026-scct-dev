@@ -153,7 +153,7 @@ export default function TopNavigation({ activeTab, onTabChange }: TopNavigationP
       <NavInner>
         <LogoArea>
           <div className="logo-icon"><FiGrid /></div>
-          AI-Driven 공정 최적화 및 설비 지능형 관제
+          물류 자원 회전율 및 운송 최적화 관제
         </LogoArea>
         <MenuArea>
           <MenuGlider style={{ left: gliderStyle.left, width: gliderStyle.width }} />
