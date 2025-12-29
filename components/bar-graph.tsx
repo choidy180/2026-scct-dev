@@ -447,7 +447,7 @@ const GaugeLabels = styled.div`
 
 const GaugeMarker = styled.div<{ $percent: number }>`
   position: absolute;
-  top: -24px; 
+  top: -26px; 
   left: ${props => props.$percent}%; 
   transform: translateX(-50%);
   display: flex;
@@ -464,11 +464,11 @@ const GaugeMarker = styled.div<{ $percent: number }>`
   }
 
   .handle {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 10px;
     background: #fff;
-    border: 4px solid #334155;
-    border-radius: 50%;
+    border: 2px solid #334155;
+    border-radius: 12px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
 `;
