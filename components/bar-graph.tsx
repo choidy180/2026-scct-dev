@@ -352,8 +352,10 @@ const StatusCard = ({
 const RowContainer = styled.div`
   display: flex;
   align-items: center;
-  padding: 20px 0;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 20px 16px;
+  background: #f1f5f9;
+  border-radius: 16px;
+  margin-bottom: 20px;
   &:last-child { border-bottom: none; }
   
   /* hover effect */
