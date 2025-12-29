@@ -77,7 +77,7 @@ const slideInRight = keyframes`
 `;
 
 // --------------------------------------------------------------------------
-// 3. Styled Components (Optimized Scaling Strategy)
+// 3. Styled Components
 // --------------------------------------------------------------------------
 
 const PageContainer = styled.div`
@@ -88,19 +88,15 @@ const PageContainer = styled.div`
   color: #111;
   overflow-x: hidden;
 
-  /* 🔥 핵심 수정: QHD(2200px 이상) 감지 시 전체 비율 확대 (Zoom In) */
-  /* 모든 요소가 깨지지 않고 비율 그대로 커집니다 */
   @media (min-width: 2200px) {
     zoom: 1.35; 
   }
 `;
 
 const ContentWrapper = styled.div`
-  max-width: 1600px; /* 기본 FHD 최적 너비 */
+  max-width: 1600px;
   margin: 0 auto;
   padding: 0 24px;
-  
-  /* QHD에서는 zoom이 적용되므로 max-width를 무리하게 늘리지 않아도 꽉 차 보입니다. */
   width: 100%;
 `;
 
@@ -143,12 +139,11 @@ const CurrentTime = styled.div`
   }
 `;
 
-// 그리드 레이아웃 견고하게 수정
 const DashboardGrid = styled.div`
   display: grid;
-  grid-template-columns: 340px 1fr; /* 좌측 고정, 우측 가변 */
+  grid-template-columns: 340px 1fr;
   gap: 24px;
-  align-items: start; /* 높이 억지로 맞추지 않음 */
+  align-items: start;
 
   @media (max-width: 1200px) {
     grid-template-columns: 1fr;
@@ -169,7 +164,7 @@ const RightColumn = styled.div`
   border: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  min-height: 700px; /* 최소 높이 보장 */
+  min-height: 700px; /* 이 높이를 기준으로 내부 아이템이 배치됨 */
 `;
 
 const SectionHeader = styled.div`
@@ -179,6 +174,7 @@ const SectionHeader = styled.div`
   margin-bottom: 32px;
   border-bottom: 2px solid #f1f5f9;
   padding-bottom: 16px;
+  flex-shrink: 0; /* 헤더는 줄어들지 않음 */
 `;
 
 const SectionTitle = styled.h2`
@@ -204,6 +200,15 @@ const DateLabel = styled.span`
   }
 `;
 
+/* 🔥 새로 추가된 MetricsList: 남은 공간을 채우고 균등 배분 */
+const MetricsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* 아이템들을 위아래 끝까지 벌려줌 */
+  flex: 1; /* 부모(RightColumn)의 남은 높이를 100% 차지 */
+  width: 100%;
+`;
+
 // --------------------------------------------------------------------------
 // 4. Status Card Components
 // --------------------------------------------------------------------------
@@ -212,7 +217,7 @@ const CardBase = styled.div<{ $status: 'good' | 'error' }>`
   background: #fff;
   border-radius: 20px;
   padding: 24px;
-  height: 338px; /* 높이 고정 */
+  height: 338px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -228,7 +233,6 @@ const CardBase = styled.div<{ $status: 'good' | 'error' }>`
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
   }
 
-  /* 배경 그라데이션 은은하게 */
   &::before {
     content: '';
     position: absolute;
@@ -346,28 +350,27 @@ const StatusCard = ({
 };
 
 // --------------------------------------------------------------------------
-// 5. Metric Row (Fixed Layout to Prevent Stretching)
+// 5. Metric Row (Updated for Flex Column Layout)
 // --------------------------------------------------------------------------
 
+/* 🔥 margin-bottom 제거 (MetricsList가 간격 조절) */
 const RowContainer = styled.div`
   display: flex;
   align-items: center;
   padding: 20px 16px;
   background: #f1f5f9;
   border-radius: 16px;
-  margin-bottom: 20px;
-  &:last-child { border-bottom: none; }
+  /* margin-bottom 제거됨 */
   
-  /* hover effect */
   &:hover { background-color: #f8fafc; border-radius: 8px; }
 `;
 
 const MetricInfo = styled.div`
-  width: 240px; /* 고정 너비 */
+  width: 240px;
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-shrink: 0; /* 줄어들지 않음 */
+  flex-shrink: 0;
 `;
 
 const IconBox = styled.div`
@@ -403,7 +406,7 @@ const MetricUnit = styled.span`
 `;
 
 const GaugeColumn = styled.div`
-  flex: 1; /* 남은 공간 모두 차지 */
+  flex: 1;
   padding: 0 40px;
   display: flex;
   flex-direction: column;
@@ -413,7 +416,7 @@ const GaugeColumn = styled.div`
 const TrackArea = styled.div`
   position: relative;
   width: 100%;
-  height: 10px; /* 얇고 세련되게 */
+  height: 10px;
   margin-top: 12px;
 `;
 
@@ -421,11 +424,10 @@ const GaugeTrack = styled.div`
   width: 100%;
   height: 100%;
   border-radius: 99px;
-  background: linear-gradient(90deg, #e0f2fe 0%, #dcfce7 40%, #fef9c3 70%, #fee2e2 100%);
+  background: linear-gradient(90deg, #3498db 0%, #2ecc71 40%, #fff200 70%, #fd79a8 100%);
   position: relative;
   overflow: hidden;
 
-  /* 쉬머 효과 */
   &::after {
     content: '';
     position: absolute;
@@ -487,7 +489,7 @@ const ValueBox = styled.div`
   font-size: 16px;
   font-weight: 700;
   box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);
-  flex-shrink: 0; /* 줄어들지 않음 */
+  flex-shrink: 0;
 `;
 
 const MetricRow = ({ data }: { data: GaugeData }) => {
@@ -529,12 +531,12 @@ const MetricRow = ({ data }: { data: GaugeData }) => {
 };
 
 // --------------------------------------------------------------------------
-// 6. Notification (Fixed Position Fix)
+// 6. Notification
 // --------------------------------------------------------------------------
 
 const NotificationContainer = styled.div`
   position: fixed;
-  top: 90px; /* 헤더 아래로 확실히 내림 */
+  top: 90px;
   right: 24px;
   width: 400px;
   z-index: 9999;
@@ -752,9 +754,13 @@ export default function ProcessMonitorPage() {
               </DateLabel>
             </SectionHeader>
             
-            {METRIC_DATA.map((item) => (
-              <MetricRow key={item.id} data={item} />
-            ))}
+            {/* 🔥 MetricsList가 남은 높이를 채우고 내부 아이템을 분배합니다 */}
+            <MetricsList>
+              {METRIC_DATA.map((item) => (
+                <MetricRow key={item.id} data={item} />
+              ))}
+            </MetricsList>
+            
           </RightColumn>
         </DashboardGrid>
       </ContentWrapper>
