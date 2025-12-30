@@ -109,7 +109,7 @@ const PageHeaderRow = styled.div`
 `;
 
 const PageTitle = styled.h1`
-  font-size: 26px;
+  font-size: px;
   font-weight: 800;
   margin: 0;
   color: #1e293b;
@@ -159,7 +159,7 @@ const LeftColumn = styled.div`
 const RightColumn = styled.div`
   background: #fff;
   border-radius: 20px;
-  padding: 32px;
+  padding: 24px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   border: 1px solid #e2e8f0;
   display: flex;
@@ -171,14 +171,13 @@ const SectionHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
-  border-bottom: 2px solid #f1f5f9;
+  margin-bottom: 10px;
   padding-bottom: 16px;
   flex-shrink: 0; /* 헤더는 줄어들지 않음 */
 `;
 
 const SectionTitle = styled.h2`
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 700;
   color: #0f172a;
   margin: 0;
@@ -214,7 +213,7 @@ const MetricsList = styled.div`
 // --------------------------------------------------------------------------
 
 const CardBase = styled.div<{ $status: 'good' | 'error' }>`
-  background: #fff;
+  background: ${props => props.$status === 'good' ? 'rgb(59 255 190 / 5%)' : 'rgb(255 101 101 / 5%)'};
   border-radius: 20px;
   padding: 24px;
   height: 338px;
@@ -248,7 +247,8 @@ const CardBase = styled.div<{ $status: 'good' | 'error' }>`
 const CardHeader = styled.div`
   width: 100%;
   text-align: left;
-  font-size: 16px;
+  font-size: 24px;
+  line-height: 30px;
   font-weight: 700;
   color: #334155;
   z-index: 1;
@@ -270,7 +270,7 @@ const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
 `;
 
 const StatusText = styled.div`
-  font-size: 28px;
+  font-size: 42px;
   font-weight: 800;
   color: #0f172a;
   z-index: 1;
@@ -280,17 +280,17 @@ const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 4px 16px;
   border-radius: 99px;
   font-size: 13px;
   font-weight: 600;
   z-index: 1;
   
   ${props => props.$status === 'good' ? css`
-    background-color: #ecfdf5;
-    color: #059669;
+    background-color: #D2F6EA;
+    color: #01A871;
   ` : css`
-    background-color: #fef2f2;
+    background-color: #FFDDDD;
     color: #dc2626;
   `}
 `;
@@ -298,8 +298,8 @@ const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
 const LegendContainer = styled.div`
   width: 100%;
   background: #f8fafc;
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 8px;
+  padding: 6px 12px;
   display: flex;
   justify-content: center;
   gap: 16px;
@@ -333,7 +333,7 @@ const StatusCard = ({
     <CardBase $status={type}>
       <CardHeader>{title}</CardHeader>
       <StatusCircle $status={type}>
-        {type === 'good' ? <FiCheck /> : <FiAlertTriangle />}
+        {type === 'good' ? <FiCheck size={80} /> : <FiAlertTriangle size={64} />}
       </StatusCircle>
       <StatusText>{mainText}</StatusText>
       <StatusBadge $status={type}>
@@ -343,7 +343,7 @@ const StatusCard = ({
       <LegendContainer>
         <LegendItem color="#10b981">{type === 'good' ? '양호' : '없음'}</LegendItem>
         <LegendItem color="#f59e0b">{type === 'good' ? '주의' : '1건 이상'}</LegendItem>
-        <LegendItem color="#ef4444">{type === 'good' ? '불량' : '3건 이상'}</LegendItem>
+        <LegendItem color="#ef4444">{type === 'good' ? '불량' : '1건 이상'}</LegendItem>
       </LegendContainer>
     </CardBase>
   );
@@ -357,7 +357,7 @@ const StatusCard = ({
 const RowContainer = styled.div`
   display: flex;
   align-items: center;
-  padding: 20px 16px;
+  padding: 34px 16px 20px 16px;
   background: #f1f5f9;
   border-radius: 16px;
   /* margin-bottom 제거됨 */
@@ -369,8 +369,9 @@ const MetricInfo = styled.div`
   width: 240px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex-shrink: 0;
+  transform: translateY(-6px);
 `;
 
 const IconBox = styled.div`
@@ -383,6 +384,7 @@ const IconBox = styled.div`
   justify-content: center;
   color: #64748b;
   font-size: 18px;
+  transform: scale(1.2);
 `;
 
 const MetricLabelGroup = styled.div`
@@ -392,7 +394,7 @@ const MetricLabelGroup = styled.div`
 
 const MetricName = styled.span`
   font-weight: 700;
-  font-size: 15px;
+  font-size: 25px;
   color: #1e293b;
   display: flex;
   align-items: center;
@@ -400,7 +402,7 @@ const MetricName = styled.span`
 `;
 
 const MetricUnit = styled.span`
-  font-size: 12px;
+  font-size: 16px;
   color: #94a3b8;
   font-weight: 400;
 `;
@@ -739,8 +741,8 @@ export default function ProcessMonitorPage() {
             <StatusCard 
               type="error"
               title="금일 특이사항"
-              mainText="3건"
-              subText="특이사항이 3건 발생했습니다."
+              mainText="2건"
+              subText="특이사항이 2건 발생했습니다."
             />
           </LeftColumn>
 
