@@ -448,6 +448,7 @@ const TopLeftWidget = styled(GlassCard)`
 
   @media (min-width: 2200px) {
     width: 520px;
+    max-width: 400px;
     padding: 24px 30px;
     top: 36px; left: 36px;
   }

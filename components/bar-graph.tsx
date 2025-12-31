@@ -10,7 +10,8 @@ import {
   FiClock, 
   FiBox,
   FiRefreshCw,
-  FiX
+  FiX,
+  FiAlertOctagon // 위험 아이콘 추가
 } from 'react-icons/fi';
 
 // --------------------------------------------------------------------------
@@ -27,12 +28,15 @@ interface GaugeData {
   value: number;
 }
 
+// 🔥 6번째 데이터(믹싱 모터 RPM)를 Spec Out(위험) 상태로 추가했습니다.
 const METRIC_DATA: GaugeData[] = [
   { id: 1, label: 'R액 압력', unit: 'kg/m²', icon: <FiActivity />, min: 110, max: 150, value: 120.3 },
   { id: 2, label: 'R액 탱크온도', unit: '°C', icon: <FiThermometer />, min: 13, max: 23, value: 16.9 },
   { id: 3, label: 'P액 헤드온도', unit: '°C', icon: <FiThermometer />, min: 24, max: 28, value: 25.61 },
   { id: 4, label: '발포시간', unit: '초', icon: <FiClock />, min: 0.76, max: 1.66, value: 1.64 },
   { id: 5, label: '가조립무게', unit: 'g', icon: <FiBox />, min: 2375, max: 12530, value: 6952.1 },
+  // 🚨 위험 데이터 추가 (Max 2200인데 2450)
+  { id: 6, label: '믹싱모터', unit: 'rpm', icon: <FiActivity />, min: 1800, max: 2200, value: 2450 },
 ];
 
 interface AlertItemData {
@@ -59,6 +63,13 @@ const pulseRed = keyframes`
   50% { transform: scale(1.02); }
   70% { box-shadow: 0 0 0 20px rgba(238, 70, 72, 0); }
   100% { box-shadow: 0 0 0 0 rgba(238, 70, 72, 0); transform: scale(1); }
+`;
+
+/* 🔥 경고창용 강한 맥동 애니메이션 */
+const dangerPulse = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 `;
 
 const shimmer = keyframes`
@@ -109,7 +120,7 @@ const PageHeaderRow = styled.div`
 `;
 
 const PageTitle = styled.h1`
-  font-size: 26px;
+  font-size: 32px;
   font-weight: 800;
   margin: 0;
   color: #1e293b;
@@ -159,26 +170,25 @@ const LeftColumn = styled.div`
 const RightColumn = styled.div`
   background: #fff;
   border-radius: 20px;
-  padding: 32px;
+  padding: 24px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   border: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  min-height: 700px; /* 이 높이를 기준으로 내부 아이템이 배치됨 */
+  min-height: 700px;
 `;
 
 const SectionHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
-  border-bottom: 2px solid #f1f5f9;
+  margin-bottom: 10px;
   padding-bottom: 16px;
-  flex-shrink: 0; /* 헤더는 줄어들지 않음 */
+  flex-shrink: 0;
 `;
 
 const SectionTitle = styled.h2`
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 700;
   color: #0f172a;
   margin: 0;
@@ -200,24 +210,24 @@ const DateLabel = styled.span`
   }
 `;
 
-/* 🔥 새로 추가된 MetricsList: 남은 공간을 채우고 균등 배분 */
 const MetricsList = styled.div`
   display: flex;
   flex-direction: column;
-  justify-content: space-between; /* 아이템들을 위아래 끝까지 벌려줌 */
-  flex: 1; /* 부모(RightColumn)의 남은 높이를 100% 차지 */
+  justify-content: space-between;
+  flex: 1;
   width: 100%;
+  gap: 16px; /* Row 간격 조금 띄움 */
 `;
 
 // --------------------------------------------------------------------------
 // 4. Status Card Components
 // --------------------------------------------------------------------------
 
-const CardBase = styled.div<{ $status: 'good' | 'error' }>`
-  background: #fff;
+const CardBase = styled.div<{ $status: 'good' | 'error', $clickable?: boolean }>`
+  background: ${props => props.$status === 'good' ? 'rgb(59 255 190 / 5%)' : 'rgb(255 101 101 / 5%)'};
   border-radius: 20px;
   padding: 24px;
-  height: 338px;
+  height:384px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -226,11 +236,12 @@ const CardBase = styled.div<{ $status: 'good' | 'error' }>`
   border: 2px solid ${props => props.$status === 'good' ? '#10b981' : '#ef4444'};
   position: relative;
   overflow: hidden;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: ${props => props.$clickable ? 'pointer' : 'default'};
   
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    transform: ${props => props.$clickable ? 'translateY(-4px)' : 'none'};
+    box-shadow: ${props => props.$clickable ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : '0 4px 6px -1px rgba(0, 0, 0, 0.05)'};
   }
 
   &::before {
@@ -248,15 +259,16 @@ const CardBase = styled.div<{ $status: 'good' | 'error' }>`
 const CardHeader = styled.div`
   width: 100%;
   text-align: left;
-  font-size: 16px;
+  font-size: 24px;
+  line-height: 30px;
   font-weight: 700;
   color: #334155;
   z-index: 1;
 `;
 
 const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
-  width: 100px;
-  height: 100px;
+  width: 110px;
+  height: 110px;
   border-radius: 50%;
   background: ${props => props.$status === 'good' ? '#10b981' : '#ef4444'};
   display: flex;
@@ -267,10 +279,11 @@ const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
   box-shadow: 0 10px 20px ${props => props.$status === 'good' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'};
   z-index: 1;
   animation: ${props => props.$status === 'good' ? pulseGreen : pulseRed} 2s infinite;
+  margin-top: 10px;
 `;
 
 const StatusText = styled.div`
-  font-size: 28px;
+  font-size: 42px;
   font-weight: 800;
   color: #0f172a;
   z-index: 1;
@@ -280,17 +293,17 @@ const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 4px 16px;
   border-radius: 99px;
   font-size: 13px;
   font-weight: 600;
   z-index: 1;
   
   ${props => props.$status === 'good' ? css`
-    background-color: #ecfdf5;
-    color: #059669;
+    background-color: #D2F6EA;
+    color: #01A871;
   ` : css`
-    background-color: #fef2f2;
+    background-color: #FFDDDD;
     color: #dc2626;
   `}
 `;
@@ -298,42 +311,43 @@ const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
 const LegendContainer = styled.div`
   width: 100%;
   background: #f8fafc;
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 8px;
+  padding: 6px 12px;
   display: flex;
   justify-content: center;
   gap: 16px;
   z-index: 1;
+  margin-top: 8px;
 `;
 
 const LegendItem = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 14px;
   color: #64748b;
   font-weight: 500;
 
   &::before {
     content: '';
     display: block;
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background-color: ${props => props.color};
   }
 `;
 
 const StatusCard = ({ 
-  type, title, mainText, subText 
+  type, title, mainText, subText, onClick
 }: { 
-  type: 'good' | 'error', title: string, mainText: string, subText: string 
+  type: 'good' | 'error', title: string, mainText: string, subText: string, onClick?: () => void
 }) => {
   return (
-    <CardBase $status={type}>
+    <CardBase $status={type} onClick={onClick} $clickable={!!onClick}>
       <CardHeader>{title}</CardHeader>
       <StatusCircle $status={type}>
-        {type === 'good' ? <FiCheck /> : <FiAlertTriangle />}
+        {type === 'good' ? <FiCheck size={80} /> : <FiAlertTriangle size={64} />}
       </StatusCircle>
       <StatusText>{mainText}</StatusText>
       <StatusBadge $status={type}>
@@ -343,46 +357,55 @@ const StatusCard = ({
       <LegendContainer>
         <LegendItem color="#10b981">{type === 'good' ? '양호' : '없음'}</LegendItem>
         <LegendItem color="#f59e0b">{type === 'good' ? '주의' : '1건 이상'}</LegendItem>
-        <LegendItem color="#ef4444">{type === 'good' ? '불량' : '3건 이상'}</LegendItem>
+        <LegendItem color="#ef4444">{type === 'good' ? '불량' : '1건 이상'}</LegendItem>
       </LegendContainer>
     </CardBase>
   );
 };
 
 // --------------------------------------------------------------------------
-// 5. Metric Row (Updated for Flex Column Layout)
+// 5. Metric Row (위험 경고창 추가)
 // --------------------------------------------------------------------------
 
-/* 🔥 margin-bottom 제거 (MetricsList가 간격 조절) */
-const RowContainer = styled.div`
+/* 🔥 $isError 일 때 배경색을 붉게, 테두리를 추가하여 시각적 강조 */
+const RowContainer = styled.div<{ $isError?: boolean }>`
   display: flex;
   align-items: center;
-  padding: 20px 16px;
-  background: #f1f5f9;
+  padding: 34px 16px 20px 16px;
   border-radius: 16px;
-  /* margin-bottom 제거됨 */
+  position: relative; /* DangerPopup 배치를 위해 relative */
   
-  &:hover { background-color: #f8fafc; border-radius: 8px; }
+  ${props => props.$isError ? css`
+    background: #FEF2F2; /* 붉은 배경 */
+    border: 2px solid #FCA5A5; /* 붉은 테두리 */
+  ` : css`
+    background: #f1f5f9;
+    border: 2px solid transparent;
+    &:hover { background-color: #f8fafc; border-color: #e2e8f0; }
+  `}
 `;
 
 const MetricInfo = styled.div`
   width: 240px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   flex-shrink: 0;
+  transform: translateY(-6px);
 `;
 
 const IconBox = styled.div`
   width: 40px;
   height: 40px;
-  background-color: #f1f5f9;
+  background-color: #fff;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #64748b;
   font-size: 18px;
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 `;
 
 const MetricLabelGroup = styled.div`
@@ -392,7 +415,7 @@ const MetricLabelGroup = styled.div`
 
 const MetricName = styled.span`
   font-weight: 700;
-  font-size: 15px;
+  font-size: 25px;
   color: #1e293b;
   display: flex;
   align-items: center;
@@ -400,8 +423,8 @@ const MetricName = styled.span`
 `;
 
 const MetricUnit = styled.span`
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: 16px;
+  color: #757d88;
   font-weight: 400;
 `;
 
@@ -420,11 +443,14 @@ const TrackArea = styled.div`
   margin-top: 12px;
 `;
 
-const GaugeTrack = styled.div`
+const GaugeTrack = styled.div<{ $isError?: boolean }>`
   width: 100%;
   height: 100%;
   border-radius: 99px;
-  background: linear-gradient(90deg, #3498db 0%, #2ecc71 40%, #fff200 70%, #fd79a8 100%);
+  /* Error일 경우 트랙을 회색조로 죽이고, 정상일 때만 컬러풀하게 */
+  background: ${props => props.$isError 
+    ? '#e2e8f0' 
+    : 'linear-gradient(90deg, #3498db 0%, #2ecc71 40%, #fff200 70%, #fd79a8 100%)'};
   position: relative;
   overflow: hidden;
 
@@ -436,6 +462,7 @@ const GaugeTrack = styled.div`
     background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 100%);
     background-size: 200% 100%;
     animation: ${shimmer} 3s infinite linear;
+    display: ${props => props.$isError ? 'none' : 'block'};
   }
 `;
 
@@ -443,15 +470,15 @@ const GaugeLabels = styled.div`
   display: flex;
   justify-content: space-between;
   margin-top: 6px;
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: 16px;
+  color: #717983;
   font-weight: 500;
   width: 100%;
 `;
 
-const GaugeMarker = styled.div<{ $percent: number }>`
+const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
   position: absolute;
-  top: -26px; 
+  top: -36px; 
   left: ${props => props.$percent}%; 
   transform: translateX(-50%);
   display: flex;
@@ -461,26 +488,97 @@ const GaugeMarker = styled.div<{ $percent: number }>`
   transition: left 1s cubic-bezier(0.4, 0, 0.2, 1); 
 
   .value-text {
-    font-size: 14px;
+    font-size: 20px;
     font-weight: 700;
-    color: #0f172a;
+    color: ${props => props.$isError ? '#ef4444' : '#0f172a'}; /* Error일 때 텍스트 빨강 */
     margin-bottom: 4px;
   }
 
   .handle {
     width: 20px;
     height: 10px;
-    background: #fff;
-    border: 2px solid #334155;
+    background: ${props => props.$isError ? '#ef4444' : '#fff'}; /* Error일 때 핸들 빨강 */
+    border: 2px solid ${props => props.$isError ? '#b91c1c' : '#334155'};
     border-radius: 12px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
 `;
 
-const ValueBox = styled.div`
+/* 🔥 위험 경고 팝업 컴포넌트 */
+const DangerPopup = styled.div`
+  position: absolute;
+  left: 280px; /* 라벨 옆, 트랙 위에 위치 */
+  top: -10px; /* 약간 위로 띄움 */
+  z-index: 50;
+  
+  background: #ef4444; /* 강렬한 빨강 */
+  color: white;
+  padding: 12px 20px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.6);
+  
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  
+  /* 맥동 애니메이션 적용 */
+  animation: ${dangerPulse} 2s infinite;
+
+  &::after {
+    /* 말풍선 꼬리 */
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 20px;
+    width: 12px;
+    height: 12px;
+    background: #ef4444;
+    transform: rotate(45deg);
+  }
+
+  .icon-area {
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+  }
+
+  .text-area {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .warning-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #fee2e2;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .warning-msg {
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .action-btn {
+    background: white;
+    color: #ef4444;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    &:hover { background: #fff1f2; }
+  }
+`;
+
+const ValueBox = styled.div<{ $isError?: boolean }>`
   width: 100px;
   height: 42px;
-  background-color: #10b981;
+  background-color: ${props => props.$isError ? '#ef4444' : '#10b981'}; /* Error일 때 박스 빨강 */
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -488,18 +586,39 @@ const ValueBox = styled.div`
   color: white;
   font-size: 16px;
   font-weight: 700;
-  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 4px 6px -1px ${props => props.$isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)'};
   flex-shrink: 0;
+  transform: translateY(-8px);
 `;
 
 const MetricRow = ({ data }: { data: GaugeData }) => {
   const range = data.max - data.min;
   let percent = ((data.value - data.min) / range) * 100;
+  
+  // Spec Out 판단 로직
+  const isSpecOut = data.value < data.min || data.value > data.max;
+
+  // 퍼센트 계산 (범위를 벗어나도 차트 밖으로 튀어나가지 않게 클램핑)
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
 
   return (
-    <RowContainer>
+    <RowContainer $isError={isSpecOut}>
+      
+      {/* 🔥 Spec Out일 경우 경고 팝업 노출 */}
+      {isSpecOut && (
+        <DangerPopup>
+          <div className="icon-area"><FiAlertOctagon /></div>
+          <div className="text-area">
+            <span className="warning-title">CRITICAL WARNING</span>
+            <span className="warning-msg">
+              현재값 {data.value} (최대 {data.max}) — 즉시 점검 요망
+            </span>
+          </div>
+          <div className="action-btn">조치완료</div>
+        </DangerPopup>
+      )}
+
       <MetricInfo>
         <IconBox>{data.icon}</IconBox>
         <MetricLabelGroup>
@@ -511,11 +630,11 @@ const MetricRow = ({ data }: { data: GaugeData }) => {
 
       <GaugeColumn>
         <TrackArea>
-          <GaugeMarker $percent={percent}>
+          <GaugeMarker $percent={percent} $isError={isSpecOut}>
             <span className="value-text">{data.value}</span>
             <div className="handle" />
           </GaugeMarker>
-          <GaugeTrack />
+          <GaugeTrack $isError={isSpecOut} />
         </TrackArea>
         <GaugeLabels>
           <span>{data.min}</span>
@@ -523,7 +642,7 @@ const MetricRow = ({ data }: { data: GaugeData }) => {
         </GaugeLabels>
       </GaugeColumn>
 
-      <ValueBox>
+      <ValueBox $isError={isSpecOut}>
         {data.value}
       </ValueBox>
     </RowContainer>
@@ -558,20 +677,39 @@ const SummaryBanner = styled.div`
   flex-direction: column;
   box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
   animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-
+  
   .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; 
+    width: 100%;
+    margin-bottom: 4px;
+  }
+  
+  .header-left {
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 16px;
     font-weight: 700;
-    margin-bottom: 4px;
+  }
+
+  /* 전체 닫기 버튼 */
+  .close-all-btn {
+    cursor: pointer;
+    color: white; 
+    opacity: 0.9;
+    transition: all 0.2s;
+    &:hover { 
+      opacity: 1; 
+      transform: scale(1.2); 
+    }
   }
 
   .sub-text {
     font-size: 13px;
     opacity: 0.9;
-    padding-left: 24px; 
+    padding-left: 28px; 
   }
 `;
 
@@ -597,7 +735,7 @@ const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
   .top-row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start; /* X버튼 위치를 위해 상단 정렬 */
     margin-bottom: 8px;
   }
 
@@ -622,17 +760,26 @@ const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
     color: #1e293b;
   }
 
-  .time {
-    font-size: 11px;
-    color: #94a3b8;
+  .right-side {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 
-  .close-btn {
+  .time {
+    font-size: 14px;
+    color: #94a3b8;
+  }
+  
+  /* 개별 닫기 버튼 */
+  .close-item-btn {
     cursor: pointer;
     color: #cbd5e1;
-    margin-left: 8px;
-    transition: color 0.2s;
-    &:hover { color: #64748b; }
+    transition: all 0.2s;
+    &:hover {
+      color: #64748b;
+      transform: scale(1.1);
+    }
   }
 
   .desc {
@@ -650,53 +797,55 @@ const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
   }
 `;
 
-const NotificationSystem = () => {
-  const [alerts, setAlerts] = useState<AlertItemData[]>([
-    {
-      id: 1,
-      type: 'error',
-      title: 'Spec Out 발생',
-      desc: 'R액 압력이 관리 상한선(150 kg/m²)을 초과하였습니다.',
-      value: '현재 수치: 156.3 kg/m²',
-      time: '13:45:22'
-    },
-    {
-      id: 2,
-      type: 'warning',
-      title: '센서 이상 감지',
-      desc: 'P액 헤드온도 센서 응답 지연이 발생하였습니다.\n점검이 필요합니다.',
-      time: '17:25:06'
-    }
-  ]);
+interface NotificationSystemProps {
+  isOpen: boolean;
+  onCloseAll: () => void;
+  onCloseItem: (id: number) => void;
+  alerts: AlertItemData[];
+  hiddenAlertIds: number[];
+}
 
-  const removeAlert = (id: number) => {
-    setAlerts(prev => prev.filter(a => a.id !== id));
-  };
-
-  if (alerts.length === 0) return null;
+const NotificationSystem = ({ 
+  isOpen, 
+  onCloseAll, 
+  onCloseItem,
+  alerts,
+  hiddenAlertIds
+}: NotificationSystemProps) => {
+  
+  // 전체가 닫혀있거나(isOpen false) 모든 알림이 숨겨졌으면 아무것도 렌더링 안함
+  const visibleAlerts = alerts.filter(a => !hiddenAlertIds.includes(a.id));
+  if (!isOpen || alerts.length === 0) return null;
 
   return (
     <NotificationContainer>
+      {/* 붉은색 배너 (전체 닫기 제어) */}
       <SummaryBanner>
         <div className="header">
-          <FiAlertTriangle size={20} />
-          WARNING - 특이사항 발생
+          <div className="header-left">
+            <FiAlertTriangle size={20} />
+            WARNING - 특이사항 발생
+          </div>
+          {/* 전체 닫기 버튼 */}
+          <FiX className="close-all-btn" size={24} onClick={onCloseAll} />
         </div>
         <div className="sub-text">
           총 {alerts.length}건의 알림이 있습니다
         </div>
       </SummaryBanner>
 
-      {alerts.map(alert => (
+      {/* 개별 알림 카드 (개별 닫기 제어) */}
+      {visibleAlerts.map(alert => (
         <AlertCard key={alert.id} $type={alert.type}>
           <div className="top-row">
             <div className="title-group">
               <div className="badge">{alert.type === 'error' ? '긴급' : '주의'}</div>
               <div className="title">{alert.title}</div>
             </div>
-            <div style={{display:'flex', alignItems:'center'}}>
+            <div className="right-side">
               <span className="time">{alert.time}</span>
-              <FiX className="close-btn" size={16} onClick={() => removeAlert(alert.id)} />
+              {/* 개별 삭제 버튼: 누르면 해당 카드만 사라짐 (hiddenAlertIds에 추가됨) */}
+              <FiX className="close-item-btn" size={18} onClick={() => onCloseItem(alert.id)} />
             </div>
           </div>
           <div className="desc">
@@ -714,14 +863,57 @@ const NotificationSystem = () => {
 // --------------------------------------------------------------------------
 
 export default function ProcessMonitorPage() {
+  // 모달 시스템 전체 On/Off
+  const [showModal, setShowModal] = useState(false);
+  
+  // 개별적으로 닫은 알림 ID 목록 (화면에서만 숨김 처리용)
+  const [hiddenAlertIds, setHiddenAlertIds] = useState<number[]>([]);
+  
+  // 원본 데이터 (변하지 않음, 발생 건수 유지용)
+  const [alerts] = useState<AlertItemData[]>([
+    {
+      id: 1,
+      type: 'error',
+      title: 'Spec Out 발생',
+      desc: 'R액 압력이 관리 상한선(150 kg/m²)을 초과하였습니다.',
+      value: '현재 수치: 156.3 kg/m²',
+      time: '13:45:22'
+    },
+    {
+      id: 2,
+      type: 'warning',
+      title: '센서 이상 감지',
+      desc: 'P액 헤드온도 센서 응답 지연이 발생하였습니다.\n점검이 필요합니다.',
+      time: '17:25:06'
+    }
+  ]);
+
+  // 발생 건수 박스 클릭 시: 모달 켜고 + 숨김 목록 초기화 (다시 다 보여주기)
+  const handleOpenModal = () => {
+    setHiddenAlertIds([]); // 숨김 목록 초기화
+    setShowModal(true);    // 모달 열기
+  };
+
+  // 개별 알림 닫기 핸들러
+  const handleCloseItem = (id: number) => {
+    setHiddenAlertIds(prev => [...prev, id]);
+  };
+
   return (
     <PageContainer>
       
-      <NotificationSystem />
+      {/* 알림 시스템 */}
+      <NotificationSystem 
+        isOpen={showModal} 
+        onCloseAll={() => setShowModal(false)} // 전체 닫기
+        onCloseItem={handleCloseItem}          // 개별 닫기
+        alerts={alerts}
+        hiddenAlertIds={hiddenAlertIds}
+      />
 
       <ContentWrapper>
         <PageHeaderRow>
-          <PageTitle>설비 이상 징후 및 공정 데이터 분석</PageTitle>
+          <PageTitle>설비이상 징후 탐지 AI (GR2)</PageTitle>
           <CurrentTime>
             2025-12-18 13:53:34
           </CurrentTime>
@@ -732,15 +924,17 @@ export default function ProcessMonitorPage() {
           <LeftColumn>
             <StatusCard 
               type="good"
-              title="공정 상태"
+              title="설비 상태"
               mainText="양호"
               subText="관리 범위 내 안정적으로 운영중"
             />
+            {/* 발생 건수 카드: 클릭 시 초기화하여 모달 열기 */}
             <StatusCard 
               type="error"
-              title="금일 특이사항"
-              mainText="3건"
-              subText="특이사항이 3건 발생했습니다."
+              title="발생 건수"
+              mainText={`${alerts.length}/7`}
+              subText={`특이사항이 ${alerts.length}건 발생했습니다.`}
+              onClick={handleOpenModal}
             />
           </LeftColumn>
 
@@ -754,7 +948,6 @@ export default function ProcessMonitorPage() {
               </DateLabel>
             </SectionHeader>
             
-            {/* 🔥 MetricsList가 남은 높이를 채우고 내부 아이템을 분배합니다 */}
             <MetricsList>
               {METRIC_DATA.map((item) => (
                 <MetricRow key={item.id} data={item} />
