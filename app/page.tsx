@@ -8,9 +8,10 @@ import { Monitor, MousePointer2 } from "lucide-react"; // 아이콘 추가
 import ProcessMonitorPage from "@/components/bar-graph";
 import LoadingGate from "@/components/loading/loading-spinner";
 import LocalMapPage from "@/components/local-map";
-import TopNavigation from "@/components/top-navigation";
+import TopNavigation from "@/components/navigation/top-navigation";
 import AiMaterialPlaceholder from "@/components/ai-material-placeholder";
 import ChatbotWidget from "@/components/chatbot-widget";
+import TopNavigationDev from "@/components/navigation/nav-dev";
 
 // --------------------------------------------------------------------------
 // 1. Mobile Blocker Components (트렌디한 안내 화면)
@@ -155,10 +156,15 @@ const ScctDevPage = () => {
       <DesktopOnlyWrapper>
         <LoadingGate isLoading={false}>
           
-          <TopNavigation 
+          {/* <TopNavigation 
+            activeTab={currentView} 
+            onTabChange={setCurrentView} 
+          /> */}
+          <TopNavigationDev
             activeTab={currentView} 
             onTabChange={setCurrentView} 
           />
+
 
           {currentView === "AI 생산관리" && <ProcessMonitorPage />}
           
