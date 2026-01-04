@@ -2,13 +2,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
+import Link from 'next/link'; 
 import { FiBell, FiSettings, FiGrid } from 'react-icons/fi';
 
 // -------------------------------------------------------------------------
-// 데이터 정의 (수정됨: 객체 형태 { label, href })
+// 데이터 정의
 // -------------------------------------------------------------------------
 
-// 타입 정의
 type SubMenuItemType = {
   label: string;
   href: string;
@@ -46,6 +46,8 @@ const NavWrapper = styled.div`
   top: 0;
   width: 100%;
   height: 64px;
+  /* ✅ NavWrapper 자체는 sticky로 유지하되, 자식들이 튀어나갈 수 있게 visible 설정 */
+  overflow: visible; 
   z-index: 9999;
   background: transparent;
 `;
@@ -56,8 +58,8 @@ const NavContainer = styled.nav`
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   position: relative;
-  z-index: 102;
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  z-index: 10000;
+  font-family: var(--font-pretendard), sans-serif;
   display: flex;
   justify-content: center;
 `;
@@ -79,6 +81,7 @@ const LogoArea = styled.div`
   font-weight: 700;
   font-size: 18px;
   color: #333;
+  cursor: pointer;
 
   .logo-icon {
     width: 32px;
@@ -153,12 +156,15 @@ const IconActions = styled.div`
   }
 `;
 
+// ✅ 중요 수정: position을 'fixed'로 변경하여 부모 영역(height:64px) 무시하고 화면에 그림
 const SubMenuWrapper = styled.div<{ $isOpen: boolean }>`
-  position: absolute;
+  position: fixed; 
   top: 64px;
   left: 0;
   width: 100%;
-  z-index: 101; 
+  
+  /* ✅ 어떤 지도나 차트보다도 위에 오도록 강력한 z-index */
+  z-index: 20000; 
 
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
@@ -213,7 +219,7 @@ const SubMenuList = styled.div`
   gap: 60px;
 `;
 
-const SubMenuItem = styled.a`
+const SubMenuItemLink = styled(Link)`
   font-size: 16px;
   color: #333;
   text-decoration: none;
@@ -242,6 +248,7 @@ const SubMenuItem = styled.a`
   }
 `;
 
+// ✅ Overlay도 fixed로 변경
 const Overlay = styled.div<{ $isOpen: boolean }>`
   position: fixed;
   top: 64px; 
@@ -255,7 +262,8 @@ const Overlay = styled.div<{ $isOpen: boolean }>`
   visibility: ${props => (props.$isOpen ? 'visible' : 'hidden')};
   
   transition: opacity 0.3s ease, visibility 0.3s;
-  z-index: 90; 
+  z-index: 15000; /* 서브메뉴(20000) 보다는 낮게 */
+  
   pointer-events: ${props => (props.$isOpen ? 'auto' : 'none')};
 `;
 
@@ -300,7 +308,7 @@ export default function TopNavigation({ activeTab, onTabChange }: TopNavigationP
       
       <NavContainer>
         <NavInner>
-          <LogoArea>
+          <LogoArea onClick={() => onTabChange("AI 운송관리")}>
             <div className="logo-icon"><FiGrid /></div>
             물류 자원 회전율 및 운송 최적화 관제
           </LogoArea>
@@ -333,14 +341,13 @@ export default function TopNavigation({ activeTab, onTabChange }: TopNavigationP
           <SubMenuContent $isOpen={!!hoveredMenu}>
             <SubMenuTitle>{hoveredMenu}</SubMenuTitle>
             <SubMenuList>
-              {/* 수정됨: 객체({ label, href })를 순회하도록 변경 */}
-              {hoveredMenu && subMenuData[hoveredMenu].map((subItem) => (
-                <SubMenuItem 
+              {hoveredMenu && subMenuData[hoveredMenu]?.map((subItem) => (
+                <SubMenuItemLink 
                   key={subItem.label} 
-                  href={subItem.href} // URL 연결
+                  href={subItem.href}
                 >
                   {subItem.label}
-                </SubMenuItem>
+                </SubMenuItemLink>
               ))}
             </SubMenuList>
           </SubMenuContent>

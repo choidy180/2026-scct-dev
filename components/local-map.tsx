@@ -6,7 +6,6 @@ import axios from "axios";
 import { Cloud, Sun, CloudRain, Navigation, Truck, Activity, Bell, AlertTriangle, CheckCircle, Radio, Server, Zap, BarChart2, Siren } from "lucide-react";
 import { format } from "date-fns";
 import dynamic from "next/dynamic";
-import { useMultiFetchGet } from "@/hooks/useMultiFetchGet";
 import VehicleStatusCard from "./vehicle-status-card";
 
 // ✅ 지도 로딩 (SSR 끔)
@@ -16,18 +15,7 @@ const VWorldMap = dynamic(
 );
 
 /* --- Types & Constants --- */
-// ... (기존 데이터 구조 및 상수 코드는 동일하게 유지) ...
-type TransportRow = {
-  출도착처리ID: string;
-  차량번호: string;
-  출발지: string;
-  도착지: string;
-  출발위치: string | null;
-  도착위치: string | null;
-  도착시간: string | null;
-  상태: string;
-};
-
+// ... (기존 데이터 구조 및 상수 코드는 동일) ...
 export interface VWorldMarker {
   lat: number;
   lng: number;
@@ -83,9 +71,6 @@ export default function LocalMapPage() {
   const [weather, setWeather] = useState({ temp: 0, desc: '-', icon: <Sun size={18} color="#aaa" /> });
   const [focusedTruckId, setFocusedTruckId] = useState<string | null>(null);
   const [hasWarning, setHasWarning] = useState(false);
-
-  // const urls = useMemo(() => ["http://1.254.24.170:24828/api/DX_API000002?startDate=&CdGCode=&CdGName="], []);
-  // const { data } = useMultiFetchGet<TransportRow[]>(urls);
 
   useLayoutEffect(() => {
     setIsMounted(true);
@@ -188,44 +173,30 @@ export default function LocalMapPage() {
   }, [mapMarkers, currentTime, isSimulationOn, focusedTruckId]);
 
   return (
-    <>
-      {isLoading && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: '#ffffff',
-            zIndex: 2147483647,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            fontFamily: "'Pretendard', sans-serif",
-            transition: 'opacity 0.5s ease-out',
-          }}
-        >
-          {showLoadingUI && (
-            <LoadingContent>
-              <div className="icon-area">
-                <Truck size={48} color="#3B82F6" strokeWidth={1.5} />
-              </div>
-              <div className="text-area">
-                <h1>실시간 운송현황 시스템</h1>
-                <p>지도 정보를 받아오고 있습니다.</p>
-              </div>
-              <div className="progress-bar-bg">
-                <div className="progress-bar-fill" />
-              </div>
-              <div className="status-text">서버와 연결 중 입니다...</div>
-            </LoadingContent>
-          )}
-        </div>
-      )}
+    // Container를 항상 렌더링하고, Loader를 그 안에 Absolute로 배치
+    <Container>
+      {/* 로딩 오버레이: fixed가 아닌 absolute로 변경하여 네비게이션 아래에 위치시킴 */}
+      <LoadingOverlay $visible={isLoading}>
+        {showLoadingUI && (
+          <LoadingContent>
+            <div className="icon-area">
+              <Truck size={48} color="#3B82F6" strokeWidth={1.5} />
+            </div>
+            <div className="text-area">
+              <h1>실시간 운송현황 시스템</h1>
+              <p>지도 정보를 받아오고 있습니다.</p>
+            </div>
+            <div className="progress-bar-bg">
+              <div className="progress-bar-fill" />
+            </div>
+            <div className="status-text">서버와 연결 중 입니다...</div>
+          </LoadingContent>
+        )}
+      </LoadingOverlay>
 
       {isMounted && (
-        <Container style={{ display: isLoading ? 'none' : 'block' }}>
+        <>
           <MapWrapper>
-            {/* 만약 VWorldMap에 padding 속성이 있다면 { top: 100, bottom: 100, left: 400, right: 300 } 등을 주어 중심점을 이동시킬 수 있습니다. */}
             <VWorldMap
               key={`map-${mapMarkers[2]?.imageUrl || 'default'}`}
               markers={mapMarkers}
@@ -390,20 +361,48 @@ export default function LocalMapPage() {
               <span className="dot"></span> Updated: {currentTime ? format(currentTime, "HH:mm:ss") : "--:--:--"}
             </SystemTicker>
           </BottomPanel>
-        </Container>
+        </>
       )}
-    </>
+    </Container>
   );
 }
 
 // --------------------------------------------------------------------------
-// Styled Components with FHD Optimization & QHD Support
+// Styled Components
 // --------------------------------------------------------------------------
 
 const Container = styled.div`
-  width: 100vw; height: calc(100vh - 64px); position: relative; overflow: hidden; background: #f8fafc; font-family: 'Pretendard', sans-serif;
-  animation: fadein 0.5s ease-in;
-  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  width: 100vw; 
+  height: calc(100vh - 64px); 
+  position: relative; /* 중요: 내부 absolute 요소의 기준점 */
+  overflow: hidden; 
+  background: #f8fafc; 
+  font-family: 'Pretendard', sans-serif;
+`;
+
+// [수정] 로딩 오버레이: fixed -> absolute로 변경하여 컨테이너 내부에 종속시킴
+const LoadingOverlay = styled.div<{ $visible: boolean }>`
+  position: fixed; /* 중요: absolute에서 fixed로 변경 */
+  top: 64px;       /* 중요: 네비게이션 바 아래부터 시작 */
+  left: 0;
+  width: 100vw;
+  height: calc(100vh - 64px);
+  
+  z-index: 99999; /* 중요: 세상 모든 위젯보다 높게 설정 */
+  
+  background: rgba(248, 250, 252, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  opacity: ${props => props.$visible ? 1 : 0};
+  visibility: ${props => props.$visible ? 'visible' : 'hidden'};
+  transition: opacity 0.5s ease-out, visibility 0.5s;
+  pointer-events: ${props => props.$visible ? 'auto' : 'none'};
 `;
 
 const LoadingContent = styled.div`
@@ -419,7 +418,7 @@ const LoadingContent = styled.div`
   .text-area { text-align: center; }
   h1 { font-size: 24px; font-weight: 800; color: #1e293b; margin: 0 0 8px 0; letter-spacing: -0.5px; }
   p { font-size: 14px; color: #64748b; font-weight: 500; margin: 0; }
-  .progress-bar-bg { width: 300px; height: 6px; background: #e2e8f0; border-radius: 99px; overflow: hidden; position: relative; }
+  .progress-bar-bg { width: 300px; height: 6px; background: #cbd5e1; border-radius: 99px; overflow: hidden; position: relative; }
   .progress-bar-fill { 
     height: 100%; background: linear-gradient(90deg, #3B82F6, #2563EB); 
     border-radius: 99px; animation: loadProgress 2s ease-in-out forwards; 
@@ -439,18 +438,14 @@ const GlassCard = styled.div`
   color: #1e293b;
 `;
 
-// [FHD 최적화] 왼쪽 KPI 위젯
 const slideDown = keyframes` from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } `;
 const TopLeftWidget = styled(GlassCard)`
   position: absolute; top: 10px; left: 20px; padding: 16px 20px; z-index: 1000;
-  width: 340px; /* FHD 최적화: 400px -> 340px */
+  width: 340px; 
   animation: ${slideDown} 0.5s ease-out;
 
   @media (min-width: 2200px) {
-    width: 520px;
-    max-width: 400px;
-    padding: 24px 30px;
-    top: 36px; left: 36px;
+    width: 520px; max-width: 400px; padding: 24px 30px; top: 36px; left: 36px;
   }
 `;
 
@@ -474,39 +469,20 @@ const KpiItem = styled.div`
   .trend { font-size: 10px; font-weight: 700; } .trend.up { color: #10b981; } .trend.neutral { color: #94a3b8; }
 
   @media (min-width: 2200px) {
-    gap: 6px;
-    .label { font-size: 14px; }
-    .value { font-size: 24px; .unit { font-size: 16px; } }
-    .trend { font-size: 13px; }
+    gap: 6px; .label { font-size: 14px; } .value { font-size: 24px; .unit { font-size: 16px; } } .trend { font-size: 13px; }
   }
 `;
 
-// [FHD 최적화] 트럭 정보 카드 위치 수정
 const slideRight = keyframes` from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } `;
 const CardOverlay = styled.div`
-  position: absolute; 
-  top: 156px; /* FHD 최적화: 170px -> 220px (겹침 방지) */
-  left: 20px; 
-  z-index: 1001; 
-  width: 340px; /* 위젯과 동일 너비 */
-  animation: ${slideRight} 0.5s ease-out;
-
-  @media (min-width: 2200px) {
-    top: 240px; left: 36px; width: 500px;
-  }
+  position: absolute; top: 156px; left: 20px; z-index: 1001; width: 340px; animation: ${slideRight} 0.5s ease-out;
+  @media (min-width: 2200px) { top: 240px; left: 36px; width: 500px; }
 `;
 
-// [FHD 최적화] 오른쪽 위젯 컬럼 너비 축소
 const slideLeft = keyframes` from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } `;
 const RightColumn = styled.div`
-  position: absolute; top: 10px; right: 20px; 
-  width: 260px; /* FHD 최적화: 280px -> 260px */
-  display: flex; flex-direction: column; gap: 12px; z-index: 1000; animation: ${slideLeft} 0.5s ease-out;
-  
-  @media (min-width: 2200px) {
-    width: 380px; gap: 20px;
-    top: 36px; right: 36px;
-  }
+  position: absolute; top: 10px; right: 20px; width: 260px; display: flex; flex-direction: column; gap: 12px; z-index: 1000; animation: ${slideLeft} 0.5s ease-out;
+  @media (min-width: 2200px) { width: 380px; gap: 20px; top: 36px; right: 36px; }
 `;
 
 const StatusWidget = styled(GlassCard)`
@@ -517,22 +493,14 @@ const StatusWidget = styled(GlassCard)`
 const TimeRow = styled.div`
   .time { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; color: #1e293b; line-height: 1; } 
   .date { font-size: 14px; color: #64748b; font-weight: 500; margin-top: 2px; }
-  
-  @media (min-width: 2200px) {
-    .time { font-size: 36px; }
-    .date { font-size: 20px; margin-top: 8px; }
-  }
+  @media (min-width: 2200px) { .time { font-size: 36px; } .date { font-size: 20px; margin-top: 8px; } }
 `;
 
 const WeatherRow = styled.div`
   display: flex; justify-content: space-between; align-items: center; 
   .temp-box { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: #334155; } 
   .desc { font-size: 12px; color: #64748b; font-weight: 500; }
-
-  @media (min-width: 2200px) {
-    .temp-box { font-size: 18px; gap: 10px; svg { width: 24px; height: 24px; } }
-    .desc { font-size: 15px; }
-  }
+  @media (min-width: 2200px) { .temp-box { font-size: 18px; gap: 10px; svg { width: 24px; height: 24px; } } .desc { font-size: 15px; } }
 `;
 
 const EtaBox = styled.div`background: rgba(241, 245, 249, 0.4); border-radius: 12px; padding: 10px; border: 1px solid rgba(255,255,255,0.3); .line { height: 1px; background: rgba(0,0,0,0.05); margin: 6px 0; }`;
@@ -540,21 +508,13 @@ const EtaRow = styled.div`
   display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; 
   .route { display: flex; align-items: center; gap: 4px; color: #475569; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 140px; } 
   .time { color: #2563eb; background: rgba(37,99,235,0.1); padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
-
-  @media (min-width: 2200px) {
-    font-size: 16px;
-    .time { padding: 4px 10px; }
-  }
+  @media (min-width: 2200px) { font-size: 16px; .time { padding: 4px 10px; } }
 `;
 
 const AlertWidget = styled(GlassCard)` padding: 16px; display: flex; flex-direction: column; gap: 10px; @media (min-width: 2200px) { padding: 24px; } `;
 const WidgetTitle = styled.div`
   font-size: 14px; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 6px; text-transform: uppercase; 
-  .count { 
-    width:17px; height:17px; background: #ef4444; color: white; 
-    display:flex; justify-content:center; align-items:center; font-size: 12px; padding: 0; border-radius: 99px; 
-    padding-top: 1.6px;
-  }
+  .count { width:17px; height:17px; background: #ef4444; color: white; display:flex; justify-content:center; align-items:center; font-size: 12px; padding: 0; border-radius: 99px; padding-top: 1.6px; }
   @media (min-width: 2200px) { font-size: 16px; .count { width: 24px; height: 24px; font-size: 18px; } }
 `;
 const AlertList = styled.div` 
@@ -568,47 +528,30 @@ const AlertItem = styled.div<{ $type: string }>`
   .content { display: flex; flex-direction: column; gap: 1px; flex: 1; overflow: hidden; } 
   .msg { font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .msg.alert-red { color: #ef4444; font-weight: 800; } 
   .time { font-size: 10px; color: #575f6a; }
-
-  @media (min-width: 2200px) {
-    padding: 14px;
-    .msg { font-size: 18px; white-space: normal; }
-    .time { font-size: 16px; }
-    svg { width: 22px; height: 22px; }
-  }
+  @media (min-width: 2200px) { padding: 14px; .msg { font-size: 18px; white-space: normal; } .time { font-size: 16px; } svg { width: 22px; height: 22px; } }
 `;
 
 const AnalyticsWidget = styled(GlassCard)` padding: 16px; display: flex; flex-direction: column; gap: 12px; @media (min-width: 2200px) { padding: 30px; gap: 24px; }`;
 const ChartRow = styled.div` display: flex; align-items: center; justify-content: space-between; gap: 10px; `;
 const DonutContainer = styled.div`
   position: relative; width: 70px; height: 70px; flex-shrink: 0; svg { transform: rotate(-90deg); width: 100%; height: 100%; } .center-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; } .num { font-size: 18px; font-weight: 800; color: #1e293b; line-height: 1; } .label { font-size: 9px; font-weight: 600; color: #94a3b8; }
-  @media (min-width: 2200px) {
-    width: 120px; height: 120px;
-    .num { font-size: 28px; } .label { font-size: 13px; }
-  }
+  @media (min-width: 2200px) { width: 120px; height: 120px; .num { font-size: 28px; } .label { font-size: 13px; } }
 `;
 
 const LegendBox = styled.div`
   display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; .item { display: flex; align-items: center; gap: 6px; color: #475569; } .dot { width: 6px; height: 6px; border-radius: 50%; }
-  @media (min-width: 2200px) {
-    font-size: 14px; gap: 10px; .dot { width: 10px; height: 10px; }
-  }
+  @media (min-width: 2200px) { font-size: 14px; gap: 10px; .dot { width: 10px; height: 10px; } }
 `;
 const SubTitle = styled.div` 
   font-size: 14px; font-weight: 700; color: #64748b; margin-bottom: 4px; text-transform: uppercase; 
-  @media (min-width: 2200px) { 
-    font-size: 18px; margin-bottom: 10px; 
-  }
+  @media (min-width: 2200px) { font-size: 18px; margin-bottom: 10px; }
 `;
 
 const ServerWidget = styled(GlassCard)` 
   padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; .row { display: flex; flex-direction: column; gap: 2px; } .label { font-size: 14px; font-weight: 500; color: #4f565f; display: flex; align-items: center; gap: 4px; } .val { font-size: 16px; font-weight: 700; color: #334155; } .val.ok { color: #10b981; }
-  @media (min-width: 2200px) {
-    padding: 20px 24px;
-    .label { font-size: 16px; } .val { font-size: 16px; }
-  }
+  @media (min-width: 2200px) { padding: 20px 24px; .label { font-size: 16px; } .val { font-size: 16px; } }
 `;
 
-// [FHD 최적화] 하단 경고 배너 크기 축소
 const bannerSlideUp = keyframes` from { opacity: 0; transform: translate(-50%, 50px); } to { opacity: 1; transform: translate(-50%, 0); } `;
 const WarningBanner = styled.div`
   position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
@@ -617,18 +560,13 @@ const WarningBanner = styled.div`
   padding: 12px 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3);
   z-index: 2000; min-width: 380px; animation: ${bannerSlideUp} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   border: 1px solid rgba(255,255,255,0.2);
-
-  @media (min-width: 2200px) {
-    bottom: 140px; min-width: 600px; padding: 24px 32px; gap: 24px;
-  }
+  @media (min-width: 2200px) { bottom: 140px; min-width: 600px; padding: 24px 32px; gap: 24px; }
 `;
 const sirenPulse = keyframes` 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } `;
 const SirenIconWrapper = styled.div`width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: ${sirenPulse} 1s infinite; @media (min-width: 2200px) { width: 56px; height: 56px; svg { width: 32px; height: 32px; } }`;
 const WarningContent = styled.div`
   color: white; .title { font-size: 16px; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; opacity: 0.9; } .desc { font-size: 14px; font-weight: 500; line-height: 1.3; } .desc strong { font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
-  @media (min-width: 2200px) {
-    .title { font-size: 16px; margin-bottom: 6px; } .desc { font-size: 18px; }
-  }
+  @media (min-width: 2200px) { .title { font-size: 16px; margin-bottom: 6px; } .desc { font-size: 18px; } }
 `;
 
 const slideUp = keyframes` from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } `;
@@ -636,22 +574,16 @@ const BottomPanel = styled(GlassCard)`
   position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 20px; padding: 10px 20px;
   animation: ${slideUp} 0.5s ease-out; z-index: 1000;
-  @media (min-width: 2200px) {
-    top: 36px; padding: 18px 32px; gap: 32px;
-  }
+  @media (min-width: 2200px) { top: 36px; padding: 18px 32px; gap: 32px; }
 `;
 
 const pulseGreen = keyframes` 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } `;
 const BottomGroup = styled.div`
   display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; color: #475569; .item { display: flex; align-items: center; gap: 6px; cursor: pointer; transition: color 0.2s; } .item.active { color: #2563eb; } .item:hover { color: #1e293b; } .divider { width: 1px; height: 10px; background: #cbd5e1; }
-  @media (min-width: 2200px) {
-    font-size: 18px; gap: 24px; .divider { height: 16px; } svg { width: 20px; height: 20px; }
-  }
+  @media (min-width: 2200px) { font-size: 18px; gap: 24px; .divider { height: 16px; } svg { width: 20px; height: 20px; } }
 `;
 
 const SystemTicker = styled.div`
   display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: #94a3b8; padding-left: 20px; border-left: 1px solid #e2e8f0; .dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 8px #22c55e; animation: ${pulseGreen} 2s infinite; }
-  @media (min-width: 2200px) {
-    font-size: 18px; padding-left: 32px; .dot { width: 8px; height: 8px; }
-  }
-`;
+  @media (min-width: 2200px) { font-size: 18px; padding-left: 32px; .dot { width: 8px; height: 8px; } }
+`; 

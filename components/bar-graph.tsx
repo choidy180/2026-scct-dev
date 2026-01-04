@@ -11,7 +11,7 @@ import {
   FiBox,
   FiRefreshCw,
   FiX,
-  FiAlertOctagon // 위험 아이콘 추가
+  FiAlertOctagon 
 } from 'react-icons/fi';
 
 // --------------------------------------------------------------------------
@@ -28,14 +28,12 @@ interface GaugeData {
   value: number;
 }
 
-// 🔥 6번째 데이터(믹싱 모터 RPM)를 Spec Out(위험) 상태로 추가했습니다.
 const METRIC_DATA: GaugeData[] = [
   { id: 1, label: 'R액 압력', unit: 'kg/m²', icon: <FiActivity />, min: 110, max: 150, value: 120.3 },
   { id: 2, label: 'R액 탱크온도', unit: '°C', icon: <FiThermometer />, min: 13, max: 23, value: 16.9 },
   { id: 3, label: 'P액 헤드온도', unit: '°C', icon: <FiThermometer />, min: 24, max: 28, value: 25.61 },
   { id: 4, label: '발포시간', unit: '초', icon: <FiClock />, min: 0.76, max: 1.66, value: 1.64 },
   { id: 5, label: '가조립무게', unit: 'g', icon: <FiBox />, min: 2375, max: 12530, value: 6952.1 },
-  // 🚨 위험 데이터 추가 (Max 2200인데 2450)
   { id: 6, label: '믹싱모터', unit: 'rpm', icon: <FiActivity />, min: 1800, max: 2200, value: 2450 },
 ];
 
@@ -65,7 +63,6 @@ const pulseRed = keyframes`
   100% { box-shadow: 0 0 0 0 rgba(238, 70, 72, 0); transform: scale(1); }
 `;
 
-/* 🔥 경고창용 강한 맥동 애니메이션 */
 const dangerPulse = keyframes`
   0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
   70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
@@ -88,35 +85,56 @@ const slideInRight = keyframes`
 `;
 
 // --------------------------------------------------------------------------
-// 3. Styled Components
+// 3. Styled Components (요청 사항 반영)
 // --------------------------------------------------------------------------
 
 const PageContainer = styled.div`
   background-color: #f5f7fa;
-  min-height: 100vh;
-  padding-bottom: 40px;
+  
+  /* 🔥 요청사항 반영 */
+  width: calc(100vw);    /* 가로: 전체 - 60px */
+  height: calc(100vh - 66px);   /* 세로: 전체 - 66px */
+  padding-top: 24px;             /* 상단 마진 50px */
+  margin-left: auto;            /* 중앙 정렬 */
+  margin-right: auto;           /* 중앙 정렬 */
+  
+  position: relative; /* 알림창(absolute)의 기준점 */
+  overflow: hidden;   /* 내부 스크롤만 허용하고 전체 스크롤 방지 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
   color: #111;
-  overflow-x: hidden;
-
-  @media (min-width: 2200px) {
-    zoom: 1.35; 
+  display: flex;
+  flex-direction: column;
+  @media (min-width: 2000px) {
+    padding-top: 50px;
   }
+  
+  /* 컨테이너 자체에 그림자를 주어 붕 떠있는 카드 느낌을 낼 수도 있음 (선택사항) */
+  /* box-shadow: 0 0 20px rgba(0,0,0,0.1); */
+  /* border-radius: 8px; */
 `;
 
 const ContentWrapper = styled.div`
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 0 24px;
-  width: 100%;
+  width: 100%; /* 부모(PageContainer)에 꽉 차게 */
+  max-width: calc(100% - 60px);
+  height: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 20px;
+  box-sizing: border-box; /* 패딩 포함 크기 계산 */
 `;
 
 const PageHeaderRow = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  margin-bottom: 20px;
-  padding-top: 30px;
+  height: 70px; /* 헤더 높이 살짝 조정 */
+  padding: 20px 0; /* 좌우 패딩 제거 (ContentWrapper가 꽉 차므로) */
+  flex-shrink: 0;
 `;
 
 const PageTitle = styled.h1`
@@ -125,6 +143,10 @@ const PageTitle = styled.h1`
   margin: 0;
   color: #1e293b;
   letter-spacing: -0.5px;
+
+  @media (min-width: 2000px) {
+    font-size: 42px;
+  }
 `;
 
 const CurrentTime = styled.div`
@@ -148,16 +170,24 @@ const CurrentTime = styled.div`
     border-radius: 50%;
     animation: ${blink} 1.5s infinite ease-in-out;
   }
+
+  @media (min-width: 2000px) {
+    font-size: 18px;
+    padding: 10px 24px;
+  }
 `;
 
 const DashboardGrid = styled.div`
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: 22% 1fr; 
   gap: 24px;
-  align-items: start;
+  align-items: stretch;
+  flex: 1; /* 남은 높이 모두 차지 */
+  min-height: 0; 
+  padding-bottom: 10px; /* 하단 여유 */
 
-  @media (max-width: 1200px) {
-    grid-template-columns: 1fr;
+  @media (max-width: 1400px) {
+    grid-template-columns: 320px 1fr;
   }
 `;
 
@@ -165,17 +195,32 @@ const LeftColumn = styled.div`
   display: flex;
   flex-direction: column;
   gap: 24px;
+  height: 100%;
 `;
 
 const RightColumn = styled.div`
   background: #fff;
   border-radius: 20px;
-  padding: 24px;
+  padding: 24px 32px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   border: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  min-height: 700px;
+  height: 100%;
+  overflow-y: auto; /* 내용 넘치면 내부 스크롤 */
+  
+  /* 스크롤바 커스텀 (선택) */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9; 
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1; 
+    border-radius: 4px;
+  }
 `;
 
 const SectionHeader = styled.div`
@@ -185,6 +230,7 @@ const SectionHeader = styled.div`
   margin-bottom: 10px;
   padding-bottom: 16px;
   flex-shrink: 0;
+  border-bottom: 1px solid #f1f5f9;
 `;
 
 const SectionTitle = styled.h2`
@@ -192,6 +238,10 @@ const SectionTitle = styled.h2`
   font-weight: 700;
   color: #0f172a;
   margin: 0;
+
+  @media (min-width: 2000px) {
+    font-size: 30px;
+  }
 `;
 
 const DateLabel = styled.span`
@@ -208,15 +258,22 @@ const DateLabel = styled.span`
     font-size: 14px;
     color: #94a3b8;
   }
+
+  @media (min-width: 2000px) {
+    font-size: 16px;
+    padding: 8px 16px;
+    svg { font-size: 18px; }
+  }
 `;
 
 const MetricsList = styled.div`
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: space-between; 
   flex: 1;
   width: 100%;
-  gap: 16px; /* Row 간격 조금 띄움 */
+  gap: 12px; 
+  padding-top: 16px;
 `;
 
 // --------------------------------------------------------------------------
@@ -227,11 +284,11 @@ const CardBase = styled.div<{ $status: 'good' | 'error', $clickable?: boolean }>
   background: ${props => props.$status === 'good' ? 'rgb(59 255 190 / 5%)' : 'rgb(255 101 101 / 5%)'};
   border-radius: 20px;
   padding: 24px;
-  height:384px;
+  flex: 1; 
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: space-evenly;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   border: 2px solid ${props => props.$status === 'good' ? '#10b981' : '#ef4444'};
   position: relative;
@@ -248,7 +305,7 @@ const CardBase = styled.div<{ $status: 'good' | 'error', $clickable?: boolean }>
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
-    height: 120px;
+    height: 30%;
     background: ${props => props.$status === 'good' 
       ? 'linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, rgba(255,255,255,0) 100%)' 
       : 'linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, rgba(255,255,255,0) 100%)'};
@@ -260,26 +317,36 @@ const CardHeader = styled.div`
   width: 100%;
   text-align: left;
   font-size: 24px;
-  line-height: 30px;
+  line-height: 1.2;
   font-weight: 700;
   color: #334155;
   z-index: 1;
+
+  @media (min-width: 2000px) {
+    font-size: 32px;
+  }
 `;
 
 const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
-  width: 110px;
-  height: 110px;
+  width: 12vmin;
+  height: 12vmin;
+  min-width: 100px; min-height: 100px;
+  max-width: 150px; max-height: 150px;
+  
   border-radius: 50%;
   background: ${props => props.$status === 'good' ? '#10b981' : '#ef4444'};
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 48px;
   box-shadow: 0 10px 20px ${props => props.$status === 'good' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'};
   z-index: 1;
   animation: ${props => props.$status === 'good' ? pulseGreen : pulseRed} 2s infinite;
-  margin-top: 10px;
+  
+  svg {
+    width: 50%;
+    height: 50%;
+  }
 `;
 
 const StatusText = styled.div`
@@ -287,15 +354,19 @@ const StatusText = styled.div`
   font-weight: 800;
   color: #0f172a;
   z-index: 1;
+
+  @media (min-width: 2000px) {
+    font-size: 56px;
+  }
 `;
 
 const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 16px;
+  padding: 6px 20px;
   border-radius: 99px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   z-index: 1;
   
@@ -306,18 +377,27 @@ const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
     background-color: #FFDDDD;
     color: #dc2626;
   `}
+
+  @media (min-width: 2000px) {
+    font-size: 18px;
+    padding: 8px 24px;
+  }
 `;
 
 const LegendContainer = styled.div`
   width: 100%;
   background: #f8fafc;
   border-radius: 8px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   display: flex;
   justify-content: center;
   gap: 16px;
   z-index: 1;
-  margin-top: 8px;
+
+  @media (min-width: 2000px) {
+    padding: 12px 16px;
+    gap: 24px;
+  }
 `;
 
 const LegendItem = styled.div`
@@ -336,6 +416,11 @@ const LegendItem = styled.div`
     border-radius: 50%;
     background-color: ${props => props.color};
   }
+
+  @media (min-width: 2000px) {
+    font-size: 16px;
+    &::before { width: 14px; height: 14px; }
+  }
 `;
 
 const StatusCard = ({ 
@@ -347,7 +432,7 @@ const StatusCard = ({
     <CardBase $status={type} onClick={onClick} $clickable={!!onClick}>
       <CardHeader>{title}</CardHeader>
       <StatusCircle $status={type}>
-        {type === 'good' ? <FiCheck size={80} /> : <FiAlertTriangle size={64} />}
+        {type === 'good' ? <FiCheck /> : <FiAlertTriangle />}
       </StatusCircle>
       <StatusText>{mainText}</StatusText>
       <StatusBadge $status={type}>
@@ -364,20 +449,21 @@ const StatusCard = ({
 };
 
 // --------------------------------------------------------------------------
-// 5. Metric Row (위험 경고창 추가)
+// 5. Metric Row
 // --------------------------------------------------------------------------
 
-/* 🔥 $isError 일 때 배경색을 붉게, 테두리를 추가하여 시각적 강조 */
 const RowContainer = styled.div<{ $isError?: boolean }>`
   display: flex;
   align-items: center;
-  padding: 34px 16px 20px 16px;
+  padding: 0 20px;
   border-radius: 16px;
-  position: relative; /* DangerPopup 배치를 위해 relative */
+  position: relative;
+  flex: 1; /* 높이 균등 분배 */
+  min-height: 60px; /* 너무 작아지지 않게 */
   
   ${props => props.$isError ? css`
-    background: #FEF2F2; /* 붉은 배경 */
-    border: 2px solid #FCA5A5; /* 붉은 테두리 */
+    background: #FEF2F2;
+    border: 2px solid #FCA5A5;
   ` : css`
     background: #f1f5f9;
     border: 2px solid transparent;
@@ -391,21 +477,29 @@ const MetricInfo = styled.div`
   align-items: center;
   gap: 14px;
   flex-shrink: 0;
-  transform: translateY(-6px);
+  
+  @media (min-width: 2000px) {
+    width: 300px;
+    gap: 20px;
+  }
 `;
 
 const IconBox = styled.div`
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   background-color: #fff;
-  border-radius: 10px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #64748b;
-  font-size: 18px;
-  transform: scale(1.2);
+  font-size: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+
+  @media (min-width: 2000px) {
+    width: 60px; height: 60px;
+    font-size: 28px;
+  }
 `;
 
 const MetricLabelGroup = styled.div`
@@ -415,17 +509,25 @@ const MetricLabelGroup = styled.div`
 
 const MetricName = styled.span`
   font-weight: 700;
-  font-size: 25px;
+  font-size: 20px;
   color: #1e293b;
   display: flex;
   align-items: center;
   gap: 4px;
+
+  @media (min-width: 2000px) {
+    font-size: 28px;
+  }
 `;
 
 const MetricUnit = styled.span`
-  font-size: 16px;
+  font-size: 14px;
   color: #757d88;
   font-weight: 400;
+
+  @media (min-width: 2000px) {
+    font-size: 18px;
+  }
 `;
 
 const GaugeColumn = styled.div`
@@ -434,20 +536,27 @@ const GaugeColumn = styled.div`
   display: flex;
   flex-direction: column;
   justify-content: center;
+
+  @media (min-width: 2000px) {
+    padding: 0 80px;
+  }
 `;
 
 const TrackArea = styled.div`
   position: relative;
   width: 100%;
-  height: 10px;
+  height: 12px;
   margin-top: 12px;
+
+  @media (min-width: 2000px) {
+    height: 18px;
+  }
 `;
 
 const GaugeTrack = styled.div<{ $isError?: boolean }>`
   width: 100%;
   height: 100%;
   border-radius: 99px;
-  /* Error일 경우 트랙을 회색조로 죽이고, 정상일 때만 컬러풀하게 */
   background: ${props => props.$isError 
     ? '#e2e8f0' 
     : 'linear-gradient(90deg, #3498db 0%, #2ecc71 40%, #fff200 70%, #fd79a8 100%)'};
@@ -469,16 +578,21 @@ const GaugeTrack = styled.div<{ $isError?: boolean }>`
 const GaugeLabels = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 16px;
   color: #717983;
   font-weight: 500;
   width: 100%;
+
+  @media (min-width: 2000px) {
+    font-size: 20px;
+    margin-top: 12px;
+  }
 `;
 
 const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
   position: absolute;
-  top: -36px; 
+  top: -38px; 
   left: ${props => props.$percent}%; 
   transform: translateX(-50%);
   display: flex;
@@ -490,28 +604,34 @@ const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
   .value-text {
     font-size: 20px;
     font-weight: 700;
-    color: ${props => props.$isError ? '#ef4444' : '#0f172a'}; /* Error일 때 텍스트 빨강 */
+    color: ${props => props.$isError ? '#ef4444' : '#0f172a'};
     margin-bottom: 4px;
+    white-space: nowrap;
   }
 
   .handle {
     width: 20px;
-    height: 10px;
-    background: ${props => props.$isError ? '#ef4444' : '#fff'}; /* Error일 때 핸들 빨강 */
+    height: 12px;
+    background: ${props => props.$isError ? '#ef4444' : '#fff'};
     border: 2px solid ${props => props.$isError ? '#b91c1c' : '#334155'};
     border-radius: 12px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
+
+  @media (min-width: 2000px) {
+    top: -50px;
+    .value-text { font-size: 26px; }
+    .handle { width: 28px; height: 16px; border-width: 3px; }
+  }
 `;
 
-/* 🔥 위험 경고 팝업 컴포넌트 */
 const DangerPopup = styled.div`
   position: absolute;
-  left: 280px; /* 라벨 옆, 트랙 위에 위치 */
-  top: -10px; /* 약간 위로 띄움 */
+  left: 260px; 
+  top: -20px;
   z-index: 50;
   
-  background: #ef4444; /* 강렬한 빨강 */
+  background: #ef4444;
   color: white;
   padding: 12px 20px;
   border-radius: 12px;
@@ -520,12 +640,15 @@ const DangerPopup = styled.div`
   display: flex;
   align-items: center;
   gap: 16px;
-  
-  /* 맥동 애니메이션 적용 */
   animation: ${dangerPulse} 2s infinite;
 
+  @media (min-width: 2000px) {
+    left: 320px;
+    padding: 16px 24px;
+    top: -30px;
+  }
+
   &::after {
-    /* 말풍선 꼬리 */
     content: '';
     position: absolute;
     bottom: -6px;
@@ -540,6 +663,7 @@ const DangerPopup = styled.div`
     font-size: 28px;
     display: flex;
     align-items: center;
+    @media (min-width: 2000px) { font-size: 36px; }
   }
 
   .text-area {
@@ -553,13 +677,14 @@ const DangerPopup = styled.div`
     font-weight: 800;
     color: #fee2e2;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    @media (min-width: 2000px) { font-size: 16px; }
   }
 
   .warning-msg {
     font-size: 15px;
     font-weight: 700;
     white-space: nowrap;
+    @media (min-width: 2000px) { font-size: 18px; }
   }
 
   .action-btn {
@@ -572,40 +697,42 @@ const DangerPopup = styled.div`
     cursor: pointer;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     &:hover { background: #fff1f2; }
+    
+    @media (min-width: 2000px) { font-size: 16px; padding: 8px 16px; }
   }
 `;
 
 const ValueBox = styled.div<{ $isError?: boolean }>`
-  width: 100px;
-  height: 42px;
-  background-color: ${props => props.$isError ? '#ef4444' : '#10b981'}; /* Error일 때 박스 빨강 */
-  border-radius: 10px;
+  width: 110px;
+  height: 48px;
+  background-color: ${props => props.$isError ? '#ef4444' : '#10b981'};
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   box-shadow: 0 4px 6px -1px ${props => props.$isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)'};
   flex-shrink: 0;
-  transform: translateY(-8px);
+
+  @media (min-width: 2000px) {
+    width: 140px; height: 60px;
+    font-size: 24px;
+  }
 `;
 
 const MetricRow = ({ data }: { data: GaugeData }) => {
   const range = data.max - data.min;
   let percent = ((data.value - data.min) / range) * 100;
   
-  // Spec Out 판단 로직
   const isSpecOut = data.value < data.min || data.value > data.max;
 
-  // 퍼센트 계산 (범위를 벗어나도 차트 밖으로 튀어나가지 않게 클램핑)
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
 
   return (
     <RowContainer $isError={isSpecOut}>
-      
-      {/* 🔥 Spec Out일 경우 경고 팝업 노출 */}
       {isSpecOut && (
         <DangerPopup>
           <div className="icon-area"><FiAlertOctagon /></div>
@@ -650,13 +777,14 @@ const MetricRow = ({ data }: { data: GaugeData }) => {
 };
 
 // --------------------------------------------------------------------------
-// 6. Notification
+// 6. Notification 
 // --------------------------------------------------------------------------
 
+/* 🔥 Position을 fixed -> absolute로 변경하여 PageContainer 내부에 종속되게 함 */
 const NotificationContainer = styled.div`
-  position: fixed;
-  top: 90px;
-  right: 24px;
+  position: absolute;
+  top: 20px;
+  right: 20px;
   width: 400px;
   z-index: 9999;
   display: flex;
@@ -664,6 +792,12 @@ const NotificationContainer = styled.div`
   gap: 12px;
   pointer-events: none; 
   font-family: 'Pretendard', sans-serif;
+
+  @media (min-width: 2000px) {
+    width: 500px;
+    top: 30px;
+    right: 30px;
+  }
 `;
 
 const SummaryBanner = styled.div`
@@ -694,16 +828,12 @@ const SummaryBanner = styled.div`
     font-weight: 700;
   }
 
-  /* 전체 닫기 버튼 */
   .close-all-btn {
     cursor: pointer;
     color: white; 
     opacity: 0.9;
     transition: all 0.2s;
-    &:hover { 
-      opacity: 1; 
-      transform: scale(1.2); 
-    }
+    &:hover { opacity: 1; transform: scale(1.2); }
   }
 
   .sub-text {
@@ -711,13 +841,18 @@ const SummaryBanner = styled.div`
     opacity: 0.9;
     padding-left: 28px; 
   }
+
+  @media (min-width: 2000px) {
+    padding: 20px 24px;
+    .header-left { font-size: 20px; }
+    .sub-text { font-size: 15px; }
+  }
 `;
 
 const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
   pointer-events: auto;
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
-  
   border-radius: 12px;
   padding: 16px;
   position: relative;
@@ -728,14 +863,12 @@ const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
   animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
   transition: transform 0.2s;
 
-  &:hover {
-    transform: translateX(-4px);
-  }
+  &:hover { transform: translateX(-4px); }
 
   .top-row {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start; /* X버튼 위치를 위해 상단 정렬 */
+    align-items: flex-start;
     margin-bottom: 8px;
   }
 
@@ -771,15 +904,11 @@ const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
     color: #94a3b8;
   }
   
-  /* 개별 닫기 버튼 */
   .close-item-btn {
     cursor: pointer;
     color: #cbd5e1;
     transition: all 0.2s;
-    &:hover {
-      color: #64748b;
-      transform: scale(1.1);
-    }
+    &:hover { color: #64748b; transform: scale(1.1); }
   }
 
   .desc {
@@ -794,6 +923,14 @@ const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
     margin-top: 4px;
     font-weight: 700;
     color: #0f172a;
+  }
+
+  @media (min-width: 2000px) {
+    padding: 20px;
+    .badge { font-size: 13px; }
+    .title { font-size: 16px; }
+    .desc { font-size: 15px; }
+    .time { font-size: 15px; }
   }
 `;
 
@@ -812,21 +949,17 @@ const NotificationSystem = ({
   alerts,
   hiddenAlertIds
 }: NotificationSystemProps) => {
-  
-  // 전체가 닫혀있거나(isOpen false) 모든 알림이 숨겨졌으면 아무것도 렌더링 안함
   const visibleAlerts = alerts.filter(a => !hiddenAlertIds.includes(a.id));
   if (!isOpen || alerts.length === 0) return null;
 
   return (
     <NotificationContainer>
-      {/* 붉은색 배너 (전체 닫기 제어) */}
       <SummaryBanner>
         <div className="header">
           <div className="header-left">
             <FiAlertTriangle size={20} />
             WARNING - 특이사항 발생
           </div>
-          {/* 전체 닫기 버튼 */}
           <FiX className="close-all-btn" size={24} onClick={onCloseAll} />
         </div>
         <div className="sub-text">
@@ -834,7 +967,6 @@ const NotificationSystem = ({
         </div>
       </SummaryBanner>
 
-      {/* 개별 알림 카드 (개별 닫기 제어) */}
       {visibleAlerts.map(alert => (
         <AlertCard key={alert.id} $type={alert.type}>
           <div className="top-row">
@@ -844,7 +976,6 @@ const NotificationSystem = ({
             </div>
             <div className="right-side">
               <span className="time">{alert.time}</span>
-              {/* 개별 삭제 버튼: 누르면 해당 카드만 사라짐 (hiddenAlertIds에 추가됨) */}
               <FiX className="close-item-btn" size={18} onClick={() => onCloseItem(alert.id)} />
             </div>
           </div>
@@ -863,13 +994,9 @@ const NotificationSystem = ({
 // --------------------------------------------------------------------------
 
 export default function ProcessMonitorPage() {
-  // 모달 시스템 전체 On/Off
   const [showModal, setShowModal] = useState(false);
-  
-  // 개별적으로 닫은 알림 ID 목록 (화면에서만 숨김 처리용)
   const [hiddenAlertIds, setHiddenAlertIds] = useState<number[]>([]);
   
-  // 원본 데이터 (변하지 않음, 발생 건수 유지용)
   const [alerts] = useState<AlertItemData[]>([
     {
       id: 1,
@@ -888,25 +1015,21 @@ export default function ProcessMonitorPage() {
     }
   ]);
 
-  // 발생 건수 박스 클릭 시: 모달 켜고 + 숨김 목록 초기화 (다시 다 보여주기)
   const handleOpenModal = () => {
-    setHiddenAlertIds([]); // 숨김 목록 초기화
-    setShowModal(true);    // 모달 열기
+    setHiddenAlertIds([]);
+    setShowModal(true);
   };
 
-  // 개별 알림 닫기 핸들러
   const handleCloseItem = (id: number) => {
     setHiddenAlertIds(prev => [...prev, id]);
   };
 
   return (
     <PageContainer>
-      
-      {/* 알림 시스템 */}
       <NotificationSystem 
         isOpen={showModal} 
-        onCloseAll={() => setShowModal(false)} // 전체 닫기
-        onCloseItem={handleCloseItem}          // 개별 닫기
+        onCloseAll={() => setShowModal(false)}
+        onCloseItem={handleCloseItem}
         alerts={alerts}
         hiddenAlertIds={hiddenAlertIds}
       />
@@ -920,7 +1043,7 @@ export default function ProcessMonitorPage() {
         </PageHeaderRow>
 
         <DashboardGrid>
-          {/* Left: Status Cards */}
+          {/* Left: Status Cards (Flex로 높이 50%씩 차지) */}
           <LeftColumn>
             <StatusCard 
               type="good"
@@ -928,7 +1051,6 @@ export default function ProcessMonitorPage() {
               mainText="양호"
               subText="관리 범위 내 안정적으로 운영중"
             />
-            {/* 발생 건수 카드: 클릭 시 초기화하여 모달 열기 */}
             <StatusCard 
               type="error"
               title="발생 건수"
@@ -938,7 +1060,7 @@ export default function ProcessMonitorPage() {
             />
           </LeftColumn>
 
-          {/* Right: Metrics List */}
+          {/* Right: Metrics List (Flex로 높이 채우고 내부 아이템 간격 자동) */}
           <RightColumn>
             <SectionHeader>
               <SectionTitle>핵심 공정 지표 및 운영 범위</SectionTitle>

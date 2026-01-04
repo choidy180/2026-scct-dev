@@ -1,7 +1,10 @@
+// app/layout.tsx
 import { Metadata } from "next";
 import "./globals.css";
 import localFont from "next/font/local";
 import "flatpickr/dist/flatpickr.min.css";
+import { ViewProvider } from "./view-context"; // Context Provider
+import ClientLayoutWrapper from "./layout-client"; // Client UI Wrapper
 
 const pretendard = localFont({
   src: [
@@ -17,12 +20,12 @@ const pretendard = localFont({
   ],
   variable: "--font-pretendard",
   display: "swap",
-})
+});
 
 export const metadata: Metadata = {
   title: 'SCCT-AI',
   description: "Using all Pretendard weights via next/font/local",
-}
+};
 
 export default function RootLayout({
   children,
@@ -32,7 +35,11 @@ export default function RootLayout({
   return (
     <html lang="ko" className={pretendard.variable} suppressHydrationWarning>
       <body suppressHydrationWarning>
-        {children}
+        <ViewProvider>
+          <ClientLayoutWrapper>
+            {children}
+          </ClientLayoutWrapper>
+        </ViewProvider>
       </body>
     </html>
   );
