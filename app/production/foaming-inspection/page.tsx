@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { 
   FiCheck, 
@@ -11,7 +11,9 @@ import {
   FiBox,
   FiRefreshCw,
   FiX,
-  FiAlertOctagon 
+  FiAlertOctagon,
+  FiCpu,       // 로딩 아이콘용 추가
+  FiDatabase   // 로딩 아이콘용 추가
 } from 'react-icons/fi';
 
 // --------------------------------------------------------------------------
@@ -84,9 +86,112 @@ const slideInRight = keyframes`
   to { transform: translateX(0); opacity: 1; }
 `;
 
+/* 🔥 로딩 화면용 애니메이션 추가 */
+const fillProgress = keyframes`
+  0% { width: 0%; }
+  100% { width: 100%; }
+`;
+
+const fadeOut = keyframes`
+  from { opacity: 1; visibility: visible; }
+  to { opacity: 0; visibility: hidden; }
+`;
+
+const textGlow = keyframes`
+  0%, 100% { text-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+  50% { text-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 30px rgba(16, 185, 129, 0.6); }
+`;
+
 // --------------------------------------------------------------------------
-// 3. Styled Components (요청 사항 반영)
+// 3. Styled Components
 // --------------------------------------------------------------------------
+
+/* 🔥 로딩 스크린 스타일 Components */
+const LoaderOverlay = styled.div<{ $isFinished: boolean }>`
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background-color: #ffffff;
+  z-index: 99999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  
+  /* 로딩 끝나면 부드럽게 사라짐 */
+  opacity: ${props => props.$isFinished ? 0 : 1};
+  visibility: ${props => props.$isFinished ? 'hidden' : 'visible'};
+  transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
+`;
+
+const LoaderContent = styled.div`
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+`;
+
+const LogoArea = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  
+  .icon-wrap {
+    font-size: 48px;
+    color: #3b82f6;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 4px 6px rgba(59, 130, 246, 0.3));
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0;
+    letter-spacing: -0.5px;
+  }
+  
+  p {
+    font-size: 14px;
+    color: #64748b;
+    font-weight: 500;
+    animation: ${textGlow} 2s infinite ease-in-out;
+  }
+`;
+
+const ProgressContainer = styled.div`
+  width: 100%;
+  height: 6px;
+  background-color: #f1f5f9;
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+`;
+
+const ProgressBar = styled.div`
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
+  border-radius: 99px;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  
+  /* 1.5초 동안 0% -> 100% */
+  width: 0%;
+  animation: ${fillProgress} 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+`;
+
+const LoadingStatus = styled.div`
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #94a3b8;
+  font-family: monospace;
+  font-weight: 600;
+`;
+
+// --- 기존 스타일 ---
 
 const PageContainer = styled.div`
   background-color: #f5f7fa;
@@ -111,10 +216,6 @@ const PageContainer = styled.div`
   @media (min-width: 2000px) {
     padding-top: 50px;
   }
-  
-  /* 컨테이너 자체에 그림자를 주어 붕 떠있는 카드 느낌을 낼 수도 있음 (선택사항) */
-  /* box-shadow: 0 0 20px rgba(0,0,0,0.1); */
-  /* border-radius: 8px; */
 `;
 
 const ContentWrapper = styled.div`
@@ -592,36 +693,52 @@ const GaugeLabels = styled.div`
 
 const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
   position: absolute;
-  top: -38px; 
-  left: ${props => props.$percent}%; 
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  top: 50%;
+  left: ${props => props.$percent}%;
+  width: 0;
+  height: 0;
   z-index: 10;
   transition: left 1s cubic-bezier(0.4, 0, 0.2, 1); 
 
+  /* 텍스트 배치 */
   .value-text {
+    position: absolute;
+    bottom: 10px; 
+    left: 50%;
+    transform: translateX(-50%);
+    
     font-size: 20px;
     font-weight: 700;
     color: ${props => props.$isError ? '#ef4444' : '#0f172a'};
-    margin-bottom: 4px;
     white-space: nowrap;
+    text-align: center;
   }
 
+  /* 핸들 배치 */
   .handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 20px;
     height: 12px;
     background: ${props => props.$isError ? '#ef4444' : '#fff'};
     border: 2px solid ${props => props.$isError ? '#b91c1c' : '#334155'};
     border-radius: 12px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-sizing: border-box;
   }
 
   @media (min-width: 2000px) {
-    top: -50px;
-    .value-text { font-size: 26px; }
-    .handle { width: 28px; height: 16px; border-width: 3px; }
+    .value-text { 
+      font-size: 26px; 
+      bottom: 14px;
+    }
+    .handle { 
+      width: 28px; 
+      height: 18px; 
+      border-width: 3px; 
+    }
   }
 `;
 
@@ -997,6 +1114,16 @@ export default function ProcessMonitorPage() {
   const [showModal, setShowModal] = useState(false);
   const [hiddenAlertIds, setHiddenAlertIds] = useState<number[]>([]);
   
+  /* 🔥 로딩 상태 추가 (1.5초) */
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500); // 1.5초 후 로딩 해제
+    return () => clearTimeout(timer);
+  }, []);
+
   const [alerts] = useState<AlertItemData[]>([
     {
       id: 1,
@@ -1025,60 +1152,85 @@ export default function ProcessMonitorPage() {
   };
 
   return (
-    <PageContainer>
-      <NotificationSystem 
-        isOpen={showModal} 
-        onCloseAll={() => setShowModal(false)}
-        onCloseItem={handleCloseItem}
-        alerts={alerts}
-        hiddenAlertIds={hiddenAlertIds}
-      />
+    <>
+      {/* 🔥 로딩 스크린 오버레이 */}
+      <LoaderOverlay $isFinished={!isLoading}>
+        <LoaderContent>
+          <LogoArea>
+            <div className="icon-wrap">
+              <FiCpu />
+            </div>
+            <h1>설비이상 징후 탐지 AI (GR2)</h1>
+            <p>AI Neural Network Initializing...</p>
+          </LogoArea>
+          
+          <ProgressContainer>
+            <ProgressBar />
+          </ProgressContainer>
 
-      <ContentWrapper>
-        <PageHeaderRow>
-          <PageTitle>설비이상 징후 탐지 AI (GR2)</PageTitle>
-          <CurrentTime>
-            2025-12-18 13:53:34
-          </CurrentTime>
-        </PageHeaderRow>
+          <LoadingStatus>
+            <span>SYSTEM CHECK</span>
+            <span>100%</span>
+          </LoadingStatus>
+        </LoaderContent>
+      </LoaderOverlay>
 
-        <DashboardGrid>
-          {/* Left: Status Cards (Flex로 높이 50%씩 차지) */}
-          <LeftColumn>
-            <StatusCard 
-              type="good"
-              title="설비 상태"
-              mainText="양호"
-              subText="관리 범위 내 안정적으로 운영중"
-            />
-            <StatusCard 
-              type="error"
-              title="발생 건수"
-              mainText={`${alerts.length}/7`}
-              subText={`특이사항이 ${alerts.length}건 발생했습니다.`}
-              onClick={handleOpenModal}
-            />
-          </LeftColumn>
+      {/* 메인 콘텐츠 */}
+      <PageContainer>
+        <NotificationSystem 
+          isOpen={showModal} 
+          onCloseAll={() => setShowModal(false)}
+          onCloseItem={handleCloseItem}
+          alerts={alerts}
+          hiddenAlertIds={hiddenAlertIds}
+        />
 
-          {/* Right: Metrics List (Flex로 높이 채우고 내부 아이템 간격 자동) */}
-          <RightColumn>
-            <SectionHeader>
-              <SectionTitle>핵심 공정 지표 및 운영 범위</SectionTitle>
-              <DateLabel>
-                <FiRefreshCw /> 
-                실시간 데이터 수신중
-              </DateLabel>
-            </SectionHeader>
-            
-            <MetricsList>
-              {METRIC_DATA.map((item) => (
-                <MetricRow key={item.id} data={item} />
-              ))}
-            </MetricsList>
-            
-          </RightColumn>
-        </DashboardGrid>
-      </ContentWrapper>
-    </PageContainer>
+        <ContentWrapper>
+          <PageHeaderRow>
+            <PageTitle>설비이상 징후 탐지 AI (GR2)</PageTitle>
+            <CurrentTime>
+              2025-12-18 13:53:34
+            </CurrentTime>
+          </PageHeaderRow>
+
+          <DashboardGrid>
+            {/* Left: Status Cards (Flex로 높이 50%씩 차지) */}
+            <LeftColumn>
+              <StatusCard 
+                type="good"
+                title="설비 상태"
+                mainText="양호"
+                subText="관리 범위 내 안정적으로 운영중"
+              />
+              <StatusCard 
+                type="error"
+                title="발생 건수"
+                mainText={`${alerts.length}/7`}
+                subText={`특이사항이 ${alerts.length}건 발생했습니다.`}
+                onClick={handleOpenModal}
+              />
+            </LeftColumn>
+
+            {/* Right: Metrics List (Flex로 높이 채우고 내부 아이템 간격 자동) */}
+            <RightColumn>
+              <SectionHeader>
+                <SectionTitle>핵심 공정 지표 및 운영 범위</SectionTitle>
+                <DateLabel>
+                  <FiRefreshCw /> 
+                  실시간 데이터 수신중
+                </DateLabel>
+              </SectionHeader>
+              
+              <MetricsList>
+                {METRIC_DATA.map((item) => (
+                  <MetricRow key={item.id} data={item} />
+                ))}
+              </MetricsList>
+              
+            </RightColumn>
+          </DashboardGrid>
+        </ContentWrapper>
+      </PageContainer>
+    </>
   );
 }

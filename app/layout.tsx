@@ -18,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>
+      <body suppressHydrationWarning={true}>
         <StyledComponentsRegistry>
           {/* ✅ ViewProvider가 가장 바깥에 있어야 합니다 */}
           <ViewProvider>

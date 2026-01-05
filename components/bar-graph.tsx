@@ -590,38 +590,62 @@ const GaugeLabels = styled.div`
   }
 `;
 
+// 기존 top: -38px -> -28px로 수정
+// 기존 미디어쿼리 top: -50px -> -38px로 수정
+
 const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
   position: absolute;
-  top: -38px; 
-  left: ${props => props.$percent}%; 
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  top: 50%; /* ✅ 핵심 1: 부모(Track)의 정중앙 높이를 기준점으로 잡습니다. */
+  left: ${props => props.$percent}%;
+  
+  /* ✅ 핵심 2: 컨테이너 크기를 0으로 없애 레이아웃 간섭을 제거합니다. */
+  width: 0;
+  height: 0;
+  
   z-index: 10;
   transition: left 1s cubic-bezier(0.4, 0, 0.2, 1); 
 
+  /* 텍스트 배치 (기준점으로부터 위로 띄움) */
   .value-text {
+    position: absolute;
+    bottom: 10px; /* 핸들 높이의 절반(6px) + 여백(4px) = 10px 위로 */
+    left: 50%;
+    transform: translateX(-50%); /* 가로 중앙 정렬 */
+    
     font-size: 20px;
     font-weight: 700;
     color: ${props => props.$isError ? '#ef4444' : '#0f172a'};
-    margin-bottom: 4px;
     white-space: nowrap;
+    text-align: center;
   }
 
+  /* 핸들 배치 (기준점에 정중앙 정렬) */
   .handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* ✅ 핵심 3: 핸들의 중심이 트랙의 중심에 정확히 꽂히도록 함 */
+    
     width: 20px;
-    height: 12px;
+    height: 12px; /* 트랙 높이(12px)와 동일 */
+    
     background: ${props => props.$isError ? '#ef4444' : '#fff'};
     border: 2px solid ${props => props.$isError ? '#b91c1c' : '#334155'};
     border-radius: 12px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-sizing: border-box; /* 테두리가 높이에 포함되도록 설정 */
   }
 
   @media (min-width: 2000px) {
-    top: -50px;
-    .value-text { font-size: 26px; }
-    .handle { width: 28px; height: 16px; border-width: 3px; }
+    .value-text { 
+      font-size: 26px; 
+      bottom: 14px; /* 핸들이 커진 만큼 텍스트도 더 위로 */
+    }
+    .handle { 
+      width: 28px; 
+      height: 18px; /* QHD에서는 트랙 높이에 맞춰 18px */
+      border-width: 3px; 
+    }
   }
 `;
 

@@ -346,7 +346,10 @@ const StatusCard = ({ data, imageUrl, layout }: { data: CamData, imageUrl: strin
     };
   };
 
-  const IconComponent = React.cloneElement(data.icon as React.ReactElement, { size: layout.iconSize });
+  // ✅ 수정된 부분: 제네릭 <{ size: number }> 추가
+  const IconComponent = React.cloneElement(data.icon as React.ReactElement<{ size: number }>, { 
+    size: layout.iconSize 
+  });
 
   return (
     <div style={{...styles.card, padding: layout.cardPadding}}>
