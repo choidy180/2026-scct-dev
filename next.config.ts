@@ -2,7 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   compiler: {
-    styledComponents: true, // ✅ SSR/Minify/DisplayName 등을 SWC가 처리
+    // ✅ 이 설정이 없으면 페이지 이동 시 스타일 불일치로 새로고침이 발생합니다.
+    styledComponents: true, 
   },
   /* config options here */
   images: {

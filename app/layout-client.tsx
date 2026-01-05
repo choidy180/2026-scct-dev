@@ -1,29 +1,28 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import styled, { keyframes } from "styled-components";
 import { Monitor, MousePointer2 } from "lucide-react";
 import TopNavigation from "@/components/navigation/top-navigation";
 import ChatbotWidget from "@/components/chatbot-widget";
-import { useViewContext } from "./view-context";
+import { useViewContext } from "./view-context"; // 경로 확인 필요
 
 // --------------------------------------------------------------------------
-// ✅ 0. 로딩 시간 설정 (여기서 URL/메뉴별 시간을 제어하세요)
+// ✅ 0. 로딩 시간 설정 (각 메뉴별 딜레이)
 // --------------------------------------------------------------------------
 
-// 기본 로딩 시간 (설정되지 않은 메뉴에 적용)
-const DEFAULT_LOADING_TIME = 100; 
+const DEFAULT_LOADING_TIME = 500; // 기본 0.5초
 
-// 특정 메뉴별 로딩 시간 (단위: ms)
-// 키 값은 TopNavigation의 메뉴명과 정확히 일치해야 합니다.
+// 메뉴명은 TopNavigation의 메뉴명이나 URL path 기준과 매칭됨
 const LOADING_CONFIG: Record<string, number> = {
-  "AI 생산관리": 100,  // 데이터가 많아서 4초
-  "AI 운송관리": 0,  // 가벼워서 1.5초
-  "AI 자재관리": 100,  // 적당히 3초
+  "AI 생산관리": 1000, // 데이터 로드 시뮬레이션: 1초
+  "AI 운송관리": 400,  // 가벼움: 0.4초
+  "AI 자재관리": 700,  // 중간: 0.7초
 };
 
 // --------------------------------------------------------------------------
-// 1. Mobile Blocker Styles
+// 1. Mobile Blocker Styles (모바일 차단 화면 스타일)
 // --------------------------------------------------------------------------
 
 const float = keyframes`
@@ -113,7 +112,7 @@ const PcBadge = styled.div`
 `;
 
 // --------------------------------------------------------------------------
-// 2. Desktop Wrapper Styles
+// 2. Desktop Wrapper Styles (PC 화면 스타일)
 // --------------------------------------------------------------------------
 
 const DesktopOnlyWrapper = styled.div`
@@ -135,37 +134,49 @@ const NavContainer = styled.div`
 const MainContent = styled.main`
   position: relative;
   z-index: 1;
-  min-height: calc(100vh - 64px);
+  min-height: calc(100vh - 64px); /* 네비게이션 높이 제외 */
 `;
 
 // --------------------------------------------------------------------------
-// 3. Main Logic
+// 3. Main Component Logic
 // --------------------------------------------------------------------------
 
 export default function ClientLayoutWrapper({ children }: { children: React.ReactNode }) {
-  const { currentView, setCurrentView, isLoading, setIsLoading } = useViewContext();
+  // ✅ 1. URL 감지 (Next.js Navigation)
+  const pathname = usePathname();
+  
+  // ✅ 2. Context 사용 (Provider 내부여야 함)
+  const { isLoading, setIsLoading } = useViewContext();
 
-  const handleTabChange = (newTab: string) => {
-    if (newTab === currentView) return;
-
-    // 1. 내비게이션 즉시 잠금
-    setIsLoading(true);
-    
-    // 2. 뷰 변경
-    setCurrentView(newTab);
-
-    // ✅ 3. 설정된 시간 가져오기 (없으면 기본값 사용)
-    // newTab("AI 생산관리" 등)이 키값이 됩니다.
-    const delayTime = LOADING_CONFIG[newTab] ?? DEFAULT_LOADING_TIME;
-
-    // 4. 해당 시간만큼 대기 후 잠금 해제
-    setTimeout(() => {
-        setIsLoading(false);
-    }, delayTime);
+  // URL 경로를 메뉴 이름으로 변환하는 헬퍼 함수
+  const getMenuNameFromPath = (path: string) => {
+    if (path.startsWith("/production")) return "AI 생산관리";
+    if (path.startsWith("/transport")) return "AI 운송관리";
+    if (path.startsWith("/material")) return "AI 자재관리";
+    return "";
   };
+
+  // ✅ 3. URL이 변경될 때마다 로딩 효과 실행 (리프레시 없는 SPA 효과)
+  useEffect(() => {
+    const currentMenu = getMenuNameFromPath(pathname);
+    
+    // 로딩 시작
+    setIsLoading(true);
+
+    // 메뉴별 설정된 시간만큼 대기
+    const delayTime = LOADING_CONFIG[currentMenu] ?? DEFAULT_LOADING_TIME;
+
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, delayTime);
+
+    // 컴포넌트 언마운트 시 타이머 정리
+    return () => clearTimeout(timer);
+  }, [pathname, setIsLoading]);
 
   return (
     <>
+      {/* 1. 모바일 접속 시 차단 화면 */}
       <MobileGuardContainer>
         <IconCircle>
           <Monitor size={48} strokeWidth={1.5} />
@@ -184,13 +195,12 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
         </PcBadge>
       </MobileGuardContainer>
 
+      {/* 2. PC 접속 시 메인 화면 */}
       <DesktopOnlyWrapper>
         <NavContainer>
-          <TopNavigation 
-            activeTab={currentView} 
-            onTabChange={handleTabChange} 
-            isLoading={isLoading} 
-          />
+          {/* TopNavigation은 내부적으로 URL을 감지하여 탭을 표시합니다.
+              isLoading만 전달하여 로딩 중 클릭을 방지합니다. */}
+          <TopNavigation isLoading={isLoading} />
         </NavContainer>
         
         <MainContent>

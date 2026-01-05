@@ -4,11 +4,12 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Scan, CheckCircle, AlertCircle, Activity, Box, Layers, Monitor } from 'lucide-react';
 
 // --- 1. 상수 및 타입 ---
-const SCOPE_SIZE = 250; // 돋보기 렌즈 크기 (px)
-const ZOOM_LEVEL = 6;   // [수정] 줌 배율: 3배 -> 6배로 변경 (2배 더 확대됨)
+const SCOPE_SIZE = 250;
+const ZOOM_LEVEL = 6;
 
 type InspectionStatus = '정상' | '점검필요' | '에러';
 type CropPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+type ScreenMode = 'FHD' | 'QHD';
 
 interface HighlightRect {
   top: number; left: number; width: number; height: number;
@@ -19,54 +20,70 @@ interface CamData {
   highlight: HighlightRect;
 }
 
+// --- 2. 해상도별 레이아웃 설정 (헤더 높이 제거됨) ---
+const LAYOUT_CONFIGS = {
+  FHD: {
+    padding: '20px',
+    gap: '12px',
+    // headerHeight 제거됨 (공간 확보)
+    cardHeight: '250px', 
+    cardPadding: '16px',
+    fontSize: { title: '16px', sub: '12px', badge: '11px' },
+    iconSize: 20,
+    logoSize: 20,
+  },
+  QHD: {
+    padding: '32px',
+    gap: '24px',
+    cardHeight: '380px',
+    cardPadding: '24px',
+    fontSize: { title: '22px', sub: '16px', badge: '14px' },
+    iconSize: 30,
+    logoSize: 28,
+  }
+};
+
 const theme = {
   bg: '#F8FAFC', cardBg: '#FFFFFF', textPrimary: '#1E293B', textSecondary: '#64748B',
   accent: '#3B82F6', success: '#10B981', warning: '#F59E0B', danger: '#EF4444',
   border: '#E2E8F0', shadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
 };
 
-// --- 2. 데이터 (외부 박스 비율 16:9 유지) ---
 const topCardsData: CamData[] = [
-  { 
-    id: 'F2', title: 'Surface Check A', status: '정상', icon: <Layers size={18} />, position: 'top-left',
-    highlight: { top: 10, left: 5, width: 32, height: 18 } 
-  },
-  { 
-    id: 'F4', title: 'Dimension Check', status: '정상', icon: <Box size={18} />, position: 'top-center',
-    highlight: { top: 5, left: 42, width: 16, height: 9 }
-  },
-  { 
-    id: 'F6', title: 'Scratch Check', status: '정상', icon: <Scan size={18} />, position: 'top-right',
-    highlight: { top: 15, left: 65, width: 32, height: 18 }
-  },
+  { id: 'F2', title: 'Surface Check A', status: '정상', icon: <Layers />, position: 'top-left', highlight: { top: 10, left: 5, width: 32, height: 18 } },
+  { id: 'F4', title: 'Dimension Check', status: '정상', icon: <Box />, position: 'top-center', highlight: { top: 5, left: 42, width: 16, height: 9 } },
+  { id: 'F6', title: 'Scratch Check', status: '정상', icon: <Scan />, position: 'top-right', highlight: { top: 15, left: 65, width: 32, height: 18 } },
 ];
 
 const bottomCardsData: CamData[] = [
-  { 
-    id: 'F1', title: 'Edge Check L', status: '정상', icon: <Activity size={18} />, position: 'bottom-left',
-    highlight: { top: 60, left: 5, width: 32, height: 18 } 
-  },
-  { 
-    id: 'F3', title: 'Center Alignment', status: '점검필요', icon: <AlertCircle size={18} />, position: 'bottom-center',
-    highlight: { top: 50, left: 42, width: 16, height: 9 }
-  },
-  { 
-    id: 'F5', title: 'Edge Check R', status: '정상', icon: <Activity size={18} />, position: 'bottom-right',
-    highlight: { top: 65, left: 60, width: 32, height: 18 } 
-  },
+  { id: 'F1', title: 'Edge Check L', status: '정상', icon: <Activity />, position: 'bottom-left', highlight: { top: 60, left: 5, width: 32, height: 18 } },
+  { id: 'F3', title: 'Center Alignment', status: '점검필요', icon: <AlertCircle />, position: 'bottom-center', highlight: { top: 50, left: 42, width: 16, height: 9 } },
+  { id: 'F5', title: 'Edge Check R', status: '정상', icon: <Activity />, position: 'bottom-right', highlight: { top: 65, left: 60, width: 32, height: 18 } },
 ];
 
 const VisionDashboard = () => {
+  const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
+
+  useEffect(() => {
+    const handleResize = () => {
+      setScreenMode(window.innerWidth > 2200 ? 'QHD' : 'FHD');
+    };
+    handleResize(); 
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const layout = LAYOUT_CONFIGS[screenMode];
+
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const scopeRef = useRef<HTMLDivElement>(null);
-  const targetBoxRef = useRef<HTMLDivElement>(null); // 동적 타겟 박스
+  const targetBoxRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number | null>(null);
   const [imageMetrics, setImageMetrics] = useState({ width: 0, height: 0, left: 0, top: 0 });
 
   const mainImageUrl = "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=1000&auto=format&fit=crop";
 
-  // --- 이미지 메트릭 계산 ---
   const updateImageMetrics = useCallback(() => {
     if (!imageRef.current || !containerRef.current) return;
     const img = imageRef.current;
@@ -93,13 +110,17 @@ const VisionDashboard = () => {
   }, []);
 
   useEffect(() => {
+    updateImageMetrics();
+    const timer = setTimeout(updateImageMetrics, 300);
+    return () => clearTimeout(timer);
+  }, [screenMode, updateImageMetrics]);
+
+  useEffect(() => {
     window.addEventListener('resize', updateImageMetrics);
     if (imageRef.current?.complete) updateImageMetrics();
-    const timer = setTimeout(updateImageMetrics, 100);
-    return () => { window.removeEventListener('resize', updateImageMetrics); clearTimeout(timer); };
+    return () => window.removeEventListener('resize', updateImageMetrics);
   }, [updateImageMetrics]);
 
-  // --- Zoom Logic ---
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current || !imageRef.current || !scopeRef.current || !targetBoxRef.current) return;
     const clientX = e.clientX; const clientY = e.clientY;
@@ -110,33 +131,27 @@ const VisionDashboard = () => {
       
       const imageRect = imageRef.current.getBoundingClientRect();
       const containerRect = containerRef.current.getBoundingClientRect();
-
-      // 마우스가 실제 이미지 영역 내부에 있는지 확인
       const isInsideImage = clientX >= imageRect.left && clientX <= imageRect.right && clientY >= imageRect.top && clientY <= imageRect.bottom;
 
       if (!isInsideImage) {
         scopeRef.current.style.opacity = '0';
         scopeRef.current.style.transform = 'scale(0.8)';
-        targetBoxRef.current.style.opacity = '0'; // 타겟 박스 숨김
+        targetBoxRef.current.style.opacity = '0';
         return;
       }
 
-      // 1. 스코프 렌즈 위치 이동
       const halfScope = SCOPE_SIZE / 2;
       const scopeLeft = clientX - containerRect.left - halfScope;
       const scopeTop = clientY - containerRect.top - halfScope;
       scopeRef.current.style.opacity = '1';
       scopeRef.current.style.transform = `translate3d(${scopeLeft}px, ${scopeTop}px, 0) scale(1)`;
 
-      // 2. 렌즈 내부 배경 이미지 이동 (확대 효과)
       const relativeX = clientX - imageRect.left;
       const relativeY = clientY - imageRect.top;
       const bgX = (relativeX / imageRect.width) * 100;
       const bgY = (relativeY / imageRect.height) * 100;
       scopeRef.current.style.backgroundPosition = `${bgX}% ${bgY}%`;
 
-      // 3. 동적 타겟 박스 위치 이동 (현재 확대중인 영역 표시)
-      // ZOOM_LEVEL이 커질수록 타겟 박스는 작아져야 함
       const targetSize = SCOPE_SIZE / ZOOM_LEVEL; 
       const halfTarget = targetSize / 2;
       const targetLeft = clientX - containerRect.left - halfTarget;
@@ -160,7 +175,74 @@ const VisionDashboard = () => {
     if (requestRef.current) cancelAnimationFrame(requestRef.current);
   };
 
-  // --- Helper: 정적 하이라이트 박스 스타일 ---
+  const dynamicStyles = {
+    container: {
+      position: 'relative' as const, // For floating widget
+      backgroundColor: theme.bg,
+      height: 'calc(100vh - 64px)', 
+      width: '100vw',
+      padding: layout.padding,
+      fontFamily: '"Inter", -apple-system, sans-serif',
+      color: theme.textPrimary,
+      display: 'flex',
+      flexDirection: 'column' as const,
+      gap: layout.gap,
+      boxSizing: 'border-box' as const,
+      overflow: 'hidden',
+    },
+    // Header 제거됨
+    mainGrid: {
+      display: 'flex',
+      flexDirection: 'column' as const,
+      gap: layout.gap,
+      flex: 1, 
+      minHeight: 0, 
+    },
+    cardRow: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, 1fr)',
+      gap: layout.gap,
+      height: layout.cardHeight, 
+      flexShrink: 0,
+    },
+    mainViewContainer: {
+      position: 'relative' as const,
+      flex: 1, // 헤더가 빠진 만큼 더 넓어진 공간을 차지함
+      width: '100%',
+      backgroundColor: '#fff',
+      borderRadius: '16px',
+      border: `1px solid ${theme.border}`,
+      boxShadow: theme.shadow,
+      overflow: 'hidden',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      cursor: 'default',
+    },
+    // ✅ Floating Widget Style (우측 하단)
+    floatingWidget: {
+      position: 'absolute' as const,
+      bottom: '32px',
+      right: '32px',
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      backdropFilter: 'blur(12px)',
+      padding: '12px 24px',
+      borderRadius: '16px',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+      border: `1px solid ${theme.border}`,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '24px',
+      zIndex: 100, // 카드 위에 뜸
+      maxWidth: '400px',
+    },
+    logoText: {
+        fontWeight: 800, 
+        fontSize: layout.fontSize.title, 
+        color: theme.textPrimary 
+    }
+  };
+
   const getHighlightBoxStyle = (highlight: HighlightRect, status: InspectionStatus): React.CSSProperties => {
     let color = theme.accent;
     if (status === '점검필요') color = theme.warning;
@@ -176,65 +258,78 @@ const VisionDashboard = () => {
       border: `2px solid ${color}`, backgroundColor: `${color}33`, zIndex: 20, pointerEvents: 'none', boxSizing: 'border-box', boxShadow: `0 0 10px ${color}80`, borderRadius: '4px',
     };
   };
+
   const boxLabelStyle = (status: InspectionStatus): React.CSSProperties => {
     let color = theme.accent;
     if (status === '점검필요') color = theme.warning;
     if (status === '에러') color = theme.danger;
     return {
-      position: 'absolute', top: '-20px', left: 0, backgroundColor: color, color: '#fff', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap',
+      position: 'absolute', top: '-24px', left: 0, backgroundColor: color, color: '#fff', fontSize: layout.fontSize.badge, fontWeight: 700, padding: '3px 8px', borderRadius: '4px', whiteSpace: 'nowrap',
     };
   };
 
   return (
-    <div style={styles.dashboardContainer}>
-      <header style={styles.header}>
+    <div style={dynamicStyles.container}>
+      {/* 1. Header 제거됨 */}
+      
+      {/* 2. Floating Widget (우측 하단 모달 형태) */}
+      <div style={dynamicStyles.floatingWidget}>
         <div style={styles.logoGroup}>
-          <Monitor size={24} color={theme.accent} />
-          <span style={{ fontWeight: 800, fontSize: '20px', color: theme.textPrimary }}>Estify<span style={{color: theme.accent}}>Vision</span></span>
+          <Monitor size={layout.logoSize} color={theme.accent} />
+          <span style={dynamicStyles.logoText}>Estify<span style={{color: theme.accent}}>Vision</span></span>
         </div>
+        <div style={styles.vDivider} />
         <div style={styles.headerStats}>
-          <HeaderItem label="Status" value="PASS" valueColor={theme.success} icon={<CheckCircle size={16} color={theme.success} />} />
+          <HeaderItem label="System" value="OK" valueColor={theme.success} icon={<CheckCircle size={16} color={theme.success} />} layout={layout} />
+          <HeaderItem label="Count" value="14,203" layout={layout} />
         </div>
-      </header>
-      <div style={styles.mainGrid}>
-        <div style={styles.cardRow}>
-          {topCardsData.map((card) => (<StatusCard key={card.id} data={card} imageUrl={mainImageUrl} />))}
+      </div>
+
+      <div style={dynamicStyles.mainGrid}>
+        {/* Top Cards */}
+        <div style={dynamicStyles.cardRow}>
+          {topCardsData.map((card) => (<StatusCard key={card.id} data={card} imageUrl={mainImageUrl} layout={layout} />))}
         </div>
-        <div ref={containerRef} style={styles.mainViewContainer} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
+
+        {/* Main Viewport (가운데 영역 확장됨) */}
+        <div ref={containerRef} style={dynamicStyles.mainViewContainer} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
           <img ref={imageRef} src={mainImageUrl} alt="Inspection Target" style={styles.mainImage} onLoad={updateImageMetrics} />
-          {/* 정적 박스들 */}
+          
           {imageMetrics.width > 0 && [...topCardsData, ...bottomCardsData].map((card) => (
             <div key={`box-${card.id}`} style={getHighlightBoxStyle(card.highlight, card.status)}>
               <div style={boxLabelStyle(card.status)}>{card.id}</div>
             </div>
           ))}
           
-          {/* [추가] 동적 타겟 박스 (현재 줌 영역 표시) */}
           <div ref={targetBoxRef} style={styles.targetBox} />
 
-          {/* 줌 렌즈 */}
           <div ref={scopeRef} style={{...styles.scopeLens, backgroundImage: `url(${mainImageUrl})`}}>
             <div style={styles.reticleH} /><div style={styles.reticleV} />
           </div>
-          <div style={styles.mainLabel}>Live Inspection View (x{ZOOM_LEVEL})</div>
+          <div style={styles.mainLabel}>Live Inspection View (x{ZOOM_LEVEL}) - {screenMode}</div>
         </div>
-        <div style={styles.cardRow}>
-          {bottomCardsData.map((card) => (<StatusCard key={card.id} data={card} imageUrl={mainImageUrl} />))}
+
+        {/* Bottom Cards */}
+        <div style={dynamicStyles.cardRow}>
+          {bottomCardsData.map((card) => (<StatusCard key={card.id} data={card} imageUrl={mainImageUrl} layout={layout} />))}
         </div>
       </div>
     </div>
   );
 };
 
-// --- Components ---
-const HeaderItem = ({ label, value, valueColor, icon }: any) => (
+// --- Sub Components ---
+
+const HeaderItem = ({ label, value, valueColor, icon, layout }: any) => (
   <div style={styles.headerItem}>
-    <span style={styles.headerLabel}>{label}</span>
-    <span style={{ ...styles.headerValue, color: valueColor || theme.textPrimary }}>{icon && <span style={{ marginRight: '6px', display: 'flex' }}>{icon}</span>}{value}</span>
+    <span style={{ fontSize: '10px', fontWeight: 600, color: theme.textSecondary, textTransform: 'uppercase' }}>{label}</span>
+    <span style={{ fontSize: layout.fontSize.sub, fontWeight: 700, display: 'flex', alignItems: 'center', color: valueColor || theme.textPrimary }}>
+      {icon && <span style={{ marginRight: '4px', display: 'flex' }}>{icon}</span>}{value}
+    </span>
   </div>
 );
 
-const StatusCard = ({ data, imageUrl }: { data: CamData, imageUrl: string }) => {
+const StatusCard = ({ data, imageUrl, layout }: { data: CamData, imageUrl: string, layout: any }) => {
   const calculateCropStyle = (highlight: HighlightRect): React.CSSProperties => {
     const { top, left, width, height } = highlight;
     const safeWidth = width <= 0.1 ? 0.1 : width;
@@ -250,63 +345,59 @@ const StatusCard = ({ data, imageUrl }: { data: CamData, imageUrl: string }) => 
       backgroundRepeat: 'no-repeat',
     };
   };
+
+  const IconComponent = React.cloneElement(data.icon as React.ReactElement, { size: layout.iconSize });
+
   return (
-    <div style={styles.card}>
+    <div style={{...styles.card, padding: layout.cardPadding}}>
       <div style={styles.cardHeader}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: theme.accent }}>{data.icon}</span>
-          <span style={styles.cardTitle}>{data.id}</span>
+          <span style={{ color: theme.accent }}>{IconComponent}</span>
+          <span style={{ fontWeight: 700, fontSize: layout.fontSize.title }}>{data.id}</span>
         </div>
-        <Badge status={data.status} />
+        <Badge status={data.status} fontSize={layout.fontSize.badge} />
       </div>
+      
       <div style={styles.cropContainer}>
         <div style={{ ...styles.cropImage, ...calculateCropStyle(data.highlight) }} />
         <div style={styles.cropOverlay}>{data.position.replace('-', ' ').toUpperCase()} Area</div>
       </div>
-      <div style={styles.cardFooter}>{data.title}</div>
+      
+      <div style={{ fontSize: layout.fontSize.sub, color: theme.textSecondary, fontWeight: 500, marginTop: '8px' }}>
+        {data.title}
+      </div>
     </div>
   );
 };
 
-const Badge = ({ status }: { status: InspectionStatus }) => {
+const Badge = ({ status, fontSize }: { status: InspectionStatus, fontSize: string }) => {
   const colors = status === '정상' ? { bg: theme.success + '20', text: theme.success } : status === '점검필요' ? { bg: theme.warning + '20', text: theme.warning } : { bg: theme.danger + '20', text: theme.danger };
-  return <span style={{ ...styles.badge, backgroundColor: colors.bg, color: colors.text }}>{status}</span>;
+  return <span style={{ ...styles.badge, backgroundColor: colors.bg, color: colors.text, fontSize: fontSize }}>{status}</span>;
 };
 
 // --- Styles ---
 const styles: { [key: string]: React.CSSProperties } = {
-  dashboardContainer: { backgroundColor: theme.bg, minHeight: '100vh', padding: '32px', fontFamily: '"Inter", -apple-system, sans-serif', color: theme.textPrimary, display: 'flex', flexDirection: 'column', gap: '24px' },
-  header: { backgroundColor: theme.cardBg, borderRadius: '16px', padding: '16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: theme.shadow, border: `1px solid ${theme.border}` },
-  logoGroup: { display: 'flex', alignItems: 'center', gap: '10px' },
-  headerStats: { display: 'flex', alignItems: 'center', gap: '32px' },
-  headerItem: { display: 'flex', flexDirection: 'column', gap: '2px' },
-  headerLabel: { fontSize: '11px', fontWeight: 600, color: theme.textSecondary, textTransform: 'uppercase' },
-  headerValue: { fontSize: '15px', fontWeight: 700, display: 'flex', alignItems: 'center' },
-  vDivider: { width: '1px', height: '20px', backgroundColor: theme.border },
-  mainGrid: { display: 'flex', flexDirection: 'column', gap: '24px', flex: 1 },
-  cardRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' },
-  mainViewContainer: { position: 'relative', width: '100%', height: '500px', backgroundColor: '#fff', borderRadius: '20px', border: `1px solid ${theme.border}`, boxShadow: theme.shadow, overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'default' },
-  mainImage: { maxHeight: '90%', maxWidth: '90%', objectFit: 'contain', display: 'block', cursor: 'none' },
+  logoGroup: { display: 'flex', alignItems: 'center', gap: '8px' },
+  headerStats: { display: 'flex', alignItems: 'center', gap: '16px' },
+  headerItem: { display: 'flex', flexDirection: 'column', gap: '0px' },
+  vDivider: { width: '1px', height: '16px', backgroundColor: theme.border },
+  mainImage: { maxHeight: '98%', maxWidth: '98%', objectFit: 'contain', display: 'block', cursor: 'none' },
   mainLabel: { position: 'absolute', bottom: '20px', backgroundColor: 'rgba(255,255,255,0.9)', padding: '6px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 600, color: theme.textSecondary, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', pointerEvents: 'none', zIndex: 60 },
   scopeLens: { position: 'absolute', top: 0, left: 0, width: `${SCOPE_SIZE}px`, height: `${SCOPE_SIZE}px`, borderRadius: '50%', border: `2px solid ${theme.accent}`, backgroundColor: '#fff', backgroundRepeat: 'no-repeat', backgroundSize: `${ZOOM_LEVEL * 100}%`, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', pointerEvents: 'none', zIndex: 50, opacity: 0, transform: 'scale(0.8)', transition: 'opacity 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1)', willChange: 'transform, opacity' },
   reticleH: { position: 'absolute', top: '50%', left: '15%', width: '70%', height: '1px', backgroundColor: theme.accent, opacity: 0.5 },
   reticleV: { position: 'absolute', left: '50%', top: '15%', height: '70%', width: '1px', backgroundColor: theme.accent, opacity: 0.5 },
-  card: { backgroundColor: theme.cardBg, borderRadius: '16px', padding: '16px', border: `1px solid ${theme.border}`, boxShadow: theme.shadow, display: 'flex', flexDirection: 'column', gap: '16px', transition: 'transform 0.2s' },
-  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontWeight: 700, fontSize: '15px' },
-  cropContainer: { width: '100%', aspectRatio: '16 / 9', borderRadius: '12px', overflow: 'hidden', position: 'relative', border: `1px solid ${theme.border}`, backgroundColor: '#f1f5f9' },
+  card: { backgroundColor: theme.cardBg, borderRadius: '12px', border: `1px solid ${theme.border}`, boxShadow: theme.shadow, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', transition: 'transform 0.2s', height: '100%', boxSizing: 'border-box' },
+  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' },
+  cropContainer: { width: '100%', flex: 1, minHeight: 0, borderRadius: '6px', overflow: 'hidden', position: 'relative', border: `1px solid ${theme.border}`, backgroundColor: '#f1f5f9' },
   cropImage: { width: '100%', height: '100%', backgroundRepeat: 'no-repeat' },
-  cropOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: '8px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)', color: 'white', fontSize: '11px', fontWeight: 600, textAlign: 'center', letterSpacing: '1px' },
-  cardFooter: { fontSize: '13px', color: theme.textSecondary, fontWeight: 500 },
-  badge: { padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 700 },
-  
-  // [추가] 동적 타겟 박스 스타일
+  cropOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: '3px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)', color: 'white', fontSize: '10px', fontWeight: 600, textAlign: 'center', letterSpacing: '0.5px' },
+  badge: { padding: '2px 8px', borderRadius: '10px', fontWeight: 700 },
   targetBox: {
     position: 'absolute',
     top: 0, left: 0,
-    width: '0px', height: '0px', // JS로 제어
-    border: `2px solid ${theme.accent}`, // 파란색 실선
-    boxShadow: `0 0 10px ${theme.accent}`, // 네온 효과
+    width: '0px', height: '0px',
+    border: `2px solid ${theme.accent}`,
+    boxShadow: `0 0 10px ${theme.accent}`,
     backgroundColor: 'transparent',
     zIndex: 40,
     pointerEvents: 'none',

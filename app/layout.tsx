@@ -1,30 +1,14 @@
 // app/layout.tsx
-import { Metadata } from "next";
-import "./globals.css";
-import localFont from "next/font/local";
-import "flatpickr/dist/flatpickr.min.css";
-import { ViewProvider } from "./view-context"; // Context Provider
-import ClientLayoutWrapper from "./layout-client"; // Client UI Wrapper
 
-const pretendard = localFont({
-  src: [
-    { path: "../public/fonts/Pretendard-Thin.woff2", weight: "100", style: "normal" },
-    { path: "../public/fonts/Pretendard-ExtraLight.woff2", weight: "200", style: "normal" },
-    { path: "../public/fonts/Pretendard-Light.woff2", weight: "300", style: "normal" },
-    { path: "../public/fonts/Pretendard-Regular.woff2", weight: "400", style: "normal" },
-    { path: "../public/fonts/Pretendard-Medium.woff2", weight: "500", style: "normal" },
-    { path: "../public/fonts/Pretendard-SemiBold.woff2", weight: "600", style: "normal" },
-    { path: "../public/fonts/Pretendard-Bold.woff2", weight: "700", style: "normal" },
-    { path: "../public/fonts/Pretendard-ExtraBold.woff2", weight: "800", style: "normal" },
-    { path: "../public/fonts/Pretendard-Black.woff2", weight: "900", style: "normal" },
-  ],
-  variable: "--font-pretendard",
-  display: "swap",
-});
+import type { Metadata } from "next";
+import StyledComponentsRegistry from "@/lib/registry"; 
+import { ViewProvider } from "./view-context"; // ✅ ViewProvider import 필수
+import "./globals.css";
+import ClientLayoutWrapper from "./layout-client";
 
 export const metadata: Metadata = {
-  title: 'SCCT-AI',
-  description: "Using all Pretendard weights via next/font/local",
+  title: "스마트 팩토리 대시보드",
+  description: "물류 및 생산 관리 시스템",
 };
 
 export default function RootLayout({
@@ -33,13 +17,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className={pretendard.variable} suppressHydrationWarning>
-      <body suppressHydrationWarning>
-        <ViewProvider>
-          <ClientLayoutWrapper>
-            {children}
-          </ClientLayoutWrapper>
-        </ViewProvider>
+    <html lang="ko">
+      <body>
+        <StyledComponentsRegistry>
+          {/* ✅ ViewProvider가 가장 바깥에 있어야 합니다 */}
+          <ViewProvider>
+          {/* ✅ 여기서 한 번만 감싸줍니다. */}
+            <ClientLayoutWrapper>
+              {children} 
+            </ClientLayoutWrapper>
+          </ViewProvider>
+        </StyledComponentsRegistry>
       </body>
     </html>
   );
