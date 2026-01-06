@@ -4,8 +4,14 @@ import React, { useState, Suspense, useRef, useMemo, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
 import { Canvas, useThree, useFrame } from "@react-three/fiber"; 
 import { useGLTF, Stage, OrbitControls, Html, useProgress, Center, Resize, Environment } from "@react-three/drei";
-import { Box as LucideBox, Activity, Thermometer, Cpu, AlertCircle, Scan } from "lucide-react";
+import { Box as LucideBox, Activity, Thermometer, Cpu, Scan, BarChart3, TrendingUp } from "lucide-react";
 import * as THREE from "three";
+import { 
+  ResponsiveContainer, ComposedChart, Bar, Line, AreaChart, Area, 
+  XAxis, YAxis, CartesianGrid, Tooltip 
+} from 'recharts';
+
+import { GR2_DATA } from "@/data/gr2";
 
 // -----------------------------------------------------------------------------
 // [설정] 불러올 파일 경로
@@ -23,14 +29,15 @@ const PageContainer = styled.div`
 
 const Header = styled.header`
   display: flex; align-items: center; justify-content: space-between;
-  padding: 1rem 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background-color: rgba(26, 26, 26, 0.8); backdrop-filter: blur(8px);
-  position: fixed; top: 0; width: 100%; z-index: 10; box-sizing: border-box;
+  padding: 1rem 1.5rem; border-bottom: 1px solid rgba(132, 204, 22, 0.2);
+  background-color: rgba(26, 26, 26, 0.9); backdrop-filter: blur(8px);
+  position: fixed; top: 0; width: 100%; box-sizing: border-box;
+  z-index: 200;
 `;
 
 const HeaderLeft = styled.div`
   display: flex; align-items: center; gap: 0.5rem;
-  h1 { font-size: 1.125rem; font-weight: 700; margin: 0; }
+  h1 { font-size: 1.125rem; font-weight: 700; margin: 0; color: #fff; letter-spacing: -0.5px; }
 `;
 
 const MainContent = styled.main`
@@ -43,16 +50,71 @@ const ViewerContainer = styled.div<{ $visible: boolean }>`
   background: radial-gradient(circle at center, #262626 0%, #111111 100%);
   position: relative;
   opacity: ${props => (props.$visible ? 1 : 0)};
-  transition: opacity 0.8s ease-out;
+  transition: opacity 1s cubic-bezier(0.19, 1, 0.22, 1);
 `;
 
 const InstructionBadge = styled.div`
-  position: absolute; bottom: 2rem; left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: 8rem; left: 50%; transform: translateX(-50%);
   padding: 0.6rem 1.2rem; background-color: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9999px; font-size: 0.8rem; color: #a3a3a3;
-  pointer-events: none; white-space: nowrap; z-index: 5;
+  pointer-events: none; white-space: nowrap; 
+  z-index: 90; 
 `;
+
+// --- [수정됨] Graph Overlay Components (Absolute Layout) ---
+
+const GraphPanel = styled.div`
+  position: fixed; 
+  left: 50%; transform: translateX(-50%);
+  width: 90%; max-width: 1200px; 
+  height: 220px; /* 패널 높이 고정 */
+  background: rgba(10, 15, 20, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(132, 204, 22, 0.3);
+  border-radius: 12px;
+  /* Flex 제거, 일반 Block 레이아웃 사용 */
+  display: block; 
+  z-index: 100; /* 3D Canvas보다 무조건 위에 */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+
+  &::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+    background: #84cc16; border-radius: 12px 0 0 12px; opacity: 0.8;
+  }
+`;
+
+const TopGraphPanel = styled(GraphPanel)`
+  top: 5rem;
+`;
+
+const BottomGraphPanel = styled(GraphPanel)`
+  bottom: 2rem;
+  height: 180px; 
+`;
+
+const PanelTitle = styled.div`
+  /* 제목 영역 고정 */
+  position: absolute; top: 16px; left: 20px; right: 20px; height: 24px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 700; color: #84cc16; text-transform: uppercase; letter-spacing: 1px;
+  
+  span.sub { font-size: 11px; color: #888; margin-left: auto; text-transform: none; font-weight: 400; }
+`;
+
+// [핵심 수정] 차트 영역을 절대 위치로 강제 지정하여 높이 0 문제 해결
+const ChartContainerAbsolute = styled.div`
+  position: absolute;
+  top: 50px; /* 제목 아래 */
+  bottom: 16px; /* 패널 하단 여백 */
+  left: 16px; 
+  right: 16px;
+  /* 이 영역 안에서 ResponsiveContainer가 100%를 차지 */
+`;
+
+
+// --- Styled Components for 3D Labels & Popups (기존 유지) ---
 
 const FloatingLabel = styled.div`
   padding: 4px 8px; background-color: rgba(0, 0, 0, 0.8);
@@ -61,8 +123,6 @@ const FloatingLabel = styled.div`
   box-shadow: 0 4px 6px rgba(0,0,0,0.4); pointer-events: none;
   user-select: none; opacity: 0.7;
 `;
-
-// --- UI & Animation Components ---
 
 const popupFadeIn = keyframes`
   from { opacity: 0; transform: translateY(10px); }
@@ -183,11 +243,11 @@ const ProgressBarTrack = styled.div`
 const ProgressBarFill = styled.div<{ $progress: number }>`
   height: 100%; width: ${props => props.$progress}%;
   background-color: #84cc16; border-radius: 9999px;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.2s linear; 
   box-shadow: 0 0 20px rgba(132, 204, 22, 0.5);
 `;
 
-// --- Preview Components ---
+// --- Preview & Model Components (기존과 동일) ---
 
 function PreviewObject({ name }: { name: string }) {
   const { scene } = useGLTF(FIXED_MODEL_PATH);
@@ -197,10 +257,7 @@ function PreviewObject({ name }: { name: string }) {
     let found: THREE.Mesh | null = null;
     scene.traverse((child) => {
       if (child.uuid === name && (child as THREE.Mesh).isMesh) {
-        // 원본 복제
         found = (child as THREE.Mesh).clone();
-        
-        // [수정] 타입 단언(Type Assertion)을 사용하여 emissive 속성 접근
         if (found.material) {
           const mat = Array.isArray(found.material) 
             ? found.material.map(m => m.clone()) 
@@ -208,13 +265,11 @@ function PreviewObject({ name }: { name: string }) {
             
           if (Array.isArray(mat)) {
             mat.forEach(m => { 
-              // MeshStandardMaterial로 캐스팅 후 emissive 접근
               if ((m as THREE.MeshStandardMaterial).emissive) {
                 (m as THREE.MeshStandardMaterial).emissive.setHex(0x000000); 
               }
             });
           } else {
-            // MeshStandardMaterial로 캐스팅 후 emissive 접근
             if ((mat as THREE.MeshStandardMaterial).emissive) {
               (mat as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
             }
@@ -227,7 +282,6 @@ function PreviewObject({ name }: { name: string }) {
   }, [scene, name]);
 
   useFrame((state, delta) => {
-    // 천천히 회전
     if (groupRef.current) groupRef.current.rotation.y += delta * 0.2;
   });
 
@@ -260,20 +314,15 @@ function InitialCameraRig() {
   return null;
 }
 
-// [StatusPopup]
 function StatusPopup({ data, position }: { data: any, position: [number, number, number] }) {
   const { camera } = useThree();
-  
   const vec = new THREE.Vector3(...position);
   vec.project(camera);
   const isRightSide = vec.x > 0; 
-
   const dx = isRightSide ? -250 : 250; 
   const dy = -250; 
-
   const lineLength = Math.sqrt(dx * dx + dy * dy);
   const angle = Math.atan2(dy, dx) * (180 / Math.PI); 
-
   const totalWidth = 310;
   const popupLeft = dx - (totalWidth / 2); 
   const popupTop = dy;
@@ -289,50 +338,29 @@ function StatusPopup({ data, position }: { data: any, position: [number, number,
       style={{ pointerEvents: 'none', width: 0, height: 0, overflow: 'visible' }}
     >
       <div style={{ position: 'relative' }}>
-        
-        {/* 시작점 마커 (정중앙) */}
         <div style={{
           position: 'absolute', left: -4, top: -4, width: 8, height: 8,
           background: '#84cc16', borderRadius: '50%', boxShadow: '0 0 10px #84cc16',
           zIndex: 1001
         }} />
-
-        {/* 연결선 */}
-        <LineContainer 
-          style={{
-            width: `${lineLength}px`,
-            transform: `rotate(${angle}deg)`
-          }}
-        >
+        <LineContainer style={{ width: `${lineLength}px`, transform: `rotate(${angle}deg)` }}>
           <AnimatedLine />
         </LineContainer>
-
-        {/* 연결 링 */}
         <RingEffect style={{ left: dx, top: dy }} />
-
-        {/* 정보창 래퍼 */}
         <div style={{
-          position: 'absolute',
-          left: popupLeft + 'px',
-          top: popupTop + 'px',
-          width: totalWidth + 'px',
-          transform: 'translateY(-100%)',
-          paddingBottom: '16px' 
+          position: 'absolute', left: popupLeft + 'px', top: popupTop + 'px',
+          width: totalWidth + 'px', transform: 'translateY(-100%)', paddingBottom: '16px' 
         }}>
           <InfoWrapper>
-            
-            {/* 프리뷰 창 */}
             <PreviewBox>
               <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 3], fov: 50 }}>
                 <Suspense fallback={null}>
-                  {/* 조명 추가로 검은색 현상 해결 */}
                   <Environment preset="city" /> 
                   <ambientLight intensity={1} />
                   <PreviewObject name={data.id} />
                 </Suspense>
               </Canvas>
             </PreviewBox>
-
             <PopupContainer>
               <PopupHeader>
                 <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
@@ -357,32 +385,40 @@ function StatusPopup({ data, position }: { data: any, position: [number, number,
             </PopupContainer>
           </InfoWrapper>
         </div>
-
       </div>
     </Html>
   );
 }
 
-// Loader
 function Loader({ onFinished }: { onFinished: () => void }) {
   const { active, progress } = useProgress();
-  const [percent, setPercent] = useState(0);
-  const [timePassed, setTimePassed] = useState(false);
+  const [visualProgress, setVisualProgress] = useState(0);
   const [shouldUnmount, setShouldUnmount] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => { setTimePassed(true); }, 2500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (active) setPercent(progress);
-    else if (progress === 100) setPercent(100);
+    let animationFrameId: number;
+    const animate = () => {
+      setVisualProgress(prev => {
+        const target = active ? progress : 100;
+        const next = prev + (target - prev) * 0.1;
+        if (Math.abs(target - next) < 0.1) return target;
+        return next;
+      });
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    animationFrameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrameId);
   }, [active, progress]);
 
   useEffect(() => {
-    if (timePassed && percent === 100) { onFinished(); setShouldUnmount(true); }
-  }, [timePassed, percent, onFinished]);
+    if (visualProgress >= 99.9) {
+      const timer = setTimeout(() => {
+        onFinished();
+        setShouldUnmount(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [visualProgress, onFinished]);
 
   if (shouldUnmount) return null;
 
@@ -390,10 +426,10 @@ function Loader({ onFinished }: { onFinished: () => void }) {
     <LoaderOverlay>
       <ProgressContainer>
         <ProgressText>
-          <span>모델 불러오는 중...</span>
-          <span className="percent">{percent.toFixed(0)}%</span>
+          <span>시스템 초기화 중...</span>
+          <span className="percent">{visualProgress.toFixed(0)}%</span>
         </ProgressText>
-        <ProgressBarTrack><ProgressBarFill $progress={percent} /></ProgressBarTrack>
+        <ProgressBarTrack><ProgressBarFill $progress={visualProgress} /></ProgressBarTrack>
       </ProgressContainer>
     </LoaderOverlay>
   );
@@ -416,25 +452,20 @@ function Model({ url }: { url: string }) {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         mesh.castShadow = true; mesh.receiveShadow = true;
-        
         if (mesh.material) {
           mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => m.clone()) : mesh.material.clone();
         }
-        
         mesh.updateMatrixWorld();
         const box = new THREE.Box3().setFromObject(mesh);
-        
         if (!box.isEmpty()) {
           const center = new THREE.Vector3();
           box.getCenter(center);
           const labelText = `GR${grCount.toString().padStart(2, '0')}`;
-          
           mesh.userData = { 
             name: labelText,
             temp: Math.floor(Math.random() * 30) + 40, 
             load: Math.floor(Math.random() * 40) + 20
           };
-
           generatedLabels.push({ id: mesh.uuid, text: labelText, position: [center.x, box.max.y + 0.1, center.z] });
           grCount++;
         }
@@ -447,7 +478,6 @@ function Model({ url }: { url: string }) {
     e.stopPropagation();
     const mesh = e.object as THREE.Mesh;
     document.body.style.cursor = "pointer";
-
     if (mesh.isMesh) {
       if (mesh.material) {
         const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -459,13 +489,10 @@ function Model({ url }: { url: string }) {
           mat.emissiveIntensity = 2.0;
         }
       }
-
-      // [핵심] 마우스 올린 '바로 그 부품(mesh)'의 정중앙 좌표 계산
       mesh.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(mesh); // 절대 parent를 쓰지 않음
+      const box = new THREE.Box3().setFromObject(mesh);
       const center = new THREE.Vector3();
       box.getCenter(center); 
-
       setHoveredData({
         id: mesh.uuid,
         name: mesh.userData.name || "Unknown Unit",
@@ -479,7 +506,6 @@ function Model({ url }: { url: string }) {
   const handlePointerOut = (e: any) => {
     const mesh = e.object as THREE.Mesh;
     document.body.style.cursor = "auto";
-    
     if (mesh.isMesh && originalEmissives.current.has(mesh.uuid)) {
       const mat = mesh.material as THREE.MeshStandardMaterial;
       const originalData = originalEmissives.current.get(mesh.uuid)!;
@@ -491,27 +517,37 @@ function Model({ url }: { url: string }) {
 
   return (
     <group>
-      <primitive 
-        object={scene} 
-        onPointerOver={handlePointerOver} 
-        onPointerOut={handlePointerOut} 
-      />
-      
+      <primitive object={scene} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} />
       {labels.map((label) => (
         <Html key={label.id} position={label.position} center zIndexRange={[100, 0]} distanceFactor={12} style={{pointerEvents: 'none'}}>
           <FloatingLabel>{label.text}</FloatingLabel>
         </Html>
       ))}
-
-      {hoveredData && (
-        <StatusPopup 
-          data={hoveredData} 
-          position={hoveredData.position} 
-        />
-      )}
+      {hoveredData && <StatusPopup data={hoveredData} position={hoveredData.position} />}
     </group>
   );
 }
+
+// --- Custom Graph Tooltip ---
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{
+        background: 'rgba(10, 15, 20, 0.95)', border: '1px solid #84cc16', 
+        padding: '8px 12px', borderRadius: '4px', boxShadow: '0 4px 10px rgba(0,0,0,0.5)',
+        fontFamily: 'monospace', fontSize: '12px', zIndex: 1000
+      }}>
+        <p style={{ color: '#84cc16', fontWeight: 'bold', margin: '0 0 4px 0' }}>{label}</p>
+        {payload.map((p: any, idx: number) => (
+          <p key={idx} style={{ color: p.color, margin: 0 }}>
+            {p.name}: {p.value}{p.unit || ''}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
 
 // --- Main Page Component ---
 
@@ -532,17 +568,62 @@ export default function GlbViewerPage() {
 
         <ViewerContainer $visible={isLoaded}>
           
-          <Canvas dpr={[1, 2]} camera={{ position: [0, 10.54, 10.25], fov: 45 }} shadows>
+          {/* 상단 그래프: 검사수 & 불량수 */}
+          <TopGraphPanel>
+            <PanelTitle>
+              <BarChart3 size={16} /> 
+              Production Inspection & Error
+              <span className="sub">GR2 LINE / MES DATA (2024.01 - 12)</span>
+            </PanelTitle>
             
-            <InitialCameraRig />
+            {/* ChartContainerAbsolute: 그래프 영역을 절대 좌표로 강제 고정 */}
+            <ChartContainerAbsolute>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={GR2_DATA}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis dataKey="name" tick={{fontSize: 10, fill: '#666'}} interval={2} />
+                  <YAxis yAxisId="left" tick={{fontSize: 10, fill: '#666'}} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(132, 204, 22, 0.1)' }} />
+                  {/* isAnimationActive={false}로 데이터 로드 시 렌더링 누락 방지 */}
+                  <Bar yAxisId="left" dataKey="inspection" name="검사수" fill="#3f6212" barSize={12} radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                  <Line yAxisId="left" type="monotone" dataKey="error" name="불량수" stroke="#ef4444" strokeWidth={2} dot={{r: 2, fill: '#ef4444'}} activeDot={{r: 4}} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartContainerAbsolute>
+          </TopGraphPanel>
 
+          {/* 하단 그래프: 불량률 */}
+          <BottomGraphPanel>
+            <PanelTitle>
+              <TrendingUp size={16} /> 
+              Defect Rate Analysis
+              <span className="sub">WEEKLY TREND %</span>
+            </PanelTitle>
+            
+            <ChartContainerAbsolute>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={GR2_DATA}>
+                  <defs>
+                    <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#84cc16" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#84cc16" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis dataKey="name" tick={{fontSize: 10, fill: '#666'}} interval={2} />
+                  <YAxis tick={{fontSize: 10, fill: '#666'}} unit="%" />
+                  <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#84cc16', strokeWidth: 1 }} />
+                  <Area type="monotone" dataKey="rate" name="불량률" unit="%" stroke="#84cc16" fillOpacity={1} fill="url(#colorRate)" strokeWidth={2} isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartContainerAbsolute>
+          </BottomGraphPanel>
+
+          {/* 3D Canvas */}
+          <Canvas dpr={[1, 2]} camera={{ position: [0, 10.54, 10.25], fov: 45 }} shadows>
+            <InitialCameraRig />
             <Suspense fallback={null}>
-              <Stage 
-                environment="city" 
-                intensity={1} 
-                adjustCamera={0.7} 
-                shadows="contact"
-              >
+              <Stage environment="city" intensity={1} adjustCamera={0.7} shadows="contact">
                 <Center>
                   <Model url={FIXED_MODEL_PATH} />
                 </Center>
@@ -554,6 +635,7 @@ export default function GlbViewerPage() {
           <InstructionBadge>
             좌클릭/휠: 시점 조작 / 마우스 오버: 상세 정보
           </InstructionBadge>
+
         </ViewerContainer>
       </MainContent>
     </PageContainer>

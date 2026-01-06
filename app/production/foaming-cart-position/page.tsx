@@ -4,243 +4,368 @@ import React, { useState, Suspense, useRef, useMemo, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
 import { Canvas, useThree, useFrame } from "@react-three/fiber"; 
 import { useGLTF, Stage, OrbitControls, Html, useProgress, Center, Resize, Environment } from "@react-three/drei";
-import { Box as LucideBox, Activity, Thermometer, Cpu, AlertCircle, Scan } from "lucide-react";
+import { Box as LucideBox, Activity, Thermometer, Cpu, Scan, BarChart3, TrendingUp, Zap, Layers } from "lucide-react";
 import * as THREE from "three";
+import { 
+  ResponsiveContainer, ComposedChart, Bar, Line, AreaChart, Area, 
+  XAxis, YAxis, CartesianGrid, Tooltip 
+} from 'recharts';
+
+// [데이터 경로 유지]
+import { GR2_DATA } from "@/data/gr2";
 
 // -----------------------------------------------------------------------------
 // [설정] 불러올 파일 경로
 const FIXED_MODEL_PATH = "/model.glb"; 
 // -----------------------------------------------------------------------------
 
+// --- Animations ---
+
+const fadeIn = keyframes` from { opacity: 0; } to { opacity: 1; } `;
+const slideInRight = keyframes` from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } `;
+const slideInLeft = keyframes` from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } `;
+const float = keyframes` 0% { transform: translateY(0px); } 50% { transform: translateY(-5px); } 100% { transform: translateY(0px); } `;
+
+// [복구됨] 선이 자라나는 애니메이션
+const growLine = keyframes` from { transform: scaleX(0); } to { transform: scaleX(1); } `;
+// [복구됨] 팝업 등장 애니메이션
+const popupFadeIn = keyframes` from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } `;
+// [복구됨] 펄스 효과
+const pulse = keyframes`
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
+  70% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+`;
+
 // --- Styled Components ---
 
 const PageContainer = styled.div`
   display: flex; flex-direction: column; width: 100%; height: 100vh;
-  background-color: #1a1a1a; color: #f5f5f5;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
+  color: #f8fafc;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
   overflow: hidden;
 `;
 
 const Header = styled.header`
   display: flex; align-items: center; justify-content: space-between;
-  padding: 1rem 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background-color: rgba(26, 26, 26, 0.8); backdrop-filter: blur(8px);
-  position: fixed; top: 0; width: 100%; z-index: 10; box-sizing: border-box;
+  padding: 1rem 2rem; 
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: fixed; top: 0; width: 100%; box-sizing: border-box;
+  z-index: 200;
 `;
 
 const HeaderLeft = styled.div`
-  display: flex; align-items: center; gap: 0.5rem;
-  h1 { font-size: 1.125rem; font-weight: 700; margin: 0; }
+  display: flex; align-items: center; gap: 0.8rem;
+  
+  .icon-box {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #38bdf8, #818cf8);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4);
+  }
+  
+  h1 { 
+    font-size: 1.25rem; font-weight: 700; margin: 0; 
+    background: linear-gradient(to right, #fff, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
 `;
 
 const MainContent = styled.main`
   flex: 1; width: 100%; height: 100%; position: relative;
-  display: flex; flex-direction: column;
 `;
 
 const ViewerContainer = styled.div<{ $visible: boolean }>`
-  width: 100%; height: 100%; padding-top: 3.5rem;
-  background: radial-gradient(circle at center, #262626 0%, #111111 100%);
+  width: 100%; height: 100%; padding-top: 4rem;
   position: relative;
   opacity: ${props => (props.$visible ? 1 : 0)};
-  transition: opacity 0.8s ease-out;
+  transition: opacity 1.2s ease-in-out;
 `;
 
-const InstructionBadge = styled.div`
-  position: absolute; bottom: 2rem; left: 50%; transform: translateX(-50%);
-  padding: 0.6rem 1.2rem; background-color: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 9999px; font-size: 0.8rem; color: #a3a3a3;
-  pointer-events: none; white-space: nowrap; z-index: 5;
-`;
+// --- [Glass Panel System] ---
 
-const FloatingLabel = styled.div`
-  padding: 4px 8px; background-color: rgba(0, 0, 0, 0.8);
-  border: 1px solid #84cc16; border-radius: 4px; color: #84cc16;
-  font-size: 11px; font-weight: 700; white-space: nowrap;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.4); pointer-events: none;
-  user-select: none; opacity: 0.7;
-`;
+const GlassPanel = styled.div`
+  position: fixed;
+  width: 440px; 
+  height: 260px;
+  background: rgba(30, 41, 59, 0.6); 
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex; flex-direction: column;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+  pointer-events: auto;
 
-// --- UI & Animation Components ---
+  &:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(30, 41, 59, 0.7); 
+  }
 
-const popupFadeIn = keyframes`
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-`;
-
-const growLine = keyframes`
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-`;
-
-const pulse = keyframes`
-  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; box-shadow: 0 0 0 0 rgba(132, 204, 22, 0.7); }
-  70% { transform: translate(-50%, -50%) scale(1.3); opacity: 0; box-shadow: 0 0 0 10px rgba(132, 204, 22, 0); }
-  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
-`;
-
-const InfoWrapper = styled.div`
-  display: flex; align-items: stretch; gap: 8px;
-  opacity: 0; 
-  animation: ${popupFadeIn} 0.4s ease-out 0.4s forwards; 
-  pointer-events: none;
-  
-  &::after {
-    content: ''; position: absolute; bottom: -6px; left: 50%;
-    transform: translateX(-50%); width: 0; height: 0; 
-    border-left: 6px solid transparent; border-right: 6px solid transparent;
-    border-top: 6px solid #84cc16;
+  &::before {
+    content: ''; position: absolute; inset: 0; border-radius: 16px; padding: 1px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
   }
 `;
 
-const PreviewBox = styled.div`
-  width: 100px; background: rgba(10, 15, 20, 0.95);
-  border: 1px solid #84cc16; backdrop-filter: blur(12px);
-  position: relative; overflow: hidden;
-  box-shadow: 0 0 20px rgba(132, 204, 22, 0.1);
-  display: flex; align-items: center; justify-content: center;
+const TopRightPanel = styled(GlassPanel)`
+  top: 6rem; right: 2rem;
+  animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 `;
 
-const PopupContainer = styled.div`
-  width: 200px; background: rgba(15, 20, 25, 0.95);
-  border: 1px solid #84cc16; backdrop-filter: blur(12px);
-  padding: 0; color: white; font-family: "Consolas", "Monaco", monospace;
-  box-shadow: 0 0 30px rgba(132, 204, 22, 0.2);
+const BottomLeftPanel = styled(GlassPanel)`
+  bottom: 2rem; left: 2rem;
+  height: 240px;
+  animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
+  opacity: 0; 
+  animation-fill-mode: forwards;
 `;
 
-const PopupHeader = styled.div`
-  background: rgba(132, 204, 22, 0.15); padding: 8px 12px;
-  border-bottom: 1px solid #84cc16; font-size: 13px; font-weight: bold;
-  color: #84cc16; display: flex; align-items: center; gap: 8px;
-  text-transform: uppercase; letter-spacing: 1px;
+const PanelHeader = styled.div`
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 10px;
+
+  .title-group {
+    display: flex; align-items: center; gap: 10px;
+    color: #f1f5f9; font-size: 14px; font-weight: 700; letter-spacing: 0.5px;
+  }
+
+  .tag {
+    font-size: 10px; font-weight: 600; 
+    padding: 4px 8px; border-radius: 20px;
+    background: rgba(56, 189, 248, 0.15); color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
 `;
 
-const PopupBody = styled.div`
-  padding: 12px; display: flex; flex-direction: column; gap: 8px;
+const ChartWrapper = styled.div`
+  flex: 1; width: 100%; min-height: 0; position: relative;
 `;
 
-const StatRow = styled.div`
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 12px; color: #e5e5e5;
-  border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 4px;
-  span.label { color: #a3a3a3; display: flex; align-items: center; gap: 4px; }
-  span.value { font-weight: bold; color: #fff; font-family: "Menlo", monospace; }
-  span.status-ok { color: #84cc16; }
+// --- [Interactive 3D UI & Animations] ---
+
+const InstructionBadge = styled.div`
+  position: fixed; bottom: 3rem; left: 50%; transform: translateX(-50%);
+  padding: 0.8rem 1.6rem; 
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(10px); 
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px; 
+  font-size: 0.85rem; font-weight: 500; color: #cbd5e1;
+  display: flex; align-items: center; gap: 8px;
+  pointer-events: none; z-index: 90;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  animation: ${float} 4s ease-in-out infinite;
+  span.highlight { color: #38bdf8; font-weight: 700; }
 `;
 
+// [복구됨] 라인 애니메이션 컨테이너
 const LineContainer = styled.div`
   position: absolute; top: 0; left: 0;
   height: 2px; transform-origin: 0 0; 
   pointer-events: none; z-index: 1000;
 `;
 
+// [복구됨] 라인 애니메이션 바 (Cyan Color)
 const AnimatedLine = styled.div`
-  width: 100%; height: 100%; background-color: #84cc16;
-  box-shadow: 0 0 8px #84cc16; transform-origin: 0 50%; 
+  width: 100%; height: 100%; background-color: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8; transform-origin: 0 50%; 
   animation: ${growLine} 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 `;
 
+// [복구됨] 끝점 링 이펙트
 const RingEffect = styled.div`
   position: absolute; width: 12px; height: 12px;
-  background: #84cc16; border-radius: 50%;
+  background: #38bdf8; border-radius: 50%;
   transform: translate(-50%, -50%); z-index: 1002;
-  box-shadow: 0 0 10px #84cc16;
+  box-shadow: 0 0 10px #38bdf8;
   opacity: 0; animation: ${keyframes`to{opacity:1}`} 0.1s linear 0.4s forwards;
-
+  
   &::after {
     content: ''; position: absolute; top: 50%; left: 50%;
     width: 100%; height: 100%; border-radius: 50%;
-    background: transparent; border: 2px solid #84cc16;
+    background: transparent; border: 2px solid #38bdf8;
     transform: translate(-50%, -50%); animation: ${pulse} 2s infinite 0.4s;
   }
 `;
 
-// --- Loader Components ---
+// [복구됨] 정보창 래퍼 (등장 애니메이션 포함)
+const InfoWrapper = styled.div`
+  display: flex; align-items: stretch; gap: 8px;
+  opacity: 0; 
+  animation: ${popupFadeIn} 0.4s ease-out 0.4s forwards; 
+  pointer-events: none;
+`;
+
+// --- Styled Components for 3D Labels ---
+
+const FloatingLabel = styled.div`
+  padding: 4px 8px; background-color: rgba(15, 23, 42, 0.9);
+  border: 1px solid #38bdf8; border-radius: 4px; color: #38bdf8;
+  font-size: 10px; font-weight: 700; white-space: nowrap;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.6); pointer-events: none;
+  user-select: none; opacity: 0.8;
+  transition: opacity 0.3s;
+`;
+
+// --- Loader ---
 const LoaderOverlay = styled.div`
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
   display: flex; align-items: center; justify-content: center;
-  background-color: #1a1a1a; z-index: 2147483647; 
+  background: #0f172a; z-index: 9999;
 `;
 
-const ProgressContainer = styled.div`
-  display: flex; flex-direction: column; align-items: center; gap: 1.2rem;
-  width: 320px; padding: 2.5rem; background-color: #262626;
-  border-radius: 20px; border: 1px solid #333;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+const LoadingBarContainer = styled.div`
+  width: 300px; text-align: center;
+`;
+const LoadingText = styled.div`
+  font-size: 14px; color: #94a3b8; margin-bottom: 12px; display: flex; justify-content: space-between;
+  strong { color: #38bdf8; }
+`;
+const Track = styled.div`
+  width: 100%; height: 4px; background: #334155; border-radius: 2px; overflow: hidden;
+`;
+const Fill = styled.div<{ $p: number }>`
+  height: 100%; width: ${props => props.$p}%;
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
+  transition: width 0.2s ease;
 `;
 
-const ProgressText = styled.div`
-  font-size: 1rem; font-weight: 600; color: #e5e5e5;
-  display: flex; justify-content: space-between; width: 100%; margin-bottom: 0.5rem;
-  span.percent { color: #84cc16; font-variant-numeric: tabular-nums; }
+function Loader({ onFinished }: { onFinished: () => void }) {
+  const { active, progress } = useProgress();
+  const [val, setVal] = useState(0);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let frame: number;
+    const loop = () => {
+      setVal(v => {
+        const target = active ? progress : 100;
+        const next = v + (target - v) * 0.1;
+        if(Math.abs(target - next) < 0.1) return target;
+        return next;
+      });
+      frame = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => cancelAnimationFrame(frame);
+  }, [active, progress]);
+
+  useEffect(() => {
+    if(val > 99.5) {
+      setTimeout(() => { setDone(true); onFinished(); }, 600);
+    }
+  }, [val, onFinished]);
+
+  if(done) return null;
+  return (
+    <LoaderOverlay>
+      <LoadingBarContainer>
+        <LoadingText><span>System Loading</span><strong>{val.toFixed(0)}%</strong></LoadingText>
+        <Track><Fill $p={val} /></Track>
+      </LoadingBarContainer>
+    </LoaderOverlay>
+  );
+}
+
+// --- 3D & Popup Components ---
+
+// 팝업 스타일
+const PopupCard = styled.div`
+  width: 220px; background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  border-radius: 8px; overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  pointer-events: auto;
+`;
+const PopupTitle = styled.div`
+  background: rgba(56, 189, 248, 0.1); padding: 10px 12px;
+  font-size: 13px; font-weight: 700; color: #38bdf8;
+  display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+`;
+const PopupRow = styled.div`
+  padding: 8px 12px; display: flex; justify-content: space-between;
+  font-size: 12px; color: #cbd5e1; border-bottom: 1px solid rgba(255,255,255,0.05);
+  &:last-child { border-bottom: none; }
+  span.val { font-family: 'Menlo', monospace; font-weight: 600; color: #fff; }
+  span.good { color: #4ade80; }
 `;
 
-const ProgressBarTrack = styled.div`
-  width: 100%; height: 8px; background-color: #333; border-radius: 9999px; overflow: hidden;
-`;
-
-const ProgressBarFill = styled.div<{ $progress: number }>`
-  height: 100%; width: ${props => props.$progress}%;
-  background-color: #84cc16; border-radius: 9999px;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0 20px rgba(132, 204, 22, 0.5);
-`;
-
-// --- Preview Components ---
-
-function PreviewObject({ name }: { name: string }) {
-  const { scene } = useGLTF(FIXED_MODEL_PATH);
-  const groupRef = useRef<THREE.Group>(null);
+function StatusPopup({ data, position }: { data: any, position: [number, number, number] }) {
+  const { camera } = useThree();
   
-  const targetMesh = useMemo(() => {
-    let found: THREE.Mesh | null = null;
-    scene.traverse((child) => {
-      if (child.uuid === name && (child as THREE.Mesh).isMesh) {
-        // 원본 복제
-        found = (child as THREE.Mesh).clone();
-        
-        // [수정] 타입 단언(Type Assertion)을 사용하여 emissive 속성 접근
-        if (found.material) {
-          const mat = Array.isArray(found.material) 
-            ? found.material.map(m => m.clone()) 
-            : found.material.clone();
-            
-          if (Array.isArray(mat)) {
-            mat.forEach(m => { 
-              // MeshStandardMaterial로 캐스팅 후 emissive 접근
-              if ((m as THREE.MeshStandardMaterial).emissive) {
-                (m as THREE.MeshStandardMaterial).emissive.setHex(0x000000); 
-              }
-            });
-          } else {
-            // MeshStandardMaterial로 캐스팅 후 emissive 접근
-            if ((mat as THREE.MeshStandardMaterial).emissive) {
-              (mat as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
-            }
-          }
-          found.material = mat;
-        }
-      }
-    });
-    return found;
-  }, [scene, name]);
+  // [복구됨] 좌표 및 각도 계산 로직
+  const vec = new THREE.Vector3(...position);
+  vec.project(camera);
+  const isRightSide = vec.x > 0;
+  
+  // 선 길이 및 각도 계산
+  const dx = isRightSide ? -180 : 180; 
+  const dy = -180; 
+  const lineLength = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx) * (180 / Math.PI); 
 
-  useFrame((state, delta) => {
-    // 천천히 회전
-    if (groupRef.current) groupRef.current.rotation.y += delta * 0.2;
-  });
-
-  if (!targetMesh) return null;
+  const totalWidth = 220; // PopupCard width
+  const popupLeft = dx - (totalWidth / 2); 
+  const popupTop = dy;
 
   return (
-    <group key={name} ref={groupRef}>
-      <Resize scale={1.2}>
-        <Center>
-          <primitive object={targetMesh} />
-        </Center>
-      </Resize>
-    </group>
+    <Html 
+      position={position} 
+      center 
+      zIndexRange={[999999, 0]} 
+      occlude={false} 
+      style={{ pointerEvents: 'none', width: 0, height: 0, overflow: 'visible' }}
+    >
+      <div style={{ position: 'relative' }}>
+        {/* 시작점 마커 */}
+        <div style={{
+          position: 'absolute', left: -4, top: -4, width: 8, height: 8,
+          background: '#38bdf8', borderRadius: '50%', boxShadow: '0 0 10px #38bdf8',
+          zIndex: 1001
+        }} />
+
+        {/* [복구됨] 애니메이션 라인 */}
+        <LineContainer style={{ width: `${lineLength}px`, transform: `rotate(${angle}deg)` }}>
+          <AnimatedLine />
+        </LineContainer>
+
+        {/* [복구됨] 끝점 링 효과 */}
+        <RingEffect style={{ left: dx, top: dy }} />
+
+        {/* [복구됨] 팝업 컨텐츠 (애니메이션 래퍼 포함) */}
+        <div style={{
+          position: 'absolute', left: popupLeft + 'px', top: popupTop + 'px',
+          width: totalWidth + 'px', transform: 'translateY(-100%)', paddingBottom: '16px' 
+        }}>
+          <InfoWrapper>
+            <PopupCard>
+              <PopupTitle><Scan size={14}/> {data.name}</PopupTitle>
+              <PopupRow><span>STATUS</span><span className="val good">NORMAL</span></PopupRow>
+              <PopupRow><span>TEMP</span><span className="val">{data.temp}°C</span></PopupRow>
+              <PopupRow><span>LOAD</span><span className="val">{data.load}%</span></PopupRow>
+            </PopupCard>
+          </InfoWrapper>
+        </div>
+      </div>
+    </Html>
   );
 }
 
@@ -260,155 +385,17 @@ function InitialCameraRig() {
   return null;
 }
 
-// [StatusPopup]
-function StatusPopup({ data, position }: { data: any, position: [number, number, number] }) {
-  const { camera } = useThree();
-  
-  const vec = new THREE.Vector3(...position);
-  vec.project(camera);
-  const isRightSide = vec.x > 0; 
-
-  const dx = isRightSide ? -250 : 250; 
-  const dy = -250; 
-
-  const lineLength = Math.sqrt(dx * dx + dy * dy);
-  const angle = Math.atan2(dy, dx) * (180 / Math.PI); 
-
-  const totalWidth = 310;
-  const popupLeft = dx - (totalWidth / 2); 
-  const popupTop = dy;
-
-  if (!data) return null;
-
-  return (
-    <Html 
-      position={position} 
-      center 
-      zIndexRange={[999999, 0]} 
-      occlude={false} 
-      style={{ pointerEvents: 'none', width: 0, height: 0, overflow: 'visible' }}
-    >
-      <div style={{ position: 'relative' }}>
-        
-        {/* 시작점 마커 (정중앙) */}
-        <div style={{
-          position: 'absolute', left: -4, top: -4, width: 8, height: 8,
-          background: '#84cc16', borderRadius: '50%', boxShadow: '0 0 10px #84cc16',
-          zIndex: 1001
-        }} />
-
-        {/* 연결선 */}
-        <LineContainer 
-          style={{
-            width: `${lineLength}px`,
-            transform: `rotate(${angle}deg)`
-          }}
-        >
-          <AnimatedLine />
-        </LineContainer>
-
-        {/* 연결 링 */}
-        <RingEffect style={{ left: dx, top: dy }} />
-
-        {/* 정보창 래퍼 */}
-        <div style={{
-          position: 'absolute',
-          left: popupLeft + 'px',
-          top: popupTop + 'px',
-          width: totalWidth + 'px',
-          transform: 'translateY(-100%)',
-          paddingBottom: '16px' 
-        }}>
-          <InfoWrapper>
-            
-            {/* 프리뷰 창 */}
-            <PreviewBox>
-              <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 3], fov: 50 }}>
-                <Suspense fallback={null}>
-                  {/* 조명 추가로 검은색 현상 해결 */}
-                  <Environment preset="city" /> 
-                  <ambientLight intensity={1} />
-                  <PreviewObject name={data.id} />
-                </Suspense>
-              </Canvas>
-            </PreviewBox>
-
-            <PopupContainer>
-              <PopupHeader>
-                <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-                  <Scan size={14} />
-                  {data.name}
-                </div>
-              </PopupHeader>
-              <PopupBody>
-                <StatRow>
-                  <span className="label"><Activity size={12} /> STATUS</span>
-                  <span className="value status-ok">OPERATIONAL</span>
-                </StatRow>
-                <StatRow>
-                  <span className="label"><Thermometer size={12} /> TEMP</span>
-                  <span className="value">{data.temp}°C</span>
-                </StatRow>
-                <StatRow>
-                  <span className="label"><Cpu size={12} /> LOAD</span>
-                  <span className="value">{data.load}%</span>
-                </StatRow>
-              </PopupBody>
-            </PopupContainer>
-          </InfoWrapper>
-        </div>
-
-      </div>
-    </Html>
-  );
-}
-
-// Loader
-function Loader({ onFinished }: { onFinished: () => void }) {
-  const { active, progress } = useProgress();
-  const [percent, setPercent] = useState(0);
-  const [timePassed, setTimePassed] = useState(false);
-  const [shouldUnmount, setShouldUnmount] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => { setTimePassed(true); }, 2500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (active) setPercent(progress);
-    else if (progress === 100) setPercent(100);
-  }, [active, progress]);
-
-  useEffect(() => {
-    if (timePassed && percent === 100) { onFinished(); setShouldUnmount(true); }
-  }, [timePassed, percent, onFinished]);
-
-  if (shouldUnmount) return null;
-
-  return (
-    <LoaderOverlay>
-      <ProgressContainer>
-        <ProgressText>
-          <span>모델 불러오는 중...</span>
-          <span className="percent">{percent.toFixed(0)}%</span>
-        </ProgressText>
-        <ProgressBarTrack><ProgressBarFill $progress={percent} /></ProgressBarTrack>
-      </ProgressContainer>
-    </LoaderOverlay>
-  );
-}
-
 type EmissiveData = { color: THREE.Color; intensity: number; };
 type LabelInfo = { id: string; text: string; position: [number, number, number]; };
 
 function Model({ url }: { url: string }) {
   const { scene } = useGLTF(url);
-  const originalEmissives = useRef<Map<string, EmissiveData>>(new Map());
-  const highlightColor = useMemo(() => new THREE.Color("#84cc16"), []); 
   const [labels, setLabels] = useState<LabelInfo[]>([]);
   const [hoveredData, setHoveredData] = useState<any | null>(null);
+  const originalEmissives = useRef<Map<string, EmissiveData>>(new Map());
+  const highlightColor = useMemo(() => new THREE.Color("#38bdf8"), []); 
 
+  // 라벨 및 데이터 초기화
   useEffect(() => {
     const generatedLabels: LabelInfo[] = [];
     let grCount = 1;
@@ -416,26 +403,27 @@ function Model({ url }: { url: string }) {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         mesh.castShadow = true; mesh.receiveShadow = true;
-        
         if (mesh.material) {
           mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => m.clone()) : mesh.material.clone();
         }
-        
         mesh.updateMatrixWorld();
         const box = new THREE.Box3().setFromObject(mesh);
         
         if (!box.isEmpty()) {
           const center = new THREE.Vector3();
           box.getCenter(center);
-          const labelText = `GR${grCount.toString().padStart(2, '0')}`;
           
+          const labelText = `GR${grCount.toString().padStart(2, '0')}`;
           mesh.userData = { 
             name: labelText,
             temp: Math.floor(Math.random() * 30) + 40, 
             load: Math.floor(Math.random() * 40) + 20
           };
-
-          generatedLabels.push({ id: mesh.uuid, text: labelText, position: [center.x, box.max.y + 0.1, center.z] });
+          generatedLabels.push({ 
+            id: mesh.uuid, 
+            text: labelText, 
+            position: [center.x, box.max.y + 0.1, center.z] 
+          });
           grCount++;
         }
       }
@@ -444,34 +432,36 @@ function Model({ url }: { url: string }) {
   }, [scene]);
 
   const handlePointerOver = (e: any) => {
-    e.stopPropagation();
-    const mesh = e.object as THREE.Mesh;
+    e.stopPropagation(); 
     document.body.style.cursor = "pointer";
+    const mesh = e.object as THREE.Mesh;
 
     if (mesh.isMesh) {
       if (mesh.material) {
         const mat = mesh.material as THREE.MeshStandardMaterial;
         if (mat.emissive) {
-          if (!originalEmissives.current.has(mesh.uuid)) {
-            originalEmissives.current.set(mesh.uuid, { color: mat.emissive.clone(), intensity: mat.emissiveIntensity ?? 1 });
-          }
-          mat.emissive.copy(highlightColor);
-          mat.emissiveIntensity = 2.0;
+            if (!originalEmissives.current.has(mesh.uuid)) {
+                originalEmissives.current.set(mesh.uuid, { 
+                    color: mat.emissive.clone(), 
+                    intensity: mat.emissiveIntensity ?? 1 
+                });
+            }
+            mat.emissive.copy(highlightColor);
+            mat.emissiveIntensity = 2.0;
         }
       }
-
-      // [핵심] 마우스 올린 '바로 그 부품(mesh)'의 정중앙 좌표 계산
+      
       mesh.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(mesh); // 절대 parent를 쓰지 않음
+      const box = new THREE.Box3().setFromObject(mesh);
       const center = new THREE.Vector3();
-      box.getCenter(center); 
-
+      box.getCenter(center);
+      
       setHoveredData({
         id: mesh.uuid,
         name: mesh.userData.name || "Unknown Unit",
         temp: mesh.userData.temp || 45,
         load: mesh.userData.load || 30,
-        position: [center.x, center.y, center.z] 
+        position: [center.x, center.y, center.z]
       });
     }
   };
@@ -479,23 +469,18 @@ function Model({ url }: { url: string }) {
   const handlePointerOut = (e: any) => {
     const mesh = e.object as THREE.Mesh;
     document.body.style.cursor = "auto";
-    
     if (mesh.isMesh && originalEmissives.current.has(mesh.uuid)) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      const originalData = originalEmissives.current.get(mesh.uuid)!;
-      mat.emissive.copy(originalData.color);
-      mat.emissiveIntensity = originalData.intensity;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        const originalData = originalEmissives.current.get(mesh.uuid)!;
+        mat.emissive.copy(originalData.color);
+        mat.emissiveIntensity = originalData.intensity;
     }
     setHoveredData(null);
   };
 
   return (
     <group>
-      <primitive 
-        object={scene} 
-        onPointerOver={handlePointerOver} 
-        onPointerOut={handlePointerOut} 
-      />
+      <primitive object={scene} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} />
       
       {labels.map((label) => (
         <Html key={label.id} position={label.position} center zIndexRange={[100, 0]} distanceFactor={12} style={{pointerEvents: 'none'}}>
@@ -503,57 +488,127 @@ function Model({ url }: { url: string }) {
         </Html>
       ))}
 
-      {hoveredData && (
-        <StatusPopup 
-          data={hoveredData} 
-          position={hoveredData.position} 
-        />
-      )}
+      {hoveredData && <StatusPopup data={hoveredData} position={hoveredData.position} />}
     </group>
   );
 }
 
-// --- Main Page Component ---
+// --- Tooltip Style ---
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{
+        background: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px',
+        padding: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        minWidth: '140px'
+      }}>
+        <div style={{ color: '#94a3b8', fontSize: '11px', marginBottom: '8px', fontWeight: '600' }}>{label}</div>
+        {payload.map((p: any, i: number) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+            <span style={{ color: p.color, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{width:6, height:6, borderRadius:2, background:p.color}}/> {p.name}
+            </span>
+            <span style={{ color: '#fff', fontWeight: 'bold' }}>{p.value}{p.unit || ''}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+// --- Main Page ---
 
 export default function GlbViewerPage() {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   return (
     <PageContainer>
       <Header>
         <HeaderLeft>
-          <LucideBox size={24} color="#84cc16" />
-          <h1>GLB Viewer (Studio)</h1>
+          <div className="icon-box"><Zap size={20} color="#fff" fill="#fff" /></div>
+          <h1>MES 3D MONITORING</h1>
         </HeaderLeft>
       </Header>
 
       <MainContent>
-        <Loader onFinished={() => setIsLoaded(true)} />
+        <Loader onFinished={() => setLoaded(true)} />
 
-        <ViewerContainer $visible={isLoaded}>
+        <ViewerContainer $visible={loaded}>
           
-          <Canvas dpr={[1, 2]} camera={{ position: [0, 10.54, 10.25], fov: 45 }} shadows>
-            
-            <InitialCameraRig />
+          {/* Top Right Panel: Inspection vs Error */}
+          <TopRightPanel>
+            <PanelHeader>
+              <div className="title-group"><BarChart3 size={18} color="#38bdf8"/> INSPECTION STATUS</div>
+              <div className="tag">REAL-TIME</div>
+            </PanelHeader>
+            <ChartWrapper>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={GR2_DATA} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.8}/>
+                      <stop offset="100%" stopColor="#38bdf8" stopOpacity={0.2}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="name" tick={{fontSize:10, fill:'#64748b'}} tickLine={false} axisLine={false} interval={4} />
+                  <YAxis yAxisId="L" tick={{fontSize:10, fill:'#64748b'}} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="R" orientation="right" tick={{fontSize:10, fill:'#f43f5e'}} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(255,255,255,0.03)'}} />
+                  
+                  <Bar yAxisId="L" dataKey="inspection" name="Inspection" fill="url(#barGradient)" barSize={8} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                  <Line yAxisId="R" type="monotone" dataKey="error" name="Error" stroke="#f43f5e" strokeWidth={3} dot={false} activeDot={{r:5, stroke:'#fff'}} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartWrapper>
+          </TopRightPanel>
 
+          {/* Bottom Left Panel: Defect Rate */}
+          <BottomLeftPanel>
+             <PanelHeader>
+              <div className="title-group"><TrendingUp size={18} color="#4ade80"/> DEFECT RATE TREND</div>
+              <div className="tag" style={{ color: '#4ade80', background: 'rgba(74, 222, 128, 0.15)', borderColor: 'rgba(74, 222, 128, 0.3)' }}>WEEKLY</div>
+            </PanelHeader>
+            <ChartWrapper>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={GR2_DATA} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#4ade80" stopOpacity={0.4}/>
+                      <stop offset="100%" stopColor="#4ade80" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="name" tick={{fontSize:10, fill:'#64748b'}} tickLine={false} axisLine={false} interval={4} />
+                  <YAxis tick={{fontSize:10, fill:'#64748b'}} unit="%" tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{stroke: 'rgba(255,255,255,0.2)'}} />
+                  <Area type="monotone" dataKey="rate" name="Rate" stroke="#4ade80" strokeWidth={2} fill="url(#areaGradient)" isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartWrapper>
+          </BottomLeftPanel>
+
+          {/* 3D Scene */}
+          <Canvas dpr={[1, 2]} camera={{ position: [0, 10, 12], fov: 40 }} shadows>
+            <InitialCameraRig />
             <Suspense fallback={null}>
-              <Stage 
-                environment="city" 
-                intensity={1} 
-                adjustCamera={0.7} 
-                shadows="contact"
-              >
+              <Stage environment="city" intensity={0.8} adjustCamera={false} shadows={false}>
                 <Center>
                   <Model url={FIXED_MODEL_PATH} />
                 </Center>
               </Stage>
+              <Environment preset="city" blur={1} />
             </Suspense>
             <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2} />
           </Canvas>
 
           <InstructionBadge>
-            좌클릭/휠: 시점 조작 / 마우스 오버: 상세 정보
+            <Layers size={14} color="#38bdf8"/>
+            Use <span className="highlight">Left Click</span> to Rotate & <span className="highlight">Scroll</span> to Zoom
           </InstructionBadge>
+
         </ViewerContainer>
       </MainContent>
     </PageContainer>
