@@ -261,10 +261,6 @@ const Section = ({ config }: { config: SectionConfig }) => {
   return (
     <GlassCard>
       <SectionTitle>{config.id} 구역</SectionTitle>
-      {/* [핵심 수정] 
-        GlassCard는 너비가 통일되어 있고,
-        RackGrid는 그 안에서 100% 너비를 차지하며 꽉 차게 렌더링됩니다.
-      */}
       <RackGrid $rows={config.rows} $cols={config.cols}>
         {config.items.map((item) => (
           <Cell key={item.id} $status={item.status}>
@@ -474,60 +470,57 @@ const SectionTitle = styled.div`
 
 const RackGrid = styled.div<{ $rows: number; $cols: number }>`
   display: grid;
-  grid-template-rows: repeat(${(props) => props.$rows}, 1fr);
-  grid-template-columns: repeat(${(props) => props.$cols}, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(${(props) => props.$cols}, auto);
+  gap: 8px; /* 박스 사이 간격 */
   
-  /* [수정] Grid가 Card를 가득 채우도록 설정 */
-  width: 100%; 
-  height: 100%; 
+  width: 100%;
+  height: 100%;
   
-  /* [수정] 박스 비율(정사각형)이 깨지지 않는 선에서 최대 크기로 확장 */
-  justify-items: stretch;
-  align-items: stretch;
+  /* 그리드 전체를 카드 정중앙에 배치 */
+  place-content: center;
+  align-items: center;
 `;
 
 /* Cell */
 const Cell = styled.div<{ $status: ProductStatus }>`
-  border-radius: 8px;
+  /* [핵심] 크기 통일 및 정사각형 고정 */
+  width: 4.5vh;   /* 화면 크기에 비례한 고정 크기 (약 40~50px) */
+  height: 4.5vh;  /* width와 동일하게 설정하여 정사각형 유지 */
+  
+  border-radius: 6px; /* 둥근 모서리 약간 줄임 */
   display: flex; justify-content: center; align-items: center;
-  position: relative; cursor: pointer; transition: all 0.2s;
+  position: relative; cursor: pointer; transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
   
-  /* [수정] Grid 셀을 꽉 채우되, 정사각형 비율은 아니어도 됨 (꽉 채우는게 우선) */
-  /* 만약 정사각형이 필수라면 aspect-ratio: 1 추가 */
-  width: 100%; height: 100%; 
-
   .num { 
-    font-size: 1.2rem; font-weight: 800; z-index: 1; 
-    text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    font-size: 0.9rem; /* 박스 크기에 맞춰 폰트 사이즈 조정 */
+    font-weight: 700; z-index: 1; 
+    text-shadow: 0 1px 2px rgba(0,0,0,0.15);
   }
-  
-  /* 화면 반응형 폰트 */
-  @media (max-height: 800px) { .num { font-size: 1rem; } }
 
+  /* 상태별 컬러 스타일 (기존 유지) */
   ${(props) => {
     switch (props.$status) {
       case "NEW":
         return css`
           background: linear-gradient(135deg, #34d399 0%, #059669 100%);
           border: 1px solid rgba(255,255,255,0.3); color: white;
-          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-          &:hover { transform: scale(1.05); z-index: 10; }
+          box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+          &:hover { transform: translateY(-2px) scale(1.1); z-index: 10; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
         `;
       case "OLD":
         return css`
           background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
           border: 1px solid rgba(255,255,255,0.3); color: white;
-          box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-          &:hover { transform: scale(1.05); z-index: 10; }
+          box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+          &:hover { transform: translateY(-2px) scale(1.1); z-index: 10; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4); }
         `;
       case "EMPTY":
         return css`
-          background: rgba(255,255,255,0.8);
+          background: rgba(255,255,255,0.5);
           border: 1px solid #cbd5e1; color: #94a3b8;
-          .num { text-shadow: none; opacity: 0.5; }
+          
           &:hover { 
-            background: #fff; border-color: #64748b; transform: scale(1.05); z-index: 10;
+            background: #fff; border-color: #64748b; transform: scale(1.1); z-index: 10;
             .num { opacity: 1; }
           }
         `;
@@ -563,9 +556,9 @@ const ModalBackdrop = styled.div`
 `;
 const ModalCard = styled.div`
   background: white; padding: 32px; border-radius: 24px; text-align: center; width: 300px;
-  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.2);
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.2); font-family: 'Pretendard', sans-serif;
   .icon { width: 60px; height: 60px; background: #6366f1; border-radius: 50%; display: flex; justify-content: center; align-items: center; margin: 0 auto 16px; }
-  h3 { font-size: 1.25rem; font-weight: 800; color: #1e293b; margin-bottom: 8px; }
-  p { font-size: 0.95rem; color: #64748b; margin-bottom: 24px; }
-  button { width: 100%; padding: 12px; background: #1e293b; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; }
+  h3 { font-size: 1.25rem; font-weight: 800; color: #1e293b; margin-bottom: 8px; font-family: 'Pretendard', sans-serif; }
+  p { font-size: 0.95rem; color: #64748b; margin-bottom: 24px; font-family: 'Pretendard', sans-serif;}
+  button { width: 100%; padding: 12px; background: #1e293b; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; font-family: 'Pretendard', sans-serif;}
 `;
