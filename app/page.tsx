@@ -17,30 +17,7 @@ const ScctDevPage = () => {
       router.replace('/transport/realtime-status');
     }
   }, [pathname, router]);
-
-  // const renderContent = () => {
-  //   // 리다이렉트 중 깜빡임 방지
-  //   if (pathname === '/' || pathname === '') return null;
-
-  //   // URL에 포함된 단어를 기준으로 컴포넌트 매핑
-  //   if (pathname.includes('/transport/realtime-status')) {
-  //     return <LocalMapPage />;
-  //   }
-  //   if (pathname.includes('production')) {
-  //     return <ProcessMonitorPage />;
-  //   }
-  //   if (pathname.includes('material')) {
-  //     return <AiMaterialPlaceholder />;
-  //   }
-
-  //   // 아무것도 안 맞으면 404 처리
-  //   return notFound();
-  // };
-
   return (
-    // <LoadingGate isLoading={false}>
-    //   {renderContent()}
-    // </LoadingGate>
     <div/>
   );
 };

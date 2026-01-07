@@ -207,7 +207,7 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
             {children}
         </MainContent>
         
-        <ChatbotWidget />
+        {/* <ChatbotWidget /> */}
       </DesktopOnlyWrapper>
     </>
   );
