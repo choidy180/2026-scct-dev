@@ -27,6 +27,7 @@ const subMenuData: Record<string, SubMenuItemType[]> = {
     { label: "발포 누설액 체크", href: "/production/leak-detection" },
     { label: "가스켓 이상 탐지", href: "/production/gasket-check" },
     { label: "필름부착확인", href: "/production/film-attachment" },
+    { label: "Pysical AI", href: "/production/pysical-ai"}
   ],
   "AI 운송관리": [
     { label: "실시간 운송현황", href: "/transport/realtime-status" },

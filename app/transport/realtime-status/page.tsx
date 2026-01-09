@@ -1,55 +1,58 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react"; // ✅ useLayoutEffect -> useEffect 변경
-import styled, { keyframes, css } from "styled-components";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import styled, { keyframes } from "styled-components";
 import axios from "axios";
-import { Cloud, Sun, CloudRain, Navigation, Truck, Activity, Bell, AlertTriangle, CheckCircle, Radio, Server, Zap, BarChart2, Siren } from "lucide-react";
-import { format } from "date-fns";
+import { 
+  Cloud, Sun, CloudRain, Navigation, Truck, Activity, Bell, 
+  AlertTriangle, CheckCircle, Radio, Server, Zap, BarChart2, Siren, 
+  MoreHorizontal 
+} from "lucide-react";
+import { format, addMinutes } from "date-fns";
 import dynamic from "next/dynamic";
 import VehicleStatusCard from "@/components/vehicle-status-card";
+// 타입 import
+import type { VWorldMarker } from "@/components/vworld-map";
 
-// ✅ 지도 로딩 (SSR 끔)
 const VWorldMap = dynamic(
   () => import("@/components/vworld-map"),
-  { ssr: false }
+  { 
+    ssr: false,
+    loading: () => <div style={{width: '100%', height: '100%', background: '#f1f5f9'}} /> 
+  }
 );
 
 /* --- Types & Constants --- */
-export interface VWorldMarker {
-  lat: number;
-  lng: number;
-  title?: string;
-  imageUrl?: string;
-  isFacility?: boolean;
-  startLat?: number;
-  startLng?: number;
-  destLat?: number;
-  destLng?: number;
-  arrival?: string;
-  progress?: number;
-}
 
-const RED_ARROW_ICON = "data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='%23ef4444' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M12 2l7 19-7-4-7 4 7-19z'/%3e%3c/svg%3e";
+type VehicleStatus = 'Normal' | 'Delayed' | 'Arrived' | 'Maintenance';
+
+interface SimulationVehicle {
+  id: string;
+  index: number;
+  driver: string;
+  startPos: { lat: number; lng: number };
+  destPos: { lat: number; lng: number };
+  totalDistanceKm: number;
+  baseDurationSec: number;
+  startTime: number;
+  delaySec: number;
+  status: VehicleStatus;
+  cargo: string;
+  temp: string;
+}
 
 const GOMOTEK_POS = { lat: 35.1487345915681, lng: 128.859885213411, title: "고모텍 부산", imageUrl: "/icons/GMT.png" };
 const LG_POS = { lat: 35.2078432680624, lng: 128.666263957419, title: "LG전자", imageUrl: "/icons/LG.jpg" };
-const FACILITY_MARKERS: VWorldMarker[] = [{ ...GOMOTEK_POS, isFacility: true }, { ...LG_POS, isFacility: true }];
 
-const formatDuration = (seconds: number) => {
-  if (!seconds) return "-";
-  const min = Math.floor(seconds / 60);
-  const hour = Math.floor(min / 60);
-  const remainMin = min % 60;
-  if (hour > 0) return `${hour}시간 ${remainMin}분`;
-  return `${min}분`;
-};
+const ARROW_ICON = "data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='%233B82F6' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M12 2l7 19-7-4-7 4 7-19z'/%3e%3c/svg%3e";
+const TRUCK_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2554/2554936.png"; 
 
-const TRUCK_STATIC_INFO = [
-  { driver: "김철수", status: "운행 중 (정상)", cargo: "전자부품 (PCB), 12 PLT", temp: "18°C" },
-  { driver: "이영희", status: "운행 중 (지연)", cargo: "사출물, 10 PLT", temp: "22°C" },
-  { driver: "박민수", status: "운행 중 (정상)", cargo: "컴프레서 부품, 8 PLT", temp: "20°C" },
-  { driver: "최진호", status: "휴식 중", cargo: "포장재, 20 PLT", temp: "상온" },
-  { driver: "정수민", status: "운행 중 (정상)", cargo: "모터 Ass'y, 6 PLT", temp: "15°C" },
+const INITIAL_VEHICLES: SimulationVehicle[] = [
+  { id: 'GMT-101', index: 0, driver: '김철수', startPos: LG_POS, destPos: GOMOTEK_POS, totalDistanceKm: 45, baseDurationSec: 3600, startTime: Date.now() - 2800 * 1000, delaySec: 0, status: 'Normal', cargo: "전자부품 (PCB), 12 PLT", temp: "18°C" },
+  { id: 'GMT-102', index: 1, driver: '이영희', startPos: GOMOTEK_POS, destPos: LG_POS, totalDistanceKm: 45, baseDurationSec: 3800, startTime: Date.now() - 1500 * 1000, delaySec: 300, status: 'Delayed', cargo: "사출물, 10 PLT", temp: "22°C" },
+  { id: 'GMT-103', index: 2, driver: '박민수', startPos: LG_POS, destPos: GOMOTEK_POS, totalDistanceKm: 45, baseDurationSec: 3500, startTime: Date.now() - 500 * 1000, delaySec: 0, status: 'Normal', cargo: "컴프레서 부품, 8 PLT", temp: "20°C" },
+  { id: 'GMT-104', index: 3, driver: '최진호', startPos: GOMOTEK_POS, destPos: LG_POS, totalDistanceKm: 45, baseDurationSec: 3700, startTime: Date.now() - 3200 * 1000, delaySec: 0, status: 'Normal', cargo: "포장재, 20 PLT", temp: "상온" },
+  { id: 'GMT-105', index: 4, driver: '정수민', startPos: LG_POS, destPos: GOMOTEK_POS, totalDistanceKm: 45, baseDurationSec: 3600, startTime: Date.now() - 100 * 1000, delaySec: 0, status: 'Normal', cargo: "모터 Ass'y, 6 PLT", temp: "15°C" },
 ];
 
 const MOCK_ALERTS = [
@@ -58,36 +61,144 @@ const MOCK_ALERTS = [
   { id: 3, time: "16:05", msg: "GMT-105 운행 시작", type: "info" },
 ];
 
+const useVehicleSimulation = (initialVehicles: SimulationVehicle[]) => {
+  const [vehicles, setVehicles] = useState<SimulationVehicle[]>(initialVehicles);
+  const [markers, setMarkers] = useState<VWorldMarker[]>([]);
+  const [targetVehicleId, setTargetVehicleId] = useState<string | null>(null);
+  const vehiclesRef = useRef(initialVehicles);
+
+  const addDelayToVehicle = useCallback((vehicleId: string, seconds: number) => {
+    setVehicles(prev => {
+      const next = prev.map(v => {
+        if (v.id === vehicleId) {
+          return { ...v, delaySec: v.delaySec + seconds, status: 'Delayed' as VehicleStatus };
+        }
+        return v;
+      });
+      vehiclesRef.current = next;
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    let animationFrameId: number;
+
+    const animate = () => {
+      const now = Date.now();
+      
+      const currentMarkers: VWorldMarker[] = [
+        { ...GOMOTEK_POS, isFacility: true, imageUrl: "/icons/GMT.png" },
+        { ...LG_POS, isFacility: true, imageUrl: "/icons/LG.jpg" }
+      ];
+
+      let maxProgress = -1;
+      // ✅ [수정] 타입 명시로 에러 해결
+      let bestVehicleId: string | null = null; 
+
+      vehiclesRef.current.forEach(v => {
+        const elapsedSec = (now - v.startTime) / 1000;
+        const totalDuration = v.baseDurationSec + v.delaySec;
+        let progress = elapsedSec / totalDuration;
+        if (progress > 1) progress = 1; 
+        if (progress < 0) progress = 0;
+
+        // 좌표 보간 (단순 보간이지만, 지도 컴포넌트 내부에서 FIXED_ROAD_COORDS 위에 매핑됨)
+        const currentLat = v.startPos.lat + (v.destPos.lat - v.startPos.lat) * progress;
+        const currentLng = v.startPos.lng + (v.destPos.lng - v.startPos.lng) * progress;
+
+        if (progress < 1 && progress > maxProgress) {
+            maxProgress = progress;
+            bestVehicleId = v.id;
+        }
+
+        const isTarget = v.id === bestVehicleId;
+
+        currentMarkers.push({
+          lat: currentLat,
+          lng: currentLng,
+          title: v.id,
+          imageUrl: isTarget ? TRUCK_ICON_URL : ARROW_ICON,
+          isFocused: isTarget,
+          progress: progress,
+          startLat: v.startPos.lat,
+          startLng: v.startPos.lng,
+          destLat: v.destPos.lat,
+          destLng: v.destPos.lng,
+        });
+      });
+
+      setMarkers(currentMarkers);
+      setTargetVehicleId(bestVehicleId);
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    animate();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, []);
+
+  return { vehicles, markers, targetVehicleId, addDelayToVehicle };
+};
+
 export default function LocalMapPage() {
   const [isMounted, setIsMounted] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showLoadingUI, setShowLoadingUI] = useState(false);
-
-  // Data States
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
-  const isSimulationOn = true;
-  const [eta, setEta] = useState({ toBusan: 0, toLG: 0 });
   const [weather, setWeather] = useState({ temp: 0, desc: '-', icon: <Sun size={18} color="#aaa" /> });
-  const [focusedTruckId, setFocusedTruckId] = useState<string | null>(null);
   const [hasWarning, setHasWarning] = useState(false);
+  
+  const { vehicles, markers, targetVehicleId, addDelayToVehicle } = useVehicleSimulation(INITIAL_VEHICLES);
 
-  // ✅ [수정] useLayoutEffect -> useEffect로 변경하여 렌더링 블로킹 방지
+  const targetTruckData = useMemo(() => {
+    if (!targetVehicleId) return null;
+    const v = vehicles.find(veh => veh.id === targetVehicleId);
+    if (!v) return null;
+
+    const marker = markers.find(m => m.title === v.id);
+    const progress = marker?.progress || 0;
+    
+    const totalDuration = v.baseDurationSec + v.delaySec;
+    const remainingSec = totalDuration * (1 - progress);
+    const arrivalTime = addMinutes(new Date(), remainingSec / 60);
+
+    return {
+      vehicleId: v.id,
+      imageUrl: "/truck-image.png",
+      departure: v.startPos === GOMOTEK_POS ? "GOMOTEK Busan" : "LG Electronics",
+      arrival: v.destPos === GOMOTEK_POS ? "GOMOTEK Busan" : "LG Electronics",
+      progress: Math.floor(progress * 100),
+      eta: format(arrivalTime, "HH:mm"),
+      remainingTime: `${Math.ceil(remainingSec / 60)} 분 남음`,
+      distanceLeft: `${(v.totalDistanceKm * (1 - progress)).toFixed(1)} km`,
+      speed: 82, 
+      cargoInfo: v.cargo,
+      temperature: v.temp,
+      driverName: v.driver,
+      driverStatus: v.status === 'Delayed' ? '운행 중 (지연)' : '운행 중 (정상)'
+    };
+  }, [vehicles, markers, targetVehicleId]);
+
+  const etaDisplay = useMemo(() => {
+    const toLG = targetTruckData?.arrival.includes("LG") 
+      ? parseInt(targetTruckData.remainingTime) * 60 
+      : 1920; 
+    const toBusan = targetTruckData?.arrival.includes("Busan")
+      ? parseInt(targetTruckData.remainingTime) * 60
+      : 2450;
+    
+    return { toLG, toBusan };
+  }, [targetTruckData]);
+
+  const formatDuration = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return h > 0 ? `${h}시간 ${rm}분` : `${m}분`;
+  }
+
   useEffect(() => {
     setIsMounted(true);
-    setIsLoading(true);
-    
-    // 로딩 UI 딜레이 (깜빡임 방지)
-    const showUiTimer = setTimeout(() => setShowLoadingUI(true), 100);
-    
-    // 로딩 완료 처리
-    const finishLoadingTimer = setTimeout(() => {
-      setIsLoading(false);
-      setShowLoadingUI(false); // 로딩 끝날 때 UI도 숨김
-    }, 2000); // 2.5초 -> 2초로 단축 (체감 속도 향상)
-
     setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    
+
     const fetchWeather = async () => {
       try {
         const res = await axios.get('https://api.open-meteo.com/v1/forecast?latitude=35.22&longitude=128.68&current_weather=true&timezone=auto');
@@ -100,117 +211,30 @@ export default function LocalMapPage() {
     };
     fetchWeather();
 
-    const warningExists = MOCK_ALERTS.some(alert => alert.type === 'warning' || alert.msg.includes("정체"));
-    setHasWarning(warningExists);
+    const warningTimer = setTimeout(() => {
+      setHasWarning(true);
+      addDelayToVehicle('GMT-102', 900);
+      addDelayToVehicle('GMT-104', 900);
+    }, 5000);
 
     return () => {
-      clearTimeout(showUiTimer);
-      clearTimeout(finishLoadingTimer);
       clearInterval(timer);
+      clearTimeout(warningTimer);
     };
-  }, []);
+  }, [addDelayToVehicle]);
 
-  const mapMarkers = useMemo(() => {
-    let markers: VWorldMarker[] = [...FACILITY_MARKERS];
-    if (!currentTime) return markers;
-
-    if (isSimulationOn) {
-      for (let i = 0; i < 5; i++) {
-        const isToBusan = i % 2 === 0;
-        const timeVal = currentTime.getTime();
-        const progress = (timeVal / (10000 + i * 2000)) % 1;
-
-        markers.push({
-          lat: 0, lng: 0,
-          title: `Sim-${i + 1}`,
-          arrival: isToBusan ? "GMT" : "LG",
-          startLat: LG_POS.lat, startLng: LG_POS.lng,
-          destLat: GOMOTEK_POS.lat, destLng: GOMOTEK_POS.lng,
-          progress: progress,
-          imageUrl: RED_ARROW_ICON 
-        });
-      }
-    }
-    return markers;
-  }, [isSimulationOn, currentTime]);
-
-  // ✅ [수정] useEffect로 변경
-  useEffect(() => {
-    if (isSimulationOn && mapMarkers.length > 2) {
-      if (focusedTruckId) return;
-      const trucks = mapMarkers.filter(m => !m.isFacility && typeof m.progress === 'number');
-      if (trucks.length > 0) {
-        const bestTruck = trucks.reduce((prev, curr) => (prev.progress || 0) > (curr.progress || 0) ? prev : curr);
-        if (bestTruck.title) setFocusedTruckId(bestTruck.title);
-      }
-    }
-  }, [mapMarkers, isSimulationOn, focusedTruckId]);
-
-  const targetTruck = useMemo(() => {
-    if (!currentTime || !isSimulationOn || !focusedTruckId) return null;
-    const vehicleMarker = mapMarkers.find(m => m.title === focusedTruckId);
-    if (!vehicleMarker) return null;
-    
-    const truckIndex = parseInt(vehicleMarker.title?.split('-')[1] || "1") - 1;
-    const staticInfo = TRUCK_STATIC_INFO[truckIndex % TRUCK_STATIC_INFO.length];
-    const progress = vehicleMarker.progress || 0;
-    const totalDist = 45;
-    const distLeft = (totalDist * (1 - progress)).toFixed(1);
-    const speed = Math.floor(80 + (progress * 100) % 10);
-    const totalTimeMin = 60;
-    const remainMin = Math.floor(totalTimeMin * (1 - progress));
-    const arrivalTime = new Date(currentTime.getTime() + remainMin * 60000);
-
-    return {
-      vehicleId: `GMT-10${truckIndex + 1}`,
-      imageUrl: "/truck-image.png",
-      departure: vehicleMarker.arrival === "GMT" ? "LG Electronics" : "GOMOTEK Busan",
-      arrival: vehicleMarker.arrival === "GMT" ? "GOMOTEK Busan" : "LG Electronics",
-      progress: Math.floor(progress * 100),
-      eta: format(arrivalTime, "HH:mm"),
-      remainingTime: `${remainMin} 분 남음`,
-      distanceLeft: `${distLeft} km`,
-      speed: speed,
-      cargoInfo: staticInfo.cargo,
-      temperature: staticInfo.temp,
-      driverName: staticInfo.driver,
-      driverStatus: staticInfo.status
-    };
-  }, [mapMarkers, currentTime, isSimulationOn, focusedTruckId]);
-
-  // ✅ [수정] 렌더링 로직 단순화
-  if (!isMounted) return null; // Hydration 이슈 방지용
+  if (!isMounted) return null;
 
   return (
     <Container>
-      {/* 로딩 오버레이 */}
-      <LoadingOverlay $visible={isLoading}>
-        {showLoadingUI && (
-          <LoadingContent>
-            <div className="icon-area">
-              <Truck size={48} color="#3B82F6" strokeWidth={1.5} />
-            </div>
-            <div className="text-area">
-              <h1>실시간 운송현황 시스템</h1>
-              <p>지도 정보를 받아오고 있습니다.</p>
-            </div>
-            <div className="progress-bar-bg">
-              <div className="progress-bar-fill" />
-            </div>
-            <div className="status-text">서버와 연결 중 입니다...</div>
-          </LoadingContent>
-        )}
-      </LoadingOverlay>
-
-      {/* 메인 컨텐츠 */}
       <MapWrapper>
-        <VWorldMap
-          key={`map-${mapMarkers[2]?.imageUrl || 'default'}`}
-          markers={mapMarkers}
-          onEtaUpdate={setEta}
+        <VWorldMap 
+          markers={markers} 
+          focusedTitle={targetVehicleId}
         />
       </MapWrapper>
 
+      {/* --- Left Column --- */}
       <TopLeftWidget>
         <KpiHeader>
           <Activity size={16} color="#3b82f6" />
@@ -218,32 +242,54 @@ export default function LocalMapPage() {
           <LiveBadge>LIVE</LiveBadge>
         </KpiHeader>
         <KpiGrid>
-          <KpiItem>
-            <div className="label">가동률</div>
-            <div className="value">98.5<span className="unit">%</span></div>
-            <div className="trend up">▲ 1.2%</div>
-          </KpiItem>
+          <KpiItem label="가동률" value="98.5" unit="%" trend="▲ 1.2%" trendColor="#10b981" />
           <div className="divider" />
-          <KpiItem>
-            <div className="label">정시 도착</div>
-            <div className="value">100<span className="unit">%</span></div>
-            <div className="trend neutral">-</div>
-          </KpiItem>
+          <KpiItem label="정시 도착" value="96" unit="%" trend="▼ 2.0%" trendColor="#ef4444" />
           <div className="divider" />
-          <KpiItem>
-            <div className="label">평균 속도</div>
-            <div className="value">82<span className="unit">km/h</span></div>
-            <div className="trend up">▲ 3km</div>
-          </KpiItem>
+          <KpiItem label="평균 속도" value="78" unit="km/h" trend="-" trendColor="#94a3b8" />
         </KpiGrid>
       </TopLeftWidget>
 
-      {targetTruck && (
+      {/* 차량 리스트 (좌측 하단) */}
+      <VehicleListWidget>
+        <div className="header">
+          <Truck size={16} /> 운행 차량 현황 ({vehicles.length})
+        </div>
+        <div className="list-container">
+          {vehicles.map((v) => {
+             const m = markers.find(mark => mark.title === v.id);
+             const progressPct = Math.floor((m?.progress || 0) * 100);
+             const isDelayed = v.status === 'Delayed';
+             return (
+               <VehicleListItem key={v.id} $active={v.id === targetVehicleId}>
+                 <div className="row-top">
+                   <div className="v-id">{v.id}</div>
+                   <StatusTag $status={v.status}>{isDelayed ? 'Delayed' : 'On Route'}</StatusTag>
+                 </div>
+                 <div className="route-info">
+                   {v.startPos === GOMOTEK_POS ? 'BUSAN' : 'LG'} <MoreHorizontal size={10} /> {v.destPos === GOMOTEK_POS ? 'BUSAN' : 'LG'}
+                 </div>
+                 <div className="progress-track">
+                   <div className="progress-fill" style={{ width: `${progressPct}%`, background: isDelayed ? '#F59E0B' : '#3B82F6' }} />
+                 </div>
+                 <div className="meta-row">
+                   <span>{progressPct}% 완료</span>
+                   <span>{m?.progress && m.progress >= 1 ? '도착' : '운행중'}</span>
+                 </div>
+               </VehicleListItem>
+             )
+          })}
+        </div>
+      </VehicleListWidget>
+
+      {/* --- Center/Floating Overlay --- */}
+      {targetTruckData && (
         <CardOverlay>
-          <VehicleStatusCard {...targetTruck} />
+          <VehicleStatusCard {...targetTruckData} />
         </CardOverlay>
       )}
 
+      {/* --- Right Column --- */}
       <RightColumn>
         <StatusWidget>
           <TimeRow>
@@ -252,28 +298,26 @@ export default function LocalMapPage() {
           </TimeRow>
           <WeatherRow>
             <div className="temp-box">
-              {weather.icon}
-              <span>{weather.temp}°C</span>
+              {weather.icon} <span>{weather.temp}°C</span>
             </div>
             <span className="desc">{weather.desc}</span>
           </WeatherRow>
           <EtaBox>
             <EtaRow>
               <div className="route"><Navigation size={12} color="#1E40AF" /> <span>고모텍 → LG</span></div>
-              <div className="time">{formatDuration(eta.toLG)}</div>
+              <div className="time">{formatDuration(etaDisplay.toLG)}</div>
             </EtaRow>
             <div className="line" />
             <EtaRow>
               <div className="route"><Navigation size={12} color="#1E40AF" /> <span>LG → 고모텍</span></div>
-              <div className="time">{formatDuration(eta.toBusan)}</div>
+              <div className="time">{formatDuration(etaDisplay.toBusan)}</div>
             </EtaRow>
           </EtaBox>
         </StatusWidget>
 
         <AlertWidget>
           <WidgetTitle>
-            <Bell size={16} /> 실시간 알림
-            <span className="count">3</span>
+            <Bell size={16} /> 실시간 알림 <span className="count">3</span>
           </WidgetTitle>
           <AlertList>
             {MOCK_ALERTS.map((alert) => (
@@ -284,9 +328,7 @@ export default function LocalMapPage() {
                   {alert.type === 'info' && <Radio size={14} />}
                 </div>
                 <div className="content">
-                  <span className={`msg ${alert.msg.includes("정체") ? 'alert-red' : ''}`}>
-                    {alert.msg}
-                  </span>
+                  <span className={`msg ${alert.msg.includes("정체") ? 'alert-red' : ''}`}>{alert.msg}</span>
                   <span className="time">{alert.time}</span>
                 </div>
               </AlertItem>
@@ -314,10 +356,9 @@ export default function LocalMapPage() {
               <div className="item"><span className="dot" style={{ background: '#E2E8F0' }} /> 점검 (1)</div>
             </LegendBox>
           </ChartRow>
-
-          <div style={{ marginTop: 12 }}>
+          <div>
             <SubTitle>연료 효율 추이 (Daily)</SubTitle>
-            <svg width="100%" height="50" viewBox="0 0 200 60" preserveAspectRatio="none">
+            <svg width="100%" height="40" viewBox="0 0 200 60" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
@@ -350,7 +391,8 @@ export default function LocalMapPage() {
           <WarningContent>
             <div className="title">구간 정체 경고 (Traffic Jam Alert)</div>
             <div className="desc">
-              현재 <strong>창원 터널</strong> 구간 정체 감지 (확률 82%)
+              현재 <strong>창원 터널</strong> 구간 정체 감지 (확률 82%)<br/>
+              <span style={{fontSize: '12px', fontWeight: 400, opacity: 0.8}}>예상 도착 시간이 재계산 되었습니다. (+15분)</span>
             </div>
           </WarningContent>
         </WarningBanner>
@@ -372,223 +414,131 @@ export default function LocalMapPage() {
   );
 }
 
-// --------------------------------------------------------------------------
-// Styled Components (기존과 동일)
-// --------------------------------------------------------------------------
+/* --- Sub Components (Memoized) --- */
+const KpiItem = React.memo(({ label, value, unit, trend, trendColor }: any) => (
+  <StyledKpiItem>
+    <div className="label">{label}</div>
+    <div className="value">{value}<span className="unit">{unit}</span></div>
+    <div className="trend" style={{ color: trendColor }}>{trend}</div>
+  </StyledKpiItem>
+));
+KpiItem.displayName = 'KpiItem';
 
+/* --- Styles (기존과 동일) --- */
 const Container = styled.div`
-  width: 100vw; 
-  height: calc(100vh - 64px); 
-  position: relative; /* 중요: 내부 absolute 요소의 기준점 */
-  overflow: hidden; 
-  background: #f8fafc; 
-  font-family: 'Pretendard', sans-serif;
+  width: 100vw; height: calc(100vh - 64px); position: relative; overflow: hidden; background: #f8fafc; font-family: 'Pretendard', sans-serif;
 `;
-
-// [수정] 로딩 오버레이: fixed -> absolute로 변경하여 컨테이너 내부에 종속시킴
-const LoadingOverlay = styled.div<{ $visible: boolean }>`
-  position: absolute; /* fixed에서 변경 */
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  
-  z-index: 99999;
-  
-  background: rgba(248, 250, 252, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-
-  opacity: ${props => props.$visible ? 1 : 0};
-  visibility: ${props => props.$visible ? 'visible' : 'hidden'};
-  transition: opacity 0.5s ease-out, visibility 0.5s;
-  pointer-events: ${props => props.$visible ? 'auto' : 'none'};
-`;
-
-const LoadingContent = styled.div`
-  display: flex; flex-direction: column; align-items: center; gap: 20px;
-  animation: floatUp 0.8s ease-out;
-  @keyframes floatUp { 0% { transform: translateY(10px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
-  
-  .icon-area { 
-    width: 80px; height: 80px; background: #EFF6FF; border-radius: 50%; 
-    display: flex; align-items: center; justify-content: center; 
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
-  }
-  .text-area { text-align: center; }
-  h1 { font-size: 24px; font-weight: 800; color: #1e293b; margin: 0 0 8px 0; letter-spacing: -0.5px; }
-  p { font-size: 14px; color: #64748b; font-weight: 500; margin: 0; }
-  .progress-bar-bg { width: 300px; height: 6px; background: #cbd5e1; border-radius: 99px; overflow: hidden; position: relative; }
-  .progress-bar-fill { 
-    height: 100%; background: linear-gradient(90deg, #3B82F6, #2563EB); 
-    border-radius: 99px; animation: loadProgress 2s ease-in-out forwards; 
-  }
-  @keyframes loadProgress { from { width: 0%; } to { width: 100%; } }
-  .status-text { font-size: 14px; color: #94a3b8; margin-top: -10px; }
-`;
-
-const MapWrapper = styled.div` position: absolute; inset: 0; z-index: 0; `;
+const MapWrapper = styled.div`position: absolute; inset: 0; z-index: 0;`;
 
 const GlassCard = styled.div`
-  background: rgba(255, 255, 255, 0.65); 
-  backdrop-filter: blur(20px);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
-  color: #1e293b;
+  background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.6); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); color: #1e293b; transition: all 0.3s ease;
+  &:hover { background: rgba(255, 255, 255, 0.9); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12); }
 `;
 
-const slideDown = keyframes` from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } `;
+const slideDown = keyframes`from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); }`;
 const TopLeftWidget = styled(GlassCard)`
-  position: absolute; top: 10px; left: 20px; padding: 16px 20px; z-index: 1000;
-  width: 340px; 
-  animation: ${slideDown} 0.5s ease-out;
-
-  @media (min-width: 2200px) {
-    width: 520px; max-width: 400px; padding: 24px 30px; top: 36px; left: 36px;
-  }
+  position: absolute; top: 24px; left: 24px; padding: 20px; z-index: 100; width: 340px; animation: ${slideDown} 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+`;
+const KpiHeader = styled.div`display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #475569; margin-bottom: 16px;`;
+const LiveBadge = styled.span`margin-left: auto; background: #fee2e2; color: #ef4444; font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 800; animation: pulseRed 2s infinite; @keyframes pulseRed { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }`;
+const KpiGrid = styled.div`display: flex; justify-content: space-between; .divider { width: 1px; background: #e2e8f0; height: 40px; }`;
+const StyledKpiItem = styled.div`
+  display: flex; flex-direction: column; gap: 4px; .label { font-size: 12px; color: #94a3b8; font-weight: 600; } .value { font-size: 20px; font-weight: 800; color: #0f172a; .unit { font-size: 12px; color: #64748b; margin-left: 2px; } } .trend { font-size: 11px; font-weight: 700; }
 `;
 
-const KpiHeader = styled.div`
-  display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #475569; margin-bottom: 12px;
-  @media (min-width: 2200px) { font-size: 16px; margin-bottom: 20px; }
+const slideUp = keyframes`from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); }`;
+const VehicleListWidget = styled(GlassCard)`
+  position: absolute; bottom: 24px; left: 24px; width: 340px; max-height: 35vh; z-index: 95; display: flex; flex-direction: column; overflow: hidden; animation: ${slideUp} 0.6s 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0;
+  .header { padding: 12px 16px; font-size: 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; background: rgba(248,250,252,0.5); }
+  .list-container { overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; &::-webkit-scrollbar { width: 4px; } &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } }
+`;
+const VehicleListItem = styled.div<{ $active: boolean }>`
+  padding: 10px; background: ${props => props.$active ? '#fff' : 'rgba(255,255,255,0.4)'}; border-radius: 10px; border: ${props => props.$active ? '1px solid #3B82F6' : '1px solid transparent'}; box-shadow: ${props => props.$active ? '0 4px 12px rgba(59, 130, 246, 0.1)' : 'none'}; transition: all 0.2s;
+  .row-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .v-id { font-weight: 700; font-size: 13px; color: #1e293b; }
+  .route-info { font-size: 11px; color: #64748b; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
+  .progress-track { width: 100%; height: 4px; background: #e2e8f0; border-radius: 99px; overflow: hidden; margin-bottom: 4px; }
+  .progress-fill { height: 100%; transition: width 0.3s ease; border-radius: 99px; }
+  .meta-row { display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; font-weight: 600; }
+`;
+const StatusTag = styled.span<{ $status: VehicleStatus }>`
+  font-size: 9px; padding: 1px 5px; border-radius: 4px; font-weight: 700;
+  ${props => props.$status === 'Delayed' ? `background: #fef3c7; color: #d97706;` : `background: #dbeafe; color: #2563eb;`}
 `;
 
-const pulseRed = keyframes` 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } `;
-const LiveBadge = styled.span`
-  margin-left: auto; background: #fee2e2; color: #ef4444; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 800; animation: ${pulseRed} 2s infinite;
-  @media (min-width: 2200px) { font-size: 12px; padding: 4px 8px; }
-`;
-
-const KpiGrid = styled.div` display: flex; align-items: center; justify-content: space-between; `;
-
-const KpiItem = styled.div`
-  display: flex; flex-direction: column; gap: 2px; 
-  .label { font-size: 11px; color: #94a3b8; font-weight: 600; } 
-  .value { font-size: 18px; font-weight: 800; color: #1e293b; .unit { font-size: 12px; font-weight: 600; margin-left: 1px; color: #64748b; } } 
-  .trend { font-size: 10px; font-weight: 700; } .trend.up { color: #10b981; } .trend.neutral { color: #94a3b8; }
-
-  @media (min-width: 2200px) {
-    gap: 6px; .label { font-size: 14px; } .value { font-size: 24px; .unit { font-size: 16px; } } .trend { font-size: 13px; }
-  }
-`;
-
-const slideRight = keyframes` from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } `;
+const slideRight = keyframes`from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); }`;
 const CardOverlay = styled.div`
-  position: absolute; top: 156px; left: 20px; z-index: 1001; width: 340px; animation: ${slideRight} 0.5s ease-out;
-  @media (min-width: 2200px) { top: 240px; left: 36px; width: 500px; }
+  position: absolute; top: 200px; left: 24px; z-index: 100; width: 340px; animation: ${slideRight} 0.6s 0.1s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0;
 `;
 
-const slideLeft = keyframes` from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } `;
+const slideLeft = keyframes`from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); }`;
 const RightColumn = styled.div`
-  position: absolute; top: 10px; right: 20px; width: 260px; display: flex; flex-direction: column; gap: 12px; z-index: 1000; animation: ${slideLeft} 0.5s ease-out;
-  @media (min-width: 2200px) { width: 380px; gap: 20px; top: 36px; right: 36px; }
+  position: absolute; top: 24px; right: 24px; width: 280px; display: flex; flex-direction: column; gap: 12px; z-index: 100; animation: ${slideLeft} 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 `;
-
-const StatusWidget = styled(GlassCard)`
-  padding: 16px; display: flex; flex-direction: column; gap: 10px; 
-  @media (min-width: 2200px) { padding: 30px; gap: 18px; }
-`;
-
+const StatusWidget = styled(GlassCard)`padding: 16px; display: flex; flex-direction: column; gap: 12px;`;
 const TimeRow = styled.div`
-  .time { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; color: #1e293b; line-height: 1; } 
-  .date { font-size: 14px; color: #64748b; font-weight: 500; margin-top: 2px; }
-  @media (min-width: 2200px) { .time { font-size: 36px; } .date { font-size: 20px; margin-top: 8px; } }
+  display: flex; justify-content: space-between; align-items: baseline;
+  .time { font-size: 28px; font-weight: 800; letter-spacing: -1px; line-height: 1; color: #0f172a; }
+  .date { font-size: 12px; color: #64748b; font-weight: 600; }
 `;
-
 const WeatherRow = styled.div`
-  display: flex; justify-content: space-between; align-items: center; 
-  .temp-box { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: #334155; } 
-  .desc { font-size: 12px; color: #64748b; font-weight: 500; }
-  @media (min-width: 2200px) { .temp-box { font-size: 18px; gap: 10px; svg { width: 24px; height: 24px; } } .desc { font-size: 15px; } }
+  display: flex; justify-content: space-between; align-items: center; background: rgba(241,245,249,0.6); padding: 8px 12px; border-radius: 8px;
+  .temp-box { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 700; }
+  .desc { font-size: 11px; color: #64748b; }
 `;
-
-const EtaBox = styled.div`background: rgba(241, 245, 249, 0.4); border-radius: 12px; padding: 10px; border: 1px solid rgba(255,255,255,0.3); .line { height: 1px; background: rgba(0,0,0,0.05); margin: 6px 0; }`;
+const EtaBox = styled.div`background: rgba(241, 245, 249, 0.6); border-radius: 10px; padding: 10px; border: 1px solid rgba(255,255,255,0.4); .line { height: 1px; background: rgba(0,0,0,0.05); margin: 6px 0; }`;
 const EtaRow = styled.div`
-  display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; 
-  .route { display: flex; align-items: center; gap: 4px; color: #475569; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 140px; } 
-  .time { color: #2563eb; background: rgba(37,99,235,0.1); padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
-  @media (min-width: 2200px) { font-size: 16px; .time { padding: 4px 10px; } }
+  display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; 
+  .route { display: flex; align-items: center; gap: 4px; color: #475569; } 
+  .time { color: #2563eb; background: rgba(37,99,235,0.1); padding: 2px 6px; border-radius: 4px; }
 `;
 
-const AlertWidget = styled(GlassCard)` padding: 16px; display: flex; flex-direction: column; gap: 10px; @media (min-width: 2200px) { padding: 24px; } `;
-const WidgetTitle = styled.div`
-  font-size: 14px; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 6px; text-transform: uppercase; 
-  .count { width:17px; height:17px; background: #ef4444; color: white; display:flex; justify-content:center; align-items:center; font-size: 12px; padding: 0; border-radius: 99px; padding-top: 1.6px; }
-  @media (min-width: 2200px) { font-size: 16px; .count { width: 24px; height: 24px; font-size: 18px; } }
-`;
-const AlertList = styled.div` 
-  display: flex; flex-direction: column; gap: 8px; max-height: 120px; overflow-y: auto; &::-webkit-scrollbar { width: 3px; } &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-  @media (min-width: 2200px) { max-height: 200px; gap: 14px; }
-`;
-
+const AlertWidget = styled(GlassCard)`padding: 16px; display: flex; flex-direction: column; gap: 10px;`;
+const WidgetTitle = styled.div`font-size: 13px; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 6px; .count { background: #ef4444; color: white; font-size: 10px; padding: 1px 6px; border-radius: 99px; }`;
+const AlertList = styled.div`display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; &::-webkit-scrollbar { width: 3px; }`;
 const AlertItem = styled.div<{ $type: string }>`
-  display: flex; gap: 8px; align-items: flex-start; padding: 8px; background: rgba(255,255,255,0.4); border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); 
-  .icon-wrapper { margin-top: 2px; color: ${props => props.$type === 'success' ? '#22c55e' : props.$type === 'warning' ? '#f59e0b' : '#3b82f6'}; } 
-  .content { display: flex; flex-direction: column; gap: 1px; flex: 1; overflow: hidden; } 
-  .msg { font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .msg.alert-red { color: #ef4444; font-weight: 800; } 
-  .time { font-size: 10px; color: #575f6a; }
-  @media (min-width: 2200px) { padding: 14px; .msg { font-size: 18px; white-space: normal; } .time { font-size: 16px; } svg { width: 22px; height: 22px; } }
+  display: flex; gap: 8px; padding: 8px; background: rgba(255,255,255,0.5); border-radius: 8px; border: 1px solid rgba(255,255,255,0.5);
+  .icon-wrapper { margin-top: 2px; color: ${props => props.$type === 'warning' ? '#f59e0b' : props.$type === 'success' ? '#22c55e' : '#3b82f6'}; }
+  .content { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+  .msg { font-size: 11px; font-weight: 600; color: #334155; line-height: 1.3; } .msg.alert-red { color: #ef4444; font-weight: 800; }
+  .time { font-size: 10px; color: #94a3b8; }
 `;
 
-const AnalyticsWidget = styled(GlassCard)` padding: 16px; display: flex; flex-direction: column; gap: 12px; @media (min-width: 2200px) { padding: 30px; gap: 24px; }`;
-const ChartRow = styled.div` display: flex; align-items: center; justify-content: space-between; gap: 10px; `;
+const AnalyticsWidget = styled(GlassCard)`padding: 16px; display: flex; flex-direction: column; gap: 12px;`;
+const ChartRow = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 10px;`;
 const DonutContainer = styled.div`
-  position: relative; width: 70px; height: 70px; flex-shrink: 0; svg { transform: rotate(-90deg); width: 100%; height: 100%; } .center-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; } .num { font-size: 18px; font-weight: 800; color: #1e293b; line-height: 1; } .label { font-size: 9px; font-weight: 600; color: #94a3b8; }
-  @media (min-width: 2200px) { width: 120px; height: 120px; .num { font-size: 28px; } .label { font-size: 13px; } }
+  position: relative; width: 60px; height: 60px; flex-shrink: 0; svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+  .center-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .num { font-size: 16px; font-weight: 800; color: #1e293b; line-height: 1; } .label { font-size: 8px; font-weight: 600; color: #94a3b8; }
 `;
-
 const LegendBox = styled.div`
-  display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; .item { display: flex; align-items: center; gap: 6px; color: #475569; } .dot { width: 6px; height: 6px; border-radius: 50%; }
-  @media (min-width: 2200px) { font-size: 14px; gap: 10px; .dot { width: 10px; height: 10px; } }
+  display: flex; flex-direction: column; gap: 4px; font-size: 10px; font-weight: 600; .item { display: flex; align-items: center; gap: 6px; color: #475569; } .dot { width: 6px; height: 6px; border-radius: 50%; }
 `;
-const SubTitle = styled.div` 
-  font-size: 14px; font-weight: 700; color: #64748b; margin-bottom: 4px; text-transform: uppercase; 
-  @media (min-width: 2200px) { font-size: 18px; margin-bottom: 10px; }
+const SubTitle = styled.div`font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 4px;`;
+
+const ServerWidget = styled(GlassCard)`
+  padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; .row { display: flex; flex-direction: column; gap: 1px; } .label { font-size: 11px; font-weight: 500; color: #64748b; display: flex; align-items: center; gap: 4px; } .val { font-size: 13px; font-weight: 700; color: #334155; } .val.ok { color: #10b981; }
 `;
 
-const ServerWidget = styled(GlassCard)` 
-  padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; .row { display: flex; flex-direction: column; gap: 2px; } .label { font-size: 14px; font-weight: 500; color: #4f565f; display: flex; align-items: center; gap: 4px; } .val { font-size: 16px; font-weight: 700; color: #334155; } .val.ok { color: #10b981; }
-  @media (min-width: 2200px) { padding: 20px 24px; .label { font-size: 16px; } .val { font-size: 16px; } }
-`;
-
-const bannerSlideUp = keyframes` from { opacity: 0; transform: translate(-50%, 50px); } to { opacity: 1; transform: translate(-50%, 0); } `;
-const WarningBanner = styled.div`
-  position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 12px;
-  background: rgba(239, 68, 68, 0.9); backdrop-filter: blur(20px);
-  padding: 12px 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3);
-  z-index: 2000; min-width: 380px; animation: ${bannerSlideUp} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  border: 1px solid rgba(255,255,255,0.2);
-  @media (min-width: 2200px) { bottom: 140px; min-width: 600px; padding: 24px 32px; gap: 24px; }
-`;
-const sirenPulse = keyframes` 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } `;
-const SirenIconWrapper = styled.div`width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: ${sirenPulse} 1s infinite; @media (min-width: 2200px) { width: 56px; height: 56px; svg { width: 32px; height: 32px; } }`;
-const WarningContent = styled.div`
-  color: white; .title { font-size: 16px; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; opacity: 0.9; } .desc { font-size: 14px; font-weight: 500; line-height: 1.3; } .desc strong { font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
-  @media (min-width: 2200px) { .title { font-size: 16px; margin-bottom: 6px; } .desc { font-size: 18px; } }
-`;
-
-const slideUp = keyframes` from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } `;
+const slideUpBottom = keyframes`from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); }`;
 const BottomPanel = styled(GlassCard)`
-  position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 20px; padding: 10px 20px;
-  animation: ${slideUp} 0.5s ease-out; z-index: 1000;
-  @media (min-width: 2200px) { top: 36px; padding: 18px 32px; gap: 32px; }
+  position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 20px; padding: 10px 24px; animation: ${slideUpBottom} 0.6s 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; z-index: 100; opacity: 0;
 `;
-
-const pulseGreen = keyframes` 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } `;
 const BottomGroup = styled.div`
-  display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; color: #475569; .item { display: flex; align-items: center; gap: 6px; cursor: pointer; transition: color 0.2s; } .item.active { color: #2563eb; } .item:hover { color: #1e293b; } .divider { width: 1px; height: 10px; background: #cbd5e1; }
-  @media (min-width: 2200px) { font-size: 18px; gap: 24px; .divider { height: 16px; } svg { width: 20px; height: 20px; } }
+  display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; color: #475569; .item { display: flex; align-items: center; gap: 6px; } .item.active { color: #2563eb; } .divider { width: 1px; height: 10px; background: #cbd5e1; }
+`;
+const SystemTicker = styled.div`
+  display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: #94a3b8; padding-left: 20px; border-left: 1px solid #e2e8f0; .dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 8px #22c55e; animation: pulseGreen 2s infinite; }
+  @keyframes pulseGreen { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
 `;
 
-const SystemTicker = styled.div`
-  display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: #94a3b8; padding-left: 20px; border-left: 1px solid #e2e8f0; .dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 8px #22c55e; animation: ${pulseGreen} 2s infinite; }
-  @media (min-width: 2200px) { font-size: 18px; padding-left: 32px; .dot { width: 8px; height: 8px; } }
+const bannerSlideUp = keyframes`from { opacity: 0; transform: translate(-50%, 50px); } to { opacity: 1; transform: translate(-50%, 0); }`;
+const WarningBanner = styled.div`
+  position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; background: rgba(220, 38, 38, 0.95); backdrop-filter: blur(12px); padding: 14px 20px; border-radius: 12px; box-shadow: 0 10px 40px rgba(220, 38, 38, 0.4); z-index: 200; min-width: 420px; animation: ${bannerSlideUp} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 1px solid rgba(255,255,255,0.2);
+`;
+const SirenIconWrapper = styled.div`
+  width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: sirenPulse 1s infinite; @keyframes sirenPulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+`;
+const WarningContent = styled.div`
+  color: white; .title { font-size: 14px; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; } .desc { font-size: 12px; font-weight: 500; line-height: 1.4; }
 `;
