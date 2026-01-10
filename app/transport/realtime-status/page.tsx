@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import styled, { keyframes } from "styled-components";
+import styled, { keyframes, css } from "styled-components";
 import axios from "axios";
 import { 
   Cloud, Sun, CloudRain, Navigation, Truck, Activity, Bell, 
   AlertTriangle, CheckCircle, Radio, Server, Zap, BarChart2, Siren, 
-  MoreHorizontal 
+  MoreHorizontal, Loader, Cpu, Database
 } from "lucide-react";
 import { format, addMinutes } from "date-fns";
 import dynamic from "next/dynamic";
@@ -45,7 +45,7 @@ const GOMOTEK_POS = { lat: 35.1487345915681, lng: 128.859885213411, title: "고�
 const LG_POS = { lat: 35.2078432680624, lng: 128.666263957419, title: "LG전자", imageUrl: "/icons/LG.jpg" };
 
 const ARROW_ICON = "data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='%233B82F6' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M12 2l7 19-7-4-7 4 7-19z'/%3e%3c/svg%3e";
-const TRUCK_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2554/2554936.png"; 
+const TRUCK_ICON_URL = "/truck-image.png"; 
 
 const INITIAL_VEHICLES: SimulationVehicle[] = [
   { id: 'GMT-101', index: 0, driver: '김철수', startPos: LG_POS, destPos: GOMOTEK_POS, totalDistanceKm: 45, baseDurationSec: 3600, startTime: Date.now() - 2800 * 1000, delaySec: 0, status: 'Normal', cargo: "전자부품 (PCB), 12 PLT", temp: "18°C" },
@@ -92,7 +92,6 @@ const useVehicleSimulation = (initialVehicles: SimulationVehicle[]) => {
       ];
 
       let maxProgress = -1;
-      // ✅ [수정] 타입 명시로 에러 해결
       let bestVehicleId: string | null = null; 
 
       vehiclesRef.current.forEach(v => {
@@ -102,7 +101,12 @@ const useVehicleSimulation = (initialVehicles: SimulationVehicle[]) => {
         if (progress > 1) progress = 1; 
         if (progress < 0) progress = 0;
 
-        // 좌표 보간 (단순 보간이지만, 지도 컴포넌트 내부에서 FIXED_ROAD_COORDS 위에 매핑됨)
+        const remainingSec = totalDuration * (1 - progress);
+        const arrivalTime = addMinutes(new Date(), remainingSec / 60);
+        const etaTime = format(arrivalTime, "HH:mm");
+        const remainingMin = Math.ceil(remainingSec / 60);
+        const etaString = `${etaTime} (약 ${remainingMin}분 남음)`; 
+
         const currentLat = v.startPos.lat + (v.destPos.lat - v.startPos.lat) * progress;
         const currentLng = v.startPos.lng + (v.destPos.lng - v.startPos.lng) * progress;
 
@@ -124,6 +128,9 @@ const useVehicleSimulation = (initialVehicles: SimulationVehicle[]) => {
           startLng: v.startPos.lng,
           destLat: v.destPos.lat,
           destLng: v.destPos.lng,
+          driver: v.driver,
+          cargo: v.cargo,
+          eta: etaString 
         });
       });
 
@@ -141,6 +148,12 @@ const useVehicleSimulation = (initialVehicles: SimulationVehicle[]) => {
 
 export default function LocalMapPage() {
   const [isMounted, setIsMounted] = useState(false);
+  
+  // 🟢 로딩 및 퇴장 애니메이션 상태 관리
+  const [isLoading, setIsLoading] = useState(true);
+  const [isExiting, setIsExiting] = useState(false); // 사라지는 중인지 체크
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [weather, setWeather] = useState({ temp: 0, desc: '-', icon: <Sun size={18} color="#aaa" /> });
   const [hasWarning, setHasWarning] = useState(false);
@@ -194,6 +207,27 @@ export default function LocalMapPage() {
     return h > 0 ? `${h}시간 ${rm}분` : `${m}분`;
   }
 
+  // 🟢 로딩 시뮬레이션 및 부드러운 퇴장 로직
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLoadingProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          // 100% 도달 시 퇴장 애니메이션 시작 (0.8초간 Fade Out)
+          setIsExiting(true);
+          setTimeout(() => {
+            setIsLoading(false); // 완전히 DOM에서 제거
+          }, 800); 
+          return 100;
+        }
+        return prev + 2; // 진행 속도
+      });
+    }, 30);
+
+    return () => clearInterval(interval);
+  }, []);
+
+
   useEffect(() => {
     setIsMounted(true);
     setCurrentTime(new Date());
@@ -226,195 +260,235 @@ export default function LocalMapPage() {
   if (!isMounted) return null;
 
   return (
-    <Container>
-      <MapWrapper>
-        <VWorldMap 
-          markers={markers} 
-          focusedTitle={targetVehicleId}
-        />
-      </MapWrapper>
-
-      {/* --- Left Column --- */}
-      <TopLeftWidget>
-        <KpiHeader>
-          <Activity size={16} color="#3b82f6" />
-          <span>Fleet KPI Dashboard</span>
-          <LiveBadge>LIVE</LiveBadge>
-        </KpiHeader>
-        <KpiGrid>
-          <KpiItem label="가동률" value="98.5" unit="%" trend="▲ 1.2%" trendColor="#10b981" />
-          <div className="divider" />
-          <KpiItem label="정시 도착" value="96" unit="%" trend="▼ 2.0%" trendColor="#ef4444" />
-          <div className="divider" />
-          <KpiItem label="평균 속도" value="78" unit="km/h" trend="-" trendColor="#94a3b8" />
-        </KpiGrid>
-      </TopLeftWidget>
-
-      {/* 차량 리스트 (좌측 하단) */}
-      <VehicleListWidget>
-        <div className="header">
-          <Truck size={16} /> 운행 차량 현황 ({vehicles.length})
-        </div>
-        <div className="list-container">
-          {vehicles.map((v) => {
-             const m = markers.find(mark => mark.title === v.id);
-             const progressPct = Math.floor((m?.progress || 0) * 100);
-             const isDelayed = v.status === 'Delayed';
-             return (
-               <VehicleListItem key={v.id} $active={v.id === targetVehicleId}>
-                 <div className="row-top">
-                   <div className="v-id">{v.id}</div>
-                   <StatusTag $status={v.status}>{isDelayed ? 'Delayed' : 'On Route'}</StatusTag>
-                 </div>
-                 <div className="route-info">
-                   {v.startPos === GOMOTEK_POS ? 'BUSAN' : 'LG'} <MoreHorizontal size={10} /> {v.destPos === GOMOTEK_POS ? 'BUSAN' : 'LG'}
-                 </div>
-                 <div className="progress-track">
-                   <div className="progress-fill" style={{ width: `${progressPct}%`, background: isDelayed ? '#F59E0B' : '#3B82F6' }} />
-                 </div>
-                 <div className="meta-row">
-                   <span>{progressPct}% 완료</span>
-                   <span>{m?.progress && m.progress >= 1 ? '도착' : '운행중'}</span>
-                 </div>
-               </VehicleListItem>
-             )
-          })}
-        </div>
-      </VehicleListWidget>
-
-      {/* --- Center/Floating Overlay --- */}
-      {targetTruckData && (
-        <CardOverlay>
-          <VehicleStatusCard {...targetTruckData} />
-        </CardOverlay>
-      )}
-
-      {/* --- Right Column --- */}
-      <RightColumn>
-        <StatusWidget>
-          <TimeRow>
-            <div className="time">{currentTime ? format(currentTime, "HH:mm") : "00:00"}</div>
-            <div className="date">{currentTime ? format(currentTime, "yyyy.MM.dd (EEE)") : "-"}</div>
-          </TimeRow>
-          <WeatherRow>
-            <div className="temp-box">
-              {weather.icon} <span>{weather.temp}°C</span>
-            </div>
-            <span className="desc">{weather.desc}</span>
-          </WeatherRow>
-          <EtaBox>
-            <EtaRow>
-              <div className="route"><Navigation size={12} color="#1E40AF" /> <span>고모텍 → LG</span></div>
-              <div className="time">{formatDuration(etaDisplay.toLG)}</div>
-            </EtaRow>
-            <div className="line" />
-            <EtaRow>
-              <div className="route"><Navigation size={12} color="#1E40AF" /> <span>LG → 고모텍</span></div>
-              <div className="time">{formatDuration(etaDisplay.toBusan)}</div>
-            </EtaRow>
-          </EtaBox>
-        </StatusWidget>
-
-        <AlertWidget>
-          <WidgetTitle>
-            <Bell size={16} /> 실시간 알림 <span className="count">3</span>
-          </WidgetTitle>
-          <AlertList>
-            {MOCK_ALERTS.map((alert) => (
-              <AlertItem key={alert.id} $type={alert.type}>
-                <div className="icon-wrapper">
-                  {alert.type === 'success' && <CheckCircle size={14} />}
-                  {alert.type === 'warning' && <AlertTriangle size={14} />}
-                  {alert.type === 'info' && <Radio size={14} />}
-                </div>
-                <div className="content">
-                  <span className={`msg ${alert.msg.includes("정체") ? 'alert-red' : ''}`}>{alert.msg}</span>
-                  <span className="time">{alert.time}</span>
-                </div>
-              </AlertItem>
-            ))}
-          </AlertList>
-        </AlertWidget>
-
-        <AnalyticsWidget>
-          <WidgetTitle><BarChart2 size={16} /> 통합 운영 현황</WidgetTitle>
-          <ChartRow>
-            <DonutContainer>
-              <svg viewBox="0 0 36 36">
-                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#E2E8F0" strokeWidth="3" />
-                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3B82F6" strokeWidth="3" strokeDasharray="60, 100" />
-                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#22C55E" strokeWidth="3" strokeDasharray="20, 100" strokeDashoffset="-60" />
-              </svg>
-              <div className="center-text">
-                <span className="num">5</span>
-                <span className="label">Total</span>
+    <>
+      {/* 🟢 로딩 오버레이 (isExiting 상태에 따라 투명도 변화) */}
+      {isLoading && (
+        <LoadingOverlay $isExiting={isExiting}>
+          <LoadingContent>
+            
+            {/* 타이틀 영역: 심플하고 가독성 높게 */}
+            <TitleWrapper>
+              <Cpu size={32} color="#ef4444" strokeWidth={2.5} />
+              <div>
+                <MainTitle>AI LOGISTICS SYSTEM</MainTitle>
+                <SubTitleText>Real-time Fleet Management</SubTitleText>
               </div>
-            </DonutContainer>
-            <LegendBox>
-              <div className="item"><span className="dot" style={{ background: '#3B82F6' }} /> 운행중 (3)</div>
-              <div className="item"><span className="dot" style={{ background: '#22C55E' }} /> 대기 (1)</div>
-              <div className="item"><span className="dot" style={{ background: '#E2E8F0' }} /> 점검 (1)</div>
-            </LegendBox>
-          </ChartRow>
-          <div>
-            <SubTitle>연료 효율 추이 (Daily)</SubTitle>
-            <svg width="100%" height="40" viewBox="0 0 200 60" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path d="M0,50 Q20,40 40,30 T80,25 T120,40 T160,15 T200,30 V60 H0 Z" fill="url(#chartGrad)" />
-              <path d="M0,50 Q20,40 40,30 T80,25 T120,40 T160,15 T200,30" fill="none" stroke="#3B82F6" strokeWidth="3" strokeLinecap="round" />
-            </svg>
-          </div>
-        </AnalyticsWidget>
+            </TitleWrapper>
 
-        <ServerWidget>
-          <div className="row">
-            <div className="label"><Server size={12} /> API Latency</div>
-            <div className="val ok">12ms</div>
-          </div>
-          <div className="row">
-            <div className="label"><Zap size={12} /> System Uptime</div>
-            <div className="val">99.9%</div>
-          </div>
-        </ServerWidget>
-      </RightColumn>
+            {/* 트럭 애니메이션 */}
+            <TruckAnimation>
+              <DataWave />
+              <Truck size={56} color="#ef4444" className="truck-icon" strokeWidth={1.5} />
+              <div className="speed-lines">
+                <span></span><span></span><span></span>
+              </div>
+            </TruckAnimation>
 
-      {hasWarning && (
-        <WarningBanner>
-          <SirenIconWrapper>
-            <Siren size={24} color="#fff" />
-          </SirenIconWrapper>
-          <WarningContent>
-            <div className="title">구간 정체 경고 (Traffic Jam Alert)</div>
-            <div className="desc">
-              현재 <strong>창원 터널</strong> 구간 정체 감지 (확률 82%)<br/>
-              <span style={{fontSize: '12px', fontWeight: 400, opacity: 0.8}}>예상 도착 시간이 재계산 되었습니다. (+15분)</span>
-            </div>
-          </WarningContent>
-        </WarningBanner>
+            {/* 프로그래스 바 영역 */}
+            <ProgressWrapper>
+              <LoadingLabel>
+                <span>SYSTEM INITIALIZING</span>
+                <span className="percent">{loadingProgress}%</span>
+              </LoadingLabel>
+              <ProgressBarContainer>
+                <ProgressBarFill style={{ width: `${loadingProgress}%` }} />
+              </ProgressBarContainer>
+              <LoadingSubText>
+                <Database size={10} /> Fetching vehicle data from server...
+              </LoadingSubText>
+            </ProgressWrapper>
+
+          </LoadingContent>
+        </LoadingOverlay>
       )}
+      
+      <Container>
+        {/* ... (이하 기존 대시보드 코드 동일) ... */}
+        <MapWrapper>
+          <VWorldMap 
+            markers={markers} 
+            focusedTitle={targetVehicleId}
+          />
+        </MapWrapper>
 
-      <BottomPanel>
-        <BottomGroup>
-          <div className="item active"><Truck size={16} /> 운행: 5대</div>
-          <div className="divider" />
-          <div className="item"><Activity size={16} /> 상태: 정상</div>
-          <div className="divider" />
-          <div className="item"><Navigation size={16} /> 경로 최적화: ON</div>
-        </BottomGroup>
-        <SystemTicker>
-          <span className="dot"></span> Updated: {currentTime ? format(currentTime, "HH:mm:ss") : "--:--:--"}
-        </SystemTicker>
-      </BottomPanel>
-    </Container>
+        <TopLeftWidget>
+          <KpiHeader>
+            <Activity size={16} color="#3b82f6" />
+            <span>Fleet KPI Dashboard</span>
+            <LiveBadge>LIVE</LiveBadge>
+          </KpiHeader>
+          <KpiGrid>
+            <KpiItem label="가동률" value="98.5" unit="%" trend="▲ 1.2%" trendColor="#10b981" />
+            <div className="divider" />
+            <KpiItem label="정시 도착" value="96" unit="%" trend="▼ 2.0%" trendColor="#ef4444" />
+            <div className="divider" />
+            <KpiItem label="평균 속도" value="78" unit="km/h" trend="-" trendColor="#94a3b8" />
+          </KpiGrid>
+        </TopLeftWidget>
+
+        <VehicleListWidget>
+          <div className="header">
+            <Truck size={16} /> 운행 차량 현황 ({vehicles.length})
+          </div>
+          <div className="list-container">
+            {vehicles.map((v) => {
+              const m = markers.find(mark => mark.title === v.id);
+              const progressPct = Math.floor((m?.progress || 0) * 100);
+              const isDelayed = v.status === 'Delayed';
+              return (
+                <VehicleListItem key={v.id} $active={v.id === targetVehicleId}>
+                  <div className="row-top">
+                    <div className="v-id">{v.id}</div>
+                    <StatusTag $status={v.status}>{isDelayed ? 'Delayed' : 'On Route'}</StatusTag>
+                  </div>
+                  <div className="route-info">
+                    {v.startPos === GOMOTEK_POS ? 'BUSAN' : 'LG'} <MoreHorizontal size={10} /> {v.destPos === GOMOTEK_POS ? 'BUSAN' : 'LG'}
+                  </div>
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${progressPct}%`, background: isDelayed ? '#F59E0B' : '#3B82F6' }} />
+                  </div>
+                  <div className="meta-row">
+                    <span>{progressPct}% 완료</span>
+                    <span>{m?.progress && m.progress >= 1 ? '도착' : '운행중'}</span>
+                  </div>
+                </VehicleListItem>
+              )
+            })}
+          </div>
+        </VehicleListWidget>
+
+        {targetTruckData && (
+          <CardOverlay>
+            <VehicleStatusCard {...targetTruckData} />
+          </CardOverlay>
+        )}
+
+        <RightColumn>
+          <StatusWidget>
+            <TimeRow>
+              <div className="time">{currentTime ? format(currentTime, "HH:mm") : "00:00"}</div>
+              <div className="date">{currentTime ? format(currentTime, "yyyy.MM.dd (EEE)") : "-"}</div>
+            </TimeRow>
+            <WeatherRow>
+              <div className="temp-box">
+                {weather.icon} <span>{weather.temp}°C</span>
+              </div>
+              <span className="desc">{weather.desc}</span>
+            </WeatherRow>
+            <EtaBox>
+              <EtaRow>
+                <div className="route"><Navigation size={12} color="#1E40AF" /> <span>고모텍 → LG</span></div>
+                <div className="time">{formatDuration(etaDisplay.toLG)}</div>
+              </EtaRow>
+              <div className="line" />
+              <EtaRow>
+                <div className="route"><Navigation size={12} color="#1E40AF" /> <span>LG → 고모텍</span></div>
+                <div className="time">{formatDuration(etaDisplay.toBusan)}</div>
+              </EtaRow>
+            </EtaBox>
+          </StatusWidget>
+
+          <AlertWidget>
+            <WidgetTitle>
+              <Bell size={16} /> 실시간 알림 <span className="count">3</span>
+            </WidgetTitle>
+            <AlertList>
+              {MOCK_ALERTS.map((alert) => (
+                <AlertItem key={alert.id} $type={alert.type}>
+                  <div className="icon-wrapper">
+                    {alert.type === 'success' && <CheckCircle size={14} />}
+                    {alert.type === 'warning' && <AlertTriangle size={14} />}
+                    {alert.type === 'info' && <Radio size={14} />}
+                  </div>
+                  <div className="content">
+                    <span className={`msg ${alert.msg.includes("정체") ? 'alert-red' : ''}`}>{alert.msg}</span>
+                    <span className="time">{alert.time}</span>
+                  </div>
+                </AlertItem>
+              ))}
+            </AlertList>
+          </AlertWidget>
+
+          <AnalyticsWidget>
+            <WidgetTitle><BarChart2 size={16} /> 통합 운영 현황</WidgetTitle>
+            <ChartRow>
+              <DonutContainer>
+                <svg viewBox="0 0 36 36">
+                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#E2E8F0" strokeWidth="3" />
+                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3B82F6" strokeWidth="3" strokeDasharray="60, 100" />
+                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#22C55E" strokeWidth="3" strokeDasharray="20, 100" strokeDashoffset="-60" />
+                </svg>
+                <div className="center-text">
+                  <span className="num">5</span>
+                  <span className="label">Total</span>
+                </div>
+              </DonutContainer>
+              <LegendBox>
+                <div className="item"><span className="dot" style={{ background: '#3B82F6' }} /> 운행중 (3)</div>
+                <div className="item"><span className="dot" style={{ background: '#22C55E' }} /> 대기 (1)</div>
+                <div className="item"><span className="dot" style={{ background: '#E2E8F0' }} /> 점검 (1)</div>
+              </LegendBox>
+            </ChartRow>
+            <div>
+              <SubTitle>연료 효율 추이 (Daily)</SubTitle>
+              <svg width="100%" height="40" viewBox="0 0 200 60" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path d="M0,50 Q20,40 40,30 T80,25 T120,40 T160,15 T200,30 V60 H0 Z" fill="url(#chartGrad)" />
+                <path d="M0,50 Q20,40 40,30 T80,25 T120,40 T160,15 T200,30" fill="none" stroke="#3B82F6" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+            </div>
+          </AnalyticsWidget>
+
+          <ServerWidget>
+            <div className="row">
+              <div className="label"><Server size={12} /> API Latency</div>
+              <div className="val ok">12ms</div>
+            </div>
+            <div className="row">
+              <div className="label"><Zap size={12} /> System Uptime</div>
+              <div className="val">99.9%</div>
+            </div>
+          </ServerWidget>
+        </RightColumn>
+
+        {hasWarning && (
+          <WarningBanner>
+            <SirenIconWrapper>
+              <Siren size={24} color="#fff" />
+            </SirenIconWrapper>
+            <WarningContent>
+              <div className="title">구간 정체 경고 (Traffic Jam Alert)</div>
+              <div className="desc">
+                현재 <strong>창원 터널</strong> 구간 정체 감지 (확률 82%)<br/>
+                <span style={{fontSize: '12px', fontWeight: 400, opacity: 0.8}}>예상 도착 시간이 재계산 되었습니다. (+15분)</span>
+              </div>
+            </WarningContent>
+          </WarningBanner>
+        )}
+
+        <BottomPanel>
+          <BottomGroup>
+            <div className="item active"><Truck size={16} /> 운행: 5대</div>
+            <div className="divider" />
+            <div className="item"><Activity size={16} /> 상태: 정상</div>
+            <div className="divider" />
+            <div className="item"><Navigation size={16} /> 경로 최적화: ON</div>
+          </BottomGroup>
+          <SystemTicker>
+            <span className="dot"></span> Updated: {currentTime ? format(currentTime, "HH:mm:ss") : "--:--:--"}
+          </SystemTicker>
+        </BottomPanel>
+      </Container>
+    </>
   );
 }
 
-/* --- Sub Components (Memoized) --- */
+/* --- Sub Components --- */
 const KpiItem = React.memo(({ label, value, unit, trend, trendColor }: any) => (
   <StyledKpiItem>
     <div className="label">{label}</div>
@@ -424,7 +498,7 @@ const KpiItem = React.memo(({ label, value, unit, trend, trendColor }: any) => (
 ));
 KpiItem.displayName = 'KpiItem';
 
-/* --- Styles (기존과 동일) --- */
+/* --- Styles (기존과 동일 + 로딩 스타일 추가) --- */
 const Container = styled.div`
   width: 100vw; height: calc(100vh - 64px); position: relative; overflow: hidden; background: #f8fafc; font-family: 'Pretendard', sans-serif;
 `;
@@ -448,7 +522,7 @@ const StyledKpiItem = styled.div`
 
 const slideUp = keyframes`from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); }`;
 const VehicleListWidget = styled(GlassCard)`
-  position: absolute; bottom: 24px; left: 24px; width: 340px; max-height: 35vh; z-index: 95; display: flex; flex-direction: column; overflow: hidden; animation: ${slideUp} 0.6s 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0;
+  position: absolute; bottom: 84px; left: 24px; width: 340px; max-height: 35vh; z-index: 95; display: flex; flex-direction: column; overflow: hidden; animation: ${slideUp} 0.6s 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0;
   .header { padding: 12px 16px; font-size: 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; background: rgba(248,250,252,0.5); }
   .list-container { overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; &::-webkit-scrollbar { width: 4px; } &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } }
 `;
@@ -522,7 +596,7 @@ const ServerWidget = styled(GlassCard)`
 
 const slideUpBottom = keyframes`from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); }`;
 const BottomPanel = styled(GlassCard)`
-  position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 20px; padding: 10px 24px; animation: ${slideUpBottom} 0.6s 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; z-index: 100; opacity: 0;
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 20px; padding: 10px 24px; animation: ${slideUpBottom} 0.6s 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; z-index: 100; opacity: 0;
 `;
 const BottomGroup = styled.div`
   display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; color: #475569; .item { display: flex; align-items: center; gap: 6px; } .item.active { color: #2563eb; } .divider { width: 1px; height: 10px; background: #cbd5e1; }
@@ -534,11 +608,177 @@ const SystemTicker = styled.div`
 
 const bannerSlideUp = keyframes`from { opacity: 0; transform: translate(-50%, 50px); } to { opacity: 1; transform: translate(-50%, 0); }`;
 const WarningBanner = styled.div`
-  position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; background: rgba(220, 38, 38, 0.95); backdrop-filter: blur(12px); padding: 14px 20px; border-radius: 12px; box-shadow: 0 10px 40px rgba(220, 38, 38, 0.4); z-index: 200; min-width: 420px; animation: ${bannerSlideUp} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 1px solid rgba(255,255,255,0.2);
+  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; background: rgba(220, 38, 38, 0.95); backdrop-filter: blur(12px); padding: 14px 20px; border-radius: 12px; box-shadow: 0 10px 40px rgba(220, 38, 38, 0.4); z-index: 200; min-width: 420px; animation: ${bannerSlideUp} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 1px solid rgba(255,255,255,0.2);
 `;
 const SirenIconWrapper = styled.div`
   width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: sirenPulse 1s infinite; @keyframes sirenPulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 `;
 const WarningContent = styled.div`
   color: white; .title { font-size: 14px; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; } .desc { font-size: 12px; font-weight: 500; line-height: 1.4; }
+`;
+
+// --- New Loading Styles (Enhanced Readability & Fade Out) ---
+
+const truckMove = keyframes`
+  0% { transform: translateX(-10px) translateY(0px); }
+  50% { transform: translateX(10px) translateY(-2px); }
+  100% { transform: translateX(-10px) translateY(0px); }
+`;
+
+const LoadingOverlay = styled.div<{ $isExiting: boolean }>`
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: #ffffff;
+  /* Subtle grid pattern for tech feel without clutter */
+  background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+  background-size: 24px 24px;
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  
+  /* Fade out transition */
+  opacity: ${props => props.$isExiting ? 0 : 1};
+  transition: opacity 0.8s ease-in-out;
+  pointer-events: ${props => props.$isExiting ? 'none' : 'all'};
+`;
+
+const LoadingContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+`;
+
+const TitleWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+`;
+
+const MainTitle = styled.h1`
+  font-size: 28px;
+  font-weight: 900;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+`;
+
+const SubTitleText = styled.div`
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+`;
+
+const TruckAnimation = styled.div`
+  position: relative;
+  animation: ${truckMove} 2s ease-in-out infinite;
+  margin-bottom: 8px;
+  
+  .truck-icon {
+    filter: drop-shadow(0 10px 10px rgba(239, 68, 68, 0.2));
+    z-index: 2;
+    position: relative;
+  }
+
+  .speed-lines {
+    position: absolute;
+    top: 60%;
+    right: 100%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-right: 8px;
+    
+    span {
+      height: 3px;
+      background: #ef4444;
+      border-radius: 99px;
+      animation: dash 0.8s linear infinite;
+      opacity: 0;
+      
+      &:nth-child(1) { animation-delay: 0s; width: 24px; align-self: flex-end; }
+      &:nth-child(2) { animation-delay: 0.15s; width: 16px; align-self: flex-end; }
+      &:nth-child(3) { animation-delay: 0.3s; width: 32px; align-self: flex-end; }
+    }
+  }
+
+  @keyframes dash {
+    0% { transform: translateX(10px); opacity: 0; }
+    40% { opacity: 0.8; }
+    100% { transform: translateX(-30px); opacity: 0; }
+  }
+`;
+
+const DataWave = styled.div`
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 100px; height: 100px;
+  border: 1px solid #ef4444;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0.5);
+  opacity: 0;
+  animation: wave 2s infinite cubic-bezier(0, 0.55, 0.45, 1);
+  z-index: 0;
+
+  @keyframes wave {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0.5; }
+    100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+  }
+`;
+
+const ProgressWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 280px;
+`;
+
+const LoadingLabel = styled.div`
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.5px;
+
+  .percent {
+    color: #ef4444;
+  }
+`;
+
+const ProgressBarContainer = styled.div`
+  width: 100%;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+`;
+
+const ProgressBarFill = styled.div`
+  height: 100%;
+  background: #ef4444;
+  border-radius: 99px;
+  transition: width 0.1s linear;
+  position: relative;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+`;
+
+const LoadingSubText = styled.div`
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 `;

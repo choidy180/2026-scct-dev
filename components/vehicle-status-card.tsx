@@ -1,8 +1,10 @@
-import React from 'react';
-import styled, { keyframes } from 'styled-components';
-import { MapPin, Box, User, Activity } from 'lucide-react';
+"use client";
 
-interface VehicleStatusProps {
+import React from "react";
+import styled from "styled-components";
+import { Clock, MapPin, User, Package, Navigation } from "lucide-react";
+
+interface VehicleStatusCardProps {
   vehicleId: string;
   imageUrl: string;
   departure: string;
@@ -18,150 +20,234 @@ interface VehicleStatusProps {
   driverStatus: string;
 }
 
-const VehicleStatusCard: React.FC<VehicleStatusProps> = (props) => {
+export default function VehicleStatusCard({
+  vehicleId,
+  imageUrl, // 🟢 이미지 URL props 추가
+  departure,
+  arrival,
+  progress,
+  eta,
+  remainingTime,
+  distanceLeft,
+  speed,
+  cargoInfo,
+  temperature,
+  driverName,
+  driverStatus,
+}: VehicleStatusCardProps) {
+  const simpleDep = departure.split(' ')[0];
+  const simpleArr = arrival.split(' ')[0];
+
   return (
-    <Container>
-      <GlassCard>
-        {/* 상단 헤더 & 트럭 이미지 */}
-        <TopSection>
-          <HeaderRow>
-            <StatusBadge>운행 중</StatusBadge>
-            <HeaderId>ID: {props.vehicleId}</HeaderId>
-          </HeaderRow>
-          
-          <ImageArea>
-            <TruckImage src={props.imageUrl} alt="차량 이미지" />
-          </ImageArea>
-        </TopSection>
+    <CardContainer>
+      {/* 1. 헤더: 아이콘 + 차량ID + 차량이미지 + 상태배지 */}
+      <Header>
+        <div className="left-group">
+          <div className="icon-box">
+            <Navigation size={16} color="white" />
+          </div>
+          <Title>{vehicleId}</Title>
+        </div>
+        
+        <div className="right-group">
+          {/* 🟢 차량 이미지 추가 (작게) */}
+          <CarImage src={imageUrl} alt={vehicleId} />
+          <StatusBadge $status={driverStatus.includes("지연") ? "delayed" : "normal"}>
+            {driverStatus.includes("지연") ? "지연" : "정상"}
+          </StatusBadge>
+        </div>
+      </Header>
 
-        <ContentSection>
-          {/* 1. 경로 프로세스 바 */}
-          <RouteBlock>
-            <RouteHeader>
-              <LocationBox>
-                <MapPin size={14} color="#64748b" />
-                <span>{props.departure}</span>
-              </LocationBox>
-              <LocationBox $align="right">
-                <span>{props.arrival}</span>
-                <MapPin size={14} color="#64748b" />
-              </LocationBox>
-            </RouteHeader>
+      {/* 2. 진행률 바 */}
+      <ProgressSection>
+        <div className="route-text">
+          <span>{simpleDep}</span>
+          <span className="pct">{progress}%</span>
+          <span>{simpleArr}</span>
+        </div>
+        <ProgressBar>
+          <div className="fill" style={{ width: `${progress}%` }} />
+        </ProgressBar>
+      </ProgressSection>
 
-            <ProgressContainer>
-              <Track />
-              <Fill $width={props.progress} />
-              
-              <FloatingTag style={{ left: `${props.progress}%` }}>
-                <TagText>{props.progress}%</TagText>
-                <TagSubText>완료</TagSubText>
-                <TagArrow />
-              </FloatingTag>
-            </ProgressContainer>
-          </RouteBlock>
+      {/* 3. 정보 그리드 (2x2) */}
+      <InfoGrid>
+        <GridItem>
+          <Label><Clock size={12} /> 도착 예정</Label>
+          <Value className="highlight">{eta} <span className="sub">({remainingTime})</span></Value>
+        </GridItem>
+        
+        <GridItem>
+          <Label><MapPin size={12} /> 남은 거리</Label>
+          <Value>{distanceLeft} <span className="sub">({speed}km/h)</span></Value>
+        </GridItem>
 
-          {/* 2. 핵심 메트릭 */}
-          <MetricsGrid>
-            <MetricItem>
-              <Label>도착 예정 (ETA)</Label>
-              <ValueLarge>{props.eta}</ValueLarge>
-              <SubText>{props.remainingTime}</SubText>
-            </MetricItem>
-            <DividerVertical />
-            <MetricItem>
-              <Label>남은 거리</Label>
-              <ValueMedium>{props.distanceLeft}</ValueMedium>
-              <SubTextFlex>
-                <Activity size={14} /> {props.speed} km/h
-              </SubTextFlex>
-            </MetricItem>
-          </MetricsGrid>
+        <GridItem>
+          <Label><User size={12} /> 담당 기사</Label>
+          <Value>{driverName}</Value>
+        </GridItem>
 
-          {/* 3. 하단 정보 카드 */}
-          <CardGrid>
-            <DetailCard>
-              <IconBox>
-                <Box size={18} color="#475569" />
-              </IconBox>
-              <CardContent>
-                <CardLabel>화물 정보</CardLabel>
-                <CardValue>{props.cargoInfo}</CardValue>
-                <Tag $color="#10b981" $bg="#dcfce7">온도 {props.temperature}</Tag>
-              </CardContent>
-            </DetailCard>
-
-            <DetailCard>
-              <IconBox>
-                <User size={18} color="#475569" />
-              </IconBox>
-              <CardContent>
-                <CardLabel>운전자</CardLabel>
-                <CardValue>{props.driverName}</CardValue>
-                <Tag $color="#2563eb" $bg="#dbeafe">{props.driverStatus}</Tag>
-              </CardContent>
-            </DetailCard>
-          </CardGrid>
-
-        </ContentSection>
-
-        <StatusIndicator />
-      </GlassCard>
-    </Container>
+        <GridItem>
+          <Label><Package size={12} /> 적재 화물</Label>
+          <Value>{cargoInfo.split(',')[0]} <TempBadge>{temperature}</TempBadge></Value>
+        </GridItem>
+      </InfoGrid>
+    </CardContainer>
   );
-};
-
-export default VehicleStatusCard;
-
-// --- Keyframes ---
-const pulse = keyframes` 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } `;
+}
 
 // --- Styled Components ---
 
-const Container = styled.div`
+const CardContainer = styled.div`
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 16px;
+  width: 340px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  font-family: 'Pretendard', sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+`;
+
+const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  .left-group, .right-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .icon-box {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  }
+`;
+
+const Title = styled.h2`
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0;
+  letter-spacing: -0.5px;
+`;
+
+// 🟢 차량 이미지 스타일 추가
+const CarImage = styled.img`
+  height: 32px; /* 높이 고정 */
+  width: auto;
+  object-fit: contain;
+  /* filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); /* 선택사항: 그림자 추가 */
+`;
+
+const StatusBadge = styled.div<{ $status: "normal" | "delayed" }>`
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px; /* 패딩 약간 조절 */
+  border-radius: 20px;
+  background: ${props => props.$status === "delayed" ? "#FEF2F2" : "#ECFDF5"};
+  color: ${props => props.$status === "delayed" ? "#EF4444" : "#10B981"};
+  border: 1px solid ${props => props.$status === "delayed" ? "#FECACA" : "#A7F3D0"};
+  white-space: nowrap;
+`;
+
+const ProgressSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  .route-text {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    
+    .pct {
+      color: #3b82f6;
+      font-weight: 800;
+    }
+  }
+`;
+
+const ProgressBar = styled.div`
   width: 100%;
-  max-width: 400px; /* ✅ 여기서도 max-width를 맞춰줍니다 */
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  height: 6px;
+  background: #E2E8F0;
+  border-radius: 99px;
+  overflow: hidden;
+
+  .fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    border-radius: 99px;
+    transition: width 0.5s ease;
+  }
 `;
 
-const GlassCard = styled.div`
-  position: relative;
-  background: rgba(255, 255, 255, 0.75); /* ✅ 투명도 조절 */
-  backdrop-filter: blur(20px);
-  border-radius: 32px;
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-  overflow: visible;
+const InfoGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #F1F5F9;
 `;
 
-const TopSection = styled.div` background: linear-gradient(180deg, #FFFFFF 0%, rgba(241,245,249,0.5) 100%); padding: 24px; display: flex; flex-direction: column; align-items: center; border-radius: 32px 32px 0 0; border-bottom: 1px solid rgba(0,0,0,0.05); `;
-const HeaderRow = styled.div` width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; `;
-const StatusBadge = styled.span` background: #E0F2FE; color: #0284C7; font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 8px; `;
-const HeaderId = styled.span` font-size: 14px; font-weight: 600; color: #64748B; letter-spacing: 0.5px; `;
-const ImageArea = styled.div` position: relative; width: 100%; height: 150px; display: flex; justify-content: center; align-items: center; `;
-const TruckImage = styled.img` width: 95%; height: auto; object-fit: contain; z-index: 2; transition: transform 0.3s; &:hover { transform: scale(1.02); } `;
-const ContentSection = styled.div` padding: 28px 24px; `;
-const RouteBlock = styled.div` margin-bottom: 32px; `;
-const RouteHeader = styled.div` display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; `;
-const LocationBox = styled.div<{ $align?: string }>` display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: #475569; `;
-const ProgressContainer = styled.div` position: relative; width: 100%; height: 8px; `;
-const Track = styled.div` position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #E2E8F0; border-radius: 99px; `;
-const Fill = styled.div<{ $width: number }>` position: absolute; top: 0; left: 0; width: ${props => props.$width}%; height: 100%; background: linear-gradient(90deg, #3B82F6, #2563EB); border-radius: 99px; transition: width 0.5s ease-out; `;
-const FloatingTag = styled.div` position: absolute; top: -34px; transform: translateX(-50%); background: #2563EB; padding: 4px 10px; border-radius: 8px; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3); white-space: nowrap; transition: left 0.5s ease-out; z-index: 10; `;
-const TagText = styled.span` color: white; font-size: 13px; font-weight: 800; `;
-const TagSubText = styled.span` color: rgba(255,255,255,0.8); font-size: 11px; font-weight: 600; `;
-const TagArrow = styled.div` position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%) rotate(45deg); width: 8px; height: 8px; background: #2563EB; `;
-const MetricsGrid = styled.div` display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 0 4px; `;
-const MetricItem = styled.div` display: flex; flex-direction: column; gap: 6px; `;
-const DividerVertical = styled.div` width: 1px; height: 40px; background: #CBD5E1; `;
-const Label = styled.span` font-size: 13px; color: #94A3B8; font-weight: 600; text-transform: uppercase; `;
-const ValueLarge = styled.div` font-size: 28px; font-weight: 600; color: #1E293B; line-height: 1; letter-spacing: -0.5px; `;
-const ValueMedium = styled.div` font-size: 22px; font-weight: 700; color: #334155; line-height: 1; `;
-const SubText = styled.span` font-size: 14px; color: #64748B; font-weight: 500; `;
-const SubTextFlex = styled(SubText)` display: flex; align-items: center; gap: 6px; margin-top: 2px; `;
-const CardGrid = styled.div` display: grid; grid-template-columns: 1fr 1fr; gap: 16px; `;
-const DetailCard = styled.div` background: rgba(248, 250, 252, 0.5); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: transform 0.2s, background-color 0.2s; &:hover { background: rgba(241, 245, 249, 0.8); transform: translateY(-2px); } `;
-const IconBox = styled.div` width: 36px; height: 36px; background: #FFFFFF; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); `;
-const CardContent = styled.div` display: flex; flex-direction: column; `;
-const CardLabel = styled.span` font-size: 12px; color: #94A3B8; font-weight: 700; margin-bottom: 4px; `;
-const CardValue = styled.span` font-size: 14px; font-weight: 600; color: #334155; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; `;
-const Tag = styled.span<{ $color: string, $bg: string }>` align-self: flex-start; font-size: 11px; font-weight: 600; color: ${props => props.$color}; background: ${props => props.$bg}; padding: 4px 8px; border-radius: 6px; `;
-const StatusIndicator = styled.div` position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; background: #22C55E; border-radius: 4px 4px 0 0; box-shadow: 0 -2px 10px rgba(34, 197, 94, 0.6); &::after { content: ''; position: absolute; inset: 0; border-radius: inherit; animation: ${pulse} 2s infinite; } `;
+const GridItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`;
+
+const Label = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+`;
+
+const Value = styled.div`
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  &.highlight {
+    color: #3b82f6;
+    font-weight: 800;
+  }
+
+  .sub {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 500;
+  }
+`;
+
+const TempBadge = styled.span`
+  font-size: 9px;
+  background: #f1f5f9;
+  color: #64748b;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+`;
