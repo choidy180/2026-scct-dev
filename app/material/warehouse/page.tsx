@@ -252,7 +252,7 @@ export default function WarehouseMapDashboard() {
                                 <SlotGrid>
                                     {zone.slots.map((slot: any) => (
                                         <Slot key={slot.no} $active={slot.active}>
-                                            <div className="no">{slot.no}</div>
+                                            <div className="no">{slot.no}1</div>
                                             {slot.active && <div className="car-indicator" />}
                                         </Slot>
                                     ))}
@@ -479,7 +479,7 @@ const ZoneColumn = styled(motion.div)`
         &.orange { background: #ffedd5; color: #9a3412; }
         &.red { background: #fee2e2; color: #991b1b; }
     }
-    .stats-row { display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b; margin-bottom: 6px; b.use { color: #3b82f6; } }
+    .stats-row { display: flex; justify-content: space-between; font-size: 1rem; color: #64748b; margin-bottom: 6px; b.use { color: #3b82f6; } }
     .progress-bg { height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; .progress-fill { height: 100%; background: #3b82f6; } }
   }
 `;
@@ -497,8 +497,8 @@ const Slot = styled.div<{ $active: boolean }>`
   border: 1px solid ${props => props.$active ? '#93c5fd' : '#e2e8f0'};
   border-radius: 6px;
   display: flex; align-items: center; justify-content: center; position: relative;
-  font-size: 0.8rem; font-weight: 700; color: ${props => props.$active ? '#2563eb' : '#cbd5e1'};
-  .car-indicator { position: absolute; bottom: 10%; width: 4px; height: 4px; background: #3b82f6; border-radius: 50%; }
+  font-size: 1rem; font-weight: 700; color: ${props => props.$active ? '#2563eb' : '#cbd5e1'};
+  .car-indicator { position: absolute; bottom: 10%; width: 6px; height: 6px; background: #3b82f6; border-radius: 50%; }
 `;
 
 // 🔥 Side Menu Styles
@@ -524,12 +524,12 @@ const SideDrawer = styled(motion.div)`
   }
 
   .menu-list { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-  .menu-label { font-size: 0.75rem; font-weight: 700; color: #94a3b8; margin: 12px 0 8px 12px; }
+  .menu-label { font-size: 1rem; font-weight: 700; color: #94a3b8; margin: 12px 0 8px 12px; }
   
   .drawer-footer {
       padding: 20px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;
       .logout-btn { display: flex; align-items: center; gap: 8px; color: #ef4444; background: none; border: none; font-weight: 600; cursor: pointer; &:hover { opacity: 0.8; } }
-      .ver { font-size: 0.75rem; color: #cbd5e1; }
+      .ver { font-size: 1rem; color: #cbd5e1; }
   }
 `;
 

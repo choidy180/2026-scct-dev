@@ -159,9 +159,9 @@ const BoardContainer = styled.div`
                             .slot {
                                 background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
                                 display: flex; align-items: center; justify-content: center; position: relative;
-                                font-size: 0.8rem; font-weight: 700; color: #cbd5e1;
+                                font-size: 1rem; font-weight: 700; color: #cbd5e1;
                                 &.on { background: #eff6ff; border-color: #93c5fd; color: #2563eb; }
-                                .dot { position: absolute; bottom: 10%; width: 4px; height: 4px; background: #3b82f6; border-radius: 50%; }
+                                .dot { position: absolute; bottom: 10%; width: 6px; height: 6px; background: #3b82f6; border-radius: 50%; }
                             }
                         }
                     }
