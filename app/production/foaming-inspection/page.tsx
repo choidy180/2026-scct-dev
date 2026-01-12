@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { 
   FiCheck, 
@@ -18,10 +18,12 @@ import {
 } from 'react-icons/fi';
 
 // --------------------------------------------------------------------------
-// 1. Types & Data Helpers
+// 1. Types & Constants
 // --------------------------------------------------------------------------
 
 type ProcessType = 'GR1' | 'GR2' | 'GR3' | 'GR4' | 'GR5';
+const PROCESS_LIST: ProcessType[] = ['GR1', 'GR2', 'GR3', 'GR4', 'GR5'];
+const COMMON_FONT = "'Pretendard', sans-serif";
 
 interface GaugeData {
   id: number;
@@ -42,6 +44,10 @@ interface AlertItemData {
   value?: string;
 }
 
+// --------------------------------------------------------------------------
+// 2. Data Helpers (Pure Functions)
+// --------------------------------------------------------------------------
+
 const getRandomVal = (min: number, max: number, decimals: number = 0) => {
   const val = Math.random() * (max - min) + min;
   return parseFloat(val.toFixed(decimals));
@@ -50,27 +56,29 @@ const getRandomVal = (min: number, max: number, decimals: number = 0) => {
 const generateProcessData = (proc: ProcessType) => {
   const isBadLuck = proc === 'GR3' || proc === 'GR5'; 
   
-  const baseMetrics: GaugeData[] = [
-    { id: 1, label: 'R액 압력', unit: 'kg/m²', icon: <FiActivity />, min: 110, max: 150, value: 0 },
-    { id: 2, label: 'R액 탱크온도', unit: '°C', icon: <FiThermometer />, min: 13, max: 23, value: 0 },
-    { id: 3, label: 'P액 헤드온도', unit: '°C', icon: <FiThermometer />, min: 24, max: 28, value: 0 },
-    { id: 4, label: '발포시간', unit: '초', icon: <FiClock />, min: 0.76, max: 1.66, value: 0 },
-    { id: 5, label: '가조립무게', unit: 'g', icon: <FiBox />, min: 2375, max: 12530, value: 0 },
-    { id: 6, label: '믹싱모터', unit: 'rpm', icon: <FiActivity />, min: 1800, max: 2200, value: 0 },
+  const baseMetrics: Omit<GaugeData, 'value'>[] = [
+    { id: 1, label: 'R액 압력', unit: 'kg/m²', icon: <FiActivity />, min: 110, max: 150 },
+    { id: 2, label: 'R액 탱크온도', unit: '°C', icon: <FiThermometer />, min: 13, max: 23 },
+    { id: 3, label: 'P액 헤드온도', unit: '°C', icon: <FiThermometer />, min: 24, max: 28 },
+    { id: 4, label: '발포시간', unit: '초', icon: <FiClock />, min: 0.76, max: 1.66 },
+    { id: 5, label: '가조립무게', unit: 'g', icon: <FiBox />, min: 2375, max: 12530 },
+    { id: 6, label: '믹싱모터', unit: 'rpm', icon: <FiActivity />, min: 1800, max: 2200 },
   ];
 
-  const metrics = baseMetrics.map(m => {
+  const metrics: GaugeData[] = baseMetrics.map(m => {
     const range = m.max - m.min;
     const errorMargin = isBadLuck ? range * 0.4 : range * 0.05; 
     let val = getRandomVal(m.min, m.max, m.unit === 'g' || m.unit === 'rpm' ? 0 : 2);
     
     if (Math.random() > 0.8) {
-       val = getRandomVal(m.min - errorMargin, m.max + errorMargin, m.unit === 'g' ? 0 : 2);
+      val = getRandomVal(m.min - errorMargin, m.max + errorMargin, m.unit === 'g' ? 0 : 2);
     }
     return { ...m, value: val };
   });
 
   const newAlerts: AlertItemData[] = [];
+  const nowStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+
   metrics.forEach(m => {
     if (m.value < m.min || m.value > m.max) {
       newAlerts.push({
@@ -79,7 +87,7 @@ const generateProcessData = (proc: ProcessType) => {
         title: 'Spec Out 발생',
         desc: `${m.label}이(가) 관리 범위(${m.min}~${m.max}${m.unit})를 벗어났습니다.`,
         value: `현재값: ${m.value} ${m.unit}`,
-        time: new Date().toLocaleTimeString('en-US', { hour12: false })
+        time: nowStr
       });
     }
   });
@@ -90,7 +98,7 @@ const generateProcessData = (proc: ProcessType) => {
       type: 'warning',
       title: '통신 지연 감지',
       desc: '센서 데이터 수신이 0.5초 지연되었습니다.',
-      time: new Date().toLocaleTimeString('en-US', { hour12: false })
+      time: nowStr
     });
   }
 
@@ -98,7 +106,7 @@ const generateProcessData = (proc: ProcessType) => {
 };
 
 // --------------------------------------------------------------------------
-// 2. Keyframes
+// 3. Styled Components & Keyframes
 // --------------------------------------------------------------------------
 
 const pulseGreen = keyframes`
@@ -145,13 +153,6 @@ const textGlow = keyframes`
   50% { text-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 30px rgba(16, 185, 129, 0.6); }
 `;
 
-// --------------------------------------------------------------------------
-// 3. Styled Components
-// --------------------------------------------------------------------------
-
-/* 🔥 폰트 통일을 위한 상수 */
-const COMMON_FONT = "font-family: 'Pretendard';";
-
 const LoaderOverlay = styled.div<{ $isFinished: boolean }>`
   position: absolute;
   top: 0; left: 0;
@@ -165,8 +166,6 @@ const LoaderOverlay = styled.div<{ $isFinished: boolean }>`
   opacity: ${props => props.$isFinished ? 0 : 1};
   visibility: ${props => props.$isFinished ? 'hidden' : 'visible'};
   transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
-  
-  /* 폰트 적용 */
   font-family: ${COMMON_FONT};
 `;
 
@@ -231,7 +230,6 @@ const LoadingStatus = styled.div`
   font-size: 12px;
   color: #94a3b8;
   font-weight: 600;
-  /* 🔥 기존 monospace 제거 및 통합 폰트 적용 */
   font-family: ${COMMON_FONT};
 `;
 
@@ -245,17 +243,16 @@ const PageContainer = styled.div`
   justify-content: center;
   align-items: center;
   color: #111;
-  padding-top: 20px;
+  padding-top: 12px; 
   position: relative;
-
-  /* 🔥 최상위 컨테이너 폰트 통합 */
   font-family: ${COMMON_FONT};
+  box-sizing: border-box;
 `;
 
 const ContentWrapper = styled.div`
   width: 100%;
-  max-width: calc(100% - 60px);
-  height: calc(100% - 20px);
+  max-width: calc(100% - 48px);
+  height: calc(100% - 24px);
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -263,11 +260,39 @@ const ContentWrapper = styled.div`
   font-family: ${COMMON_FONT};
 `;
 
+const PageHeaderRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: 56px;
+  flex-shrink: 0;
+  margin-bottom: 16px;
+  width: 100%;
+`;
+
+const HeaderLeft = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+`;
+
+const HeaderCenter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const HeaderRight = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+`;
+
 const TabNavigation = styled.div`
   display: flex;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 8px;
   align-items: center;
+  margin: 0;
 `;
 
 const TabButton = styled.button<{ $isActive: boolean }>`
@@ -275,9 +300,9 @@ const TabButton = styled.button<{ $isActive: boolean }>`
   outline: none;
   background: ${props => props.$isActive ? '#1e293b' : '#fff'};
   color: ${props => props.$isActive ? '#fff' : '#64748b'};
-  padding: 10px 24px;
-  border-radius: 12px;
-  font-size: 16px;
+  padding: 8px 20px;
+  border-radius: 10px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
   box-shadow: ${props => props.$isActive 
@@ -286,8 +311,7 @@ const TabButton = styled.button<{ $isActive: boolean }>`
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
-  gap: 8px;
-  
+  gap: 6px;
   font-family: ${COMMON_FONT};
 
   &:hover {
@@ -296,17 +320,8 @@ const TabButton = styled.button<{ $isActive: boolean }>`
   }
 `;
 
-const PageHeaderRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 60px;
-  flex-shrink: 0;
-  margin-bottom: 20px;
-`;
-
 const PageTitle = styled.h1`
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
   margin: 0;
   color: #1e293b;
@@ -315,20 +330,19 @@ const PageTitle = styled.h1`
   align-items: center;
   gap: 12px;
   font-family: ${COMMON_FONT};
-  font-family: 'Pretendard';
-  margin-top: 10px;
 
   .proc-badge {
-    font-size: 16px;
+    font-size: 14px;
     background: #eff6ff;
     color: #3b82f6;
-    padding: 6px 12px;
+    padding: 4px 10px;
     border-radius: 8px;
     vertical-align: middle;
   }
 
   @media (min-width: 2000px) {
     font-size: 42px;
+    .proc-badge { font-size: 16px; padding: 6px 12px; }
   }
 `;
 
@@ -363,28 +377,28 @@ const CurrentTime = styled.div`
 
 const DashboardGrid = styled.div`
   display: grid;
-  grid-template-columns: 22% 1fr; 
-  gap: 24px;
+  grid-template-columns: 20% 1fr;
+  gap: 20px;
   flex: 1;
   min-height: 0; 
-  padding-bottom: 10px;
+  padding-bottom: 0px;
 
   @media (max-width: 1400px) {
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: 280px 1fr;
   }
 `;
 
 const LeftColumn = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   height: 100%;
 `;
 
 const RightColumn = styled.div`
   background: #fff;
   border-radius: 20px;
-  padding: 24px 32px;
+  padding: 20px 28px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   border: 1px solid #e2e8f0;
   display: flex;
@@ -392,7 +406,7 @@ const RightColumn = styled.div`
   height: 100%;
   overflow-y: auto;
   
-  &::-webkit-scrollbar { width: 8px; }
+  &::-webkit-scrollbar { width: 6px; }
   &::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
   &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 `;
@@ -401,14 +415,14 @@ const SectionHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  padding-bottom: 16px;
+  margin-bottom: 8px;
+  padding-bottom: 12px;
   flex-shrink: 0;
   border-bottom: 1px solid #f1f5f9;
 `;
 
 const SectionTitle = styled.h2`
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: #0f172a;
   margin: 0;
@@ -435,21 +449,18 @@ const DateLabel = styled.span`
 const MetricsList = styled.div`
   display: flex;
   flex-direction: column;
-  justify-content: space-between; 
+  justify-content: space-evenly;
   flex: 1;
   width: 100%;
-  gap: 12px; 
-  padding-top: 16px;
+  gap: 8px;
+  padding-top: 12px;
+  overflow: hidden;
 `;
-
-// --------------------------------------------------------------------------
-// 4. Status Card Components
-// --------------------------------------------------------------------------
 
 const CardBase = styled.div<{ $status: 'good' | 'error', $clickable?: boolean }>`
   background: ${props => props.$status === 'good' ? 'rgb(59 255 190 / 5%)' : 'rgb(255 101 101 / 5%)'};
   border-radius: 20px;
-  padding: 24px;
+  padding: 20px;
   flex: 1; 
   display: flex;
   flex-direction: column;
@@ -482,7 +493,7 @@ const CardBase = styled.div<{ $status: 'good' | 'error', $clickable?: boolean }>
 const CardHeader = styled.div`
   width: 100%;
   text-align: left;
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1.2;
   font-weight: 700;
   color: #334155;
@@ -492,10 +503,10 @@ const CardHeader = styled.div`
 `;
 
 const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
-  width: 12vmin;
-  height: 12vmin;
-  min-width: 100px; min-height: 100px;
-  max-width: 150px; max-height: 150px;
+  width: 10vmin;
+  height: 10vmin;
+  min-width: 80px; min-height: 80px;
+  max-width: 120px; max-height: 120px;
   border-radius: 50%;
   background: ${props => props.$status === 'good' ? '#10b981' : '#ef4444'};
   display: flex;
@@ -510,7 +521,7 @@ const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
 `;
 
 const StatusText = styled.div`
-  font-size: 42px;
+  font-size: 36px;
   font-weight: 800;
   color: #0f172a;
   z-index: 1;
@@ -522,9 +533,9 @@ const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 20px;
+  padding: 6px 16px;
   border-radius: 99px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   z-index: 1;
   font-family: ${COMMON_FONT};
@@ -536,10 +547,10 @@ const LegendContainer = styled.div`
   width: 100%;
   background: #f8fafc;
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 8px 10px;
   display: flex;
   justify-content: center;
-  gap: 16px;
+  gap: 12px;
   z-index: 1;
   @media (min-width: 2000px) { padding: 12px 16px; gap: 24px; }
 `;
@@ -547,47 +558,20 @@ const LegendContainer = styled.div`
 const LegendItem = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  gap: 4px;
+  font-size: 13px;
   color: #64748b;
   font-weight: 500;
   font-family: ${COMMON_FONT};
   &::before {
     content: '';
     display: block;
-    width: 10px; height: 10px;
+    width: 8px; height: 8px;
     border-radius: 50%;
     background-color: ${props => props.color};
   }
   @media (min-width: 2000px) { font-size: 16px; &::before { width: 14px; height: 14px; } }
 `;
-
-const StatusCard = ({ 
-  type, title, mainText, subText, onClick
-}: { 
-  type: 'good' | 'error', title: string, mainText: string, subText: string, onClick?: () => void
-}) => (
-  <CardBase $status={type} onClick={onClick} $clickable={!!onClick}>
-    <CardHeader>{title}</CardHeader>
-    <StatusCircle $status={type}>
-      {type === 'good' ? <FiCheck /> : <FiAlertTriangle />}
-    </StatusCircle>
-    <StatusText>{mainText}</StatusText>
-    <StatusBadge $status={type}>
-      {type === 'good' ? <FiCheck size={14} /> : <FiAlertTriangle size={14} />}
-      {subText}
-    </StatusBadge>
-    <LegendContainer>
-      <LegendItem color="#10b981">{type === 'good' ? '양호' : '없음'}</LegendItem>
-      <LegendItem color="#f59e0b">{type === 'good' ? '주의' : '1건 이상'}</LegendItem>
-      <LegendItem color="#ef4444">{type === 'good' ? '불량' : '1건 이상'}</LegendItem>
-    </LegendContainer>
-  </CardBase>
-);
-
-// --------------------------------------------------------------------------
-// 5. Metric Row
-// --------------------------------------------------------------------------
 
 const RowContainer = styled.div<{ $isError?: boolean }>`
   display: flex;
@@ -596,7 +580,7 @@ const RowContainer = styled.div<{ $isError?: boolean }>`
   border-radius: 16px;
   position: relative;
   flex: 1;
-  min-height: 60px;
+  min-height: 54px;
   ${props => props.$isError ? css`background: #FEF2F2; border: 2px solid #FCA5A5;` : css`background: #f1f5f9; border: 2px solid transparent; &:hover { background-color: #f8fafc; border-color: #e2e8f0; }`}
 `;
 
@@ -610,14 +594,14 @@ const MetricInfo = styled.div`
 `;
 
 const IconBox = styled.div`
-  width: 44px; height: 44px;
+  width: 40px; height: 40px;
   background-color: #fff;
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #64748b;
-  font-size: 20px;
+  font-size: 18px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   @media (min-width: 2000px) { width: 60px; height: 60px; font-size: 28px; }
 `;
@@ -629,7 +613,7 @@ const MetricLabelGroup = styled.div`
 
 const MetricName = styled.span`
   font-weight: 700;
-  font-size: 20px;
+  font-size: 18px;
   color: #1e293b;
   display: flex;
   align-items: center;
@@ -639,7 +623,7 @@ const MetricName = styled.span`
 `;
 
 const MetricUnit = styled.span`
-  font-size: 14px;
+  font-size: 13px;
   color: #757d88;
   font-weight: 400;
   font-family: ${COMMON_FONT};
@@ -657,8 +641,8 @@ const GaugeColumn = styled.div`
 
 const TrackArea = styled.div`
   position: relative;
-  width: 100%; height: 12px;
-  margin-top: 12px;
+  width: 100%; height: 10px;
+  margin-top: 10px;
   @media (min-width: 2000px) { height: 18px; }
 `;
 
@@ -683,8 +667,8 @@ const GaugeTrack = styled.div<{ $isError?: boolean }>`
 const GaugeLabels = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-top: 8px;
-  font-size: 16px;
+  margin-top: 6px;
+  font-size: 14px;
   color: #717983;
   font-weight: 500;
   width: 100%;
@@ -701,9 +685,9 @@ const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
 
   .value-text {
     position: absolute;
-    bottom: 10px; left: 50%;
+    bottom: 8px; left: 50%;
     transform: translateX(-50%);
-    font-size: 20px; font-weight: 700;
+    font-size: 18px; font-weight: 700;
     color: ${props => props.$isError ? '#ef4444' : '#0f172a'};
     white-space: nowrap;
     text-align: center;
@@ -713,7 +697,7 @@ const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
     position: absolute;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    width: 20px; height: 12px;
+    width: 18px; height: 10px;
     background: ${props => props.$isError ? '#ef4444' : '#fff'};
     border: 2px solid ${props => props.$isError ? '#b91c1c' : '#334155'};
     border-radius: 12px;
@@ -728,9 +712,9 @@ const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
 
 const DangerPopup = styled.div`
   position: absolute;
-  left: 260px; top: -20px; z-index: 50;
+  left: 260px; top: -15px; z-index: 50;
   background: #ef4444; color: white;
-  padding: 12px 20px; border-radius: 12px;
+  padding: 10px 16px; border-radius: 12px;
   box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.6);
   display: flex; align-items: center; gap: 16px;
   animation: ${dangerPulse} 2s infinite;
@@ -742,26 +726,129 @@ const DangerPopup = styled.div`
     width: 12px; height: 12px;
     background: #ef4444; transform: rotate(45deg);
   }
-  .icon-area { font-size: 28px; display: flex; align-items: center; @media (min-width: 2000px) { font-size: 36px; } }
+  .icon-area { font-size: 24px; display: flex; align-items: center; @media (min-width: 2000px) { font-size: 36px; } }
   .text-area { display: flex; flex-direction: column; gap: 2px; }
-  .warning-title { font-size: 14px; font-weight: 800; color: #fee2e2; text-transform: uppercase; font-family: ${COMMON_FONT}; @media (min-width: 2000px) { font-size: 16px; } }
-  .warning-msg { font-size: 15px; font-weight: 700; white-space: nowrap; font-family: ${COMMON_FONT}; @media (min-width: 2000px) { font-size: 18px; } }
-  .action-btn { background: white; color: #ef4444; padding: 6px 12px; border-radius: 6px; font-size: 14px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-family: ${COMMON_FONT}; &:hover { background: #fff1f2; } @media (min-width: 2000px) { font-size: 16px; padding: 8px 16px; } }
+  .warning-title { font-size: 13px; font-weight: 800; color: #fee2e2; text-transform: uppercase; font-family: ${COMMON_FONT}; @media (min-width: 2000px) { font-size: 16px; } }
+  .warning-msg { font-size: 14px; font-weight: 700; white-space: nowrap; font-family: ${COMMON_FONT}; @media (min-width: 2000px) { font-size: 18px; } }
+  .action-btn { background: white; color: #ef4444; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-family: ${COMMON_FONT}; &:hover { background: #fff1f2; } @media (min-width: 2000px) { font-size: 16px; padding: 8px 16px; } }
 `;
 
 const ValueBox = styled.div<{ $isError?: boolean }>`
-  width: 110px; height: 48px;
+  width: 100px; height: 44px;
   background-color: ${props => props.$isError ? '#ef4444' : '#10b981'};
   border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  color: white; font-size: 18px; font-weight: 700;
+  color: white; font-size: 16px; font-weight: 700;
   box-shadow: 0 4px 6px -1px ${props => props.$isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)'};
   flex-shrink: 0;
   font-family: ${COMMON_FONT};
   @media (min-width: 2000px) { width: 140px; height: 60px; font-size: 24px; }
 `;
 
-const MetricRow = ({ data }: { data: GaugeData }) => {
+const NotificationContainer = styled.div`
+  position: absolute;
+  top: 20px; right: 20px;
+  width: 400px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 12px;
+  pointer-events: none; 
+  font-family: ${COMMON_FONT};
+  @media (min-width: 2000px) { width: 500px; top: 30px; right: 30px; }
+`;
+
+const SummaryBanner = styled.div`
+  pointer-events: auto;
+  background-color: rgba(239, 68, 68, 0.95);
+  backdrop-filter: blur(4px);
+  color: white; padding: 16px 20px; border-radius: 12px;
+  display: flex; flex-direction: column;
+  box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
+  animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  
+  .header { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px; }
+  .header-left { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
+  .close-all-btn { cursor: pointer; color: white; opacity: 0.9; transition: all 0.2s; &:hover { opacity: 1; transform: scale(1.2); } }
+  .sub-text { font-size: 13px; opacity: 0.9; padding-left: 28px; }
+  @media (min-width: 2000px) { padding: 20px 24px; .header-left { font-size: 20px; } .sub-text { font-size: 15px; } }
+`;
+
+const AlertCardStyle = styled.div<{ $type: 'error' | 'warning' }>`
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px;
+  position: relative;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'};
+  display: flex; flex-direction: column;
+  animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  transition: transform 0.2s;
+  &:hover { transform: translateX(-4px); }
+
+  .top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .title-group { display: flex; align-items: center; gap: 8px; }
+  .badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; color: white; background-color: ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'}; }
+  .title { font-size: 14px; font-weight: 700; color: #1e293b; font-family: ${COMMON_FONT}; }
+  .right-side { display: flex; align-items: center; gap: 12px; }
+  .time { font-size: 14px; color: #94a3b8; font-family: ${COMMON_FONT}; }
+  .close-item-btn { cursor: pointer; color: #cbd5e1; transition: all 0.2s; &:hover { color: #64748b; transform: scale(1.1); } }
+  .desc { font-size: 13px; color: #475569; line-height: 1.5; white-space: pre-wrap; font-family: ${COMMON_FONT}; }
+  .value-highlight { display: block; margin-top: 4px; font-weight: 700; color: #0f172a; font-family: ${COMMON_FONT}; }
+  @media (min-width: 2000px) { padding: 20px; .badge { font-size: 13px; } .title { font-size: 16px; } .desc { font-size: 15px; } .time { font-size: 15px; } }
+`;
+
+// --------------------------------------------------------------------------
+// 4. Sub-Components (Memoized for Performance)
+// --------------------------------------------------------------------------
+
+// 4.1. Live Clock Component (Isolates renders)
+const LiveClock = memo(() => {
+  const [time, setTime] = useState<string>('');
+
+  useEffect(() => {
+    // Client-side only to avoid hydration mismatch
+    setTime(new Date().toLocaleTimeString('en-GB', { hour12: false }));
+    const interval = setInterval(() => {
+      setTime(new Date().toLocaleTimeString('en-GB', { hour12: false }));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!time) return <CurrentTime>Loading...</CurrentTime>;
+
+  return <CurrentTime>{time}</CurrentTime>;
+});
+
+LiveClock.displayName = 'LiveClock';
+
+// 4.2. Status Card
+const StatusCard = memo(({ 
+  type, title, mainText, subText, onClick
+}: { 
+  type: 'good' | 'error', title: string, mainText: string, subText: string, onClick?: () => void
+}) => (
+  <CardBase $status={type} onClick={onClick} $clickable={!!onClick}>
+    <CardHeader>{title}</CardHeader>
+    <StatusCircle $status={type}>
+      {type === 'good' ? <FiCheck /> : <FiAlertTriangle />}
+    </StatusCircle>
+    <StatusText>{mainText}</StatusText>
+    <StatusBadge $status={type}>
+      {type === 'good' ? <FiCheck size={14} /> : <FiAlertTriangle size={14} />}
+      {subText}
+    </StatusBadge>
+    <LegendContainer>
+      <LegendItem color="#10b981">{type === 'good' ? '양호' : '없음'}</LegendItem>
+      <LegendItem color="#f59e0b">{type === 'good' ? '주의' : '1건 이상'}</LegendItem>
+      <LegendItem color="#ef4444">{type === 'good' ? '불량' : '1건 이상'}</LegendItem>
+    </LegendContainer>
+  </CardBase>
+));
+
+StatusCard.displayName = 'StatusCard';
+
+// 4.3. Metric Row
+const MetricRow = memo(({ data }: { data: GaugeData }) => {
   const range = data.max - data.min;
   let percent = ((data.value - data.min) / range) * 100;
   const isSpecOut = data.value < data.min || data.value > data.max;
@@ -806,65 +893,11 @@ const MetricRow = ({ data }: { data: GaugeData }) => {
       <ValueBox $isError={isSpecOut}>{data.value}</ValueBox>
     </RowContainer>
   );
-};
+});
 
-// --------------------------------------------------------------------------
-// 6. Notification 
-// --------------------------------------------------------------------------
+MetricRow.displayName = 'MetricRow';
 
-const NotificationContainer = styled.div`
-  position: absolute;
-  top: 20px; right: 20px;
-  width: 400px; z-index: 9999;
-  display: flex; flex-direction: column; gap: 12px;
-  pointer-events: none; 
-  /* 🔥 폰트 통일 */
-  font-family: ${COMMON_FONT};
-  @media (min-width: 2000px) { width: 500px; top: 30px; right: 30px; }
-`;
-
-const SummaryBanner = styled.div`
-  pointer-events: auto;
-  background-color: rgba(239, 68, 68, 0.95);
-  backdrop-filter: blur(4px);
-  color: white; padding: 16px 20px; border-radius: 12px;
-  display: flex; flex-direction: column;
-  box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
-  animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-  
-  .header { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px; }
-  .header-left { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
-  .close-all-btn { cursor: pointer; color: white; opacity: 0.9; transition: all 0.2s; &:hover { opacity: 1; transform: scale(1.2); } }
-  .sub-text { font-size: 13px; opacity: 0.9; padding-left: 28px; }
-  @media (min-width: 2000px) { padding: 20px 24px; .header-left { font-size: 20px; } .sub-text { font-size: 15px; } }
-`;
-
-const AlertCard = styled.div<{ $type: 'error' | 'warning' }>`
-  pointer-events: auto;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  padding: 16px;
-  position: relative;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'};
-  display: flex; flex-direction: column;
-  animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-  transition: transform 0.2s;
-  &:hover { transform: translateX(-4px); }
-
-  .top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-  .title-group { display: flex; align-items: center; gap: 8px; }
-  .badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; color: white; background-color: ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'}; }
-  .title { font-size: 14px; font-weight: 700; color: #1e293b; font-family: ${COMMON_FONT}; }
-  .right-side { display: flex; align-items: center; gap: 12px; }
-  .time { font-size: 14px; color: #94a3b8; font-family: ${COMMON_FONT}; }
-  .close-item-btn { cursor: pointer; color: #cbd5e1; transition: all 0.2s; &:hover { color: #64748b; transform: scale(1.1); } }
-  .desc { font-size: 13px; color: #475569; line-height: 1.5; white-space: pre-wrap; font-family: ${COMMON_FONT}; }
-  .value-highlight { display: block; margin-top: 4px; font-weight: 700; color: #0f172a; font-family: ${COMMON_FONT}; }
-  @media (min-width: 2000px) { padding: 20px; .badge { font-size: 13px; } .title { font-size: 16px; } .desc { font-size: 15px; } .time { font-size: 15px; } }
-`;
-
+// 4.4. Notification System
 interface NotificationSystemProps {
   isOpen: boolean;
   onCloseAll: () => void;
@@ -873,8 +906,12 @@ interface NotificationSystemProps {
   hiddenAlertIds: number[];
 }
 
-const NotificationSystem = ({ isOpen, onCloseAll, onCloseItem, alerts, hiddenAlertIds }: NotificationSystemProps) => {
-  const visibleAlerts = alerts.filter(a => !hiddenAlertIds.includes(a.id));
+const NotificationSystem = memo(({ isOpen, onCloseAll, onCloseItem, alerts, hiddenAlertIds }: NotificationSystemProps) => {
+  const visibleAlerts = useMemo(() => 
+    alerts.filter(a => !hiddenAlertIds.includes(a.id)), 
+    [alerts, hiddenAlertIds]
+  );
+
   if (!isOpen || alerts.length === 0) return null;
 
   return (
@@ -889,7 +926,7 @@ const NotificationSystem = ({ isOpen, onCloseAll, onCloseItem, alerts, hiddenAle
         <div className="sub-text">총 {alerts.length}건의 알림이 있습니다</div>
       </SummaryBanner>
       {visibleAlerts.map(alert => (
-        <AlertCard key={alert.id} $type={alert.type}>
+        <AlertCardStyle key={alert.id} $type={alert.type}>
           <div className="top-row">
             <div className="title-group">
               <div className="badge">{alert.type === 'error' ? '긴급' : '주의'}</div>
@@ -904,17 +941,17 @@ const NotificationSystem = ({ isOpen, onCloseAll, onCloseItem, alerts, hiddenAle
             {alert.desc}
             {alert.value && <span className="value-highlight">{alert.value}</span>}
           </div>
-        </AlertCard>
+        </AlertCardStyle>
       ))}
     </NotificationContainer>
   );
-};
+});
+
+NotificationSystem.displayName = 'NotificationSystem';
 
 // --------------------------------------------------------------------------
-// 7. Main Page
+// 5. Main Page
 // --------------------------------------------------------------------------
-
-const PROCESS_LIST: ProcessType[] = ['GR1', 'GR2', 'GR3', 'GR4', 'GR5'];
 
 export default function ProcessMonitorPage() {
   const [activeProcess, setActiveProcess] = useState<ProcessType>('GR2');
@@ -925,48 +962,55 @@ export default function ProcessMonitorPage() {
   const [hiddenAlertIds, setHiddenAlertIds] = useState<number[]>([]);
   const [showModal, setShowModal] = useState(false);
 
-  // 초기 로드 시 데이터 세팅 (1.5초 로딩)
+  // 데이터 생성 로직 (useCallback으로 메모이제이션)
+  const generateData = useCallback((proc: ProcessType) => {
+    return generateProcessData(proc);
+  }, []);
+
+  const handleProcessChange = useCallback((proc: ProcessType, withLoading = true) => {
+    setActiveProcess(proc);
+    setHiddenAlertIds([]); 
+    
+    if (withLoading) {
+      setIsLoading(true);
+      setTimeout(() => {
+        const { metrics, alerts } = generateData(proc);
+        setMetricsData(metrics);
+        setAlerts(alerts);
+        setIsLoading(false);
+      }, 1500);
+    } else {
+      const { metrics, alerts } = generateData(proc);
+      setMetricsData(metrics);
+      setAlerts(alerts);
+    }
+  }, [generateData]);
+
+  // 초기 로드
   useEffect(() => {
     const timer = setTimeout(() => {
       handleProcessChange('GR2', false); 
       setIsLoading(false);
     }, 1500);
     return () => clearTimeout(timer);
-  }, []);
+  }, [handleProcessChange]);
 
-  // 탭 변경 핸들러
-  const handleProcessChange = (proc: ProcessType, withLoading = true) => {
-    // 탭 클릭 즉시 프로세스 상태 업데이트 (로딩 화면의 텍스트가 바로 바뀌도록)
-    setActiveProcess(proc);
-    setHiddenAlertIds([]); 
-    
-    if (withLoading) {
-      setIsLoading(true);
-      // 🔥 요청 반영: 최소 1.5초(1500ms) 유지
-      setTimeout(() => {
-        const { metrics, alerts } = generateProcessData(proc);
-        setMetricsData(metrics);
-        setAlerts(alerts);
-        setIsLoading(false);
-      }, 1500);
-    } else {
-      const { metrics, alerts } = generateProcessData(proc);
-      setMetricsData(metrics);
-      setAlerts(alerts);
-    }
-  };
-
-  const handleOpenModal = () => {
+  const handleOpenModal = useCallback(() => {
     setHiddenAlertIds([]);
     setShowModal(true);
-  };
+  }, []);
 
-  const handleCloseItem = (id: number) => {
+  const handleCloseItem = useCallback((id: number) => {
     setHiddenAlertIds(prev => [...prev, id]);
-  };
+  }, []);
 
-  const hasCriticalError = alerts.some(a => a.type === 'error');
+  const handleCloseAll = useCallback(() => {
+    setShowModal(false);
+  }, []);
 
+  // 파생 상태 계산 (useMemo)
+  const hasCriticalError = useMemo(() => alerts.some(a => a.type === 'error'), [alerts]);
+  
   return (
     <>
       <PageContainer>
@@ -984,37 +1028,43 @@ export default function ProcessMonitorPage() {
 
         <NotificationSystem 
           isOpen={showModal || (alerts.length > 0 && !isLoading)} 
-          onCloseAll={() => setShowModal(false)}
+          onCloseAll={handleCloseAll}
           onCloseItem={handleCloseItem}
           alerts={alerts}
           hiddenAlertIds={hiddenAlertIds}
         />
 
         <ContentWrapper>
-          <TabNavigation>
-            {PROCESS_LIST.map(proc => (
-              <TabButton 
-                  key={proc} 
-                  $isActive={activeProcess === proc}
-                  onClick={() => handleProcessChange(proc)}
-              >
-                {activeProcess === proc ? <FiLayers /> : <FiGrid />}
-                {proc}
-              </TabButton>
-            ))}
-          </TabNavigation>
-
           <PageHeaderRow>
-            <PageTitle>
-              설비이상 징후 탐지 AI
-              <span style={{ marginLeft: '12px', fontSize: '18px', color: '#94a3b8' }}>|</span>
-              <span className="proc-badge">{activeProcess} 공정</span>
-            </PageTitle>
-            <CurrentTime>2025-12-18 13:53:34</CurrentTime>
+            <HeaderLeft>
+              <PageTitle>
+                설비이상 징후 탐지 AI
+                <span style={{ marginLeft: '12px', fontSize: '18px', color: '#94a3b8' }}>|</span>
+                <span className="proc-badge">{activeProcess} 공정</span>
+              </PageTitle>
+            </HeaderLeft>
+
+            <HeaderCenter>
+              <TabNavigation>
+                {PROCESS_LIST.map(proc => (
+                  <TabButton 
+                    key={proc} 
+                    $isActive={activeProcess === proc}
+                    onClick={() => handleProcessChange(proc)}
+                  >
+                    {activeProcess === proc ? <FiLayers /> : <FiGrid />}
+                    {proc}
+                  </TabButton>
+                ))}
+              </TabNavigation>
+            </HeaderCenter>
+
+            <HeaderRight>
+              <LiveClock />
+            </HeaderRight>
           </PageHeaderRow>
 
           <DashboardGrid>
-            {/* Left Column */}
             <LeftColumn>
               <StatusCard 
                 type={hasCriticalError ? "error" : "good"}
@@ -1031,7 +1081,6 @@ export default function ProcessMonitorPage() {
               />
             </LeftColumn>
 
-            {/* Right Column */}
             <RightColumn>
               <SectionHeader>
                 <SectionTitle>{activeProcess} 핵심 공정 지표</SectionTitle>
