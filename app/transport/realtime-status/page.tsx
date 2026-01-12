@@ -1,17 +1,16 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import styled, { keyframes, css } from "styled-components";
+import styled, { keyframes } from "styled-components";
 import axios from "axios";
 import { 
   Cloud, Sun, CloudRain, Navigation, Truck, Activity, Bell, 
   AlertTriangle, CheckCircle, Radio, Server, Zap, BarChart2, Siren, 
-  MoreHorizontal, Loader, Cpu, Database
+  MoreHorizontal, Cpu, Database
 } from "lucide-react";
-import { format, addMinutes } from "date-fns";
+import { format } from "date-fns"; // 루프 밖에서만 사용
 import dynamic from "next/dynamic";
 import VehicleStatusCard from "@/components/vehicle-status-card";
-// 타입 import
 import type { VWorldMarker } from "@/components/vworld-map";
 
 const VWorldMap = dynamic(
@@ -41,9 +40,9 @@ interface SimulationVehicle {
   temp: string;
 }
 
+// [최적화] 정적 데이터는 메모리 주소 고정
 const GOMOTEK_POS = { lat: 35.1487345915681, lng: 128.859885213411, title: "고모텍 부산", imageUrl: "/icons/GMT.png" };
 const LG_POS = { lat: 35.2078432680624, lng: 128.666263957419, title: "LG전자", imageUrl: "/icons/LG.jpg" };
-
 const ARROW_ICON = "data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='%233B82F6' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M12 2l7 19-7-4-7 4 7-19z'/%3e%3c/svg%3e";
 const TRUCK_ICON_URL = "/truck-image.png"; 
 
@@ -61,10 +60,18 @@ const MOCK_ALERTS = [
   { id: 3, time: "16:05", msg: "GMT-105 운행 시작", type: "info" },
 ];
 
+// [최적화] 루프 내부에서 사용할 초경량 시간 포맷터 (date-fns 제거)
+const fastFormatTime = (date: Date) => {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  return `${h < 10 ? '0'+h : h}:${m < 10 ? '0'+m : m}`;
+};
+
 const useVehicleSimulation = (initialVehicles: SimulationVehicle[]) => {
   const [vehicles, setVehicles] = useState<SimulationVehicle[]>(initialVehicles);
   const [markers, setMarkers] = useState<VWorldMarker[]>([]);
   const [targetVehicleId, setTargetVehicleId] = useState<string | null>(null);
+  
   const vehiclesRef = useRef(initialVehicles);
 
   const addDelayToVehicle = useCallback((vehicleId: string, seconds: number) => {
@@ -82,76 +89,250 @@ const useVehicleSimulation = (initialVehicles: SimulationVehicle[]) => {
 
   useEffect(() => {
     let animationFrameId: number;
+    let lastFrameTime = 0;
+    
+    // [최적화] 목표 FPS 설정 (저사양 PC를 위해 30FPS로 제한)
+    // 60FPS -> 30FPS로 낮추면 CPU 부하가 절반으로 뚝 떨어짐
+    const TARGET_FPS = 30;
+    const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
-    const animate = () => {
-      const now = Date.now();
+    // [최적화] 루프 밖에서 미리 객체 생성 (GC 감소)
+    const baseMarkers = [
+      { ...GOMOTEK_POS, isFacility: true, imageUrl: "/icons/GMT.png" },
+      { ...LG_POS, isFacility: true, imageUrl: "/icons/LG.jpg" }
+    ];
+
+    const animate = (timestamp: number) => {
+      // 스로틀링: 지정된 시간 간격(33ms)보다 적게 지났으면 스킵
+      const deltaTime = timestamp - lastFrameTime;
       
-      const currentMarkers: VWorldMarker[] = [
-        { ...GOMOTEK_POS, isFacility: true, imageUrl: "/icons/GMT.png" },
-        { ...LG_POS, isFacility: true, imageUrl: "/icons/LG.jpg" }
-      ];
+      if (deltaTime >= FRAME_INTERVAL) {
+        lastFrameTime = timestamp - (deltaTime % FRAME_INTERVAL);
 
-      let maxProgress = -1;
-      let bestVehicleId: string | null = null; 
+        const now = Date.now();
+        // 배열 미리 할당 (크기 예측 가능 시 약간의 성능 이점)
+        const currentVehicles = vehiclesRef.current;
+        const currentMarkers: VWorldMarker[] = new Array(baseMarkers.length + currentVehicles.length);
+        
+        // 기본 마커 복사
+        currentMarkers[0] = baseMarkers[0];
+        currentMarkers[1] = baseMarkers[1];
 
-      vehiclesRef.current.forEach(v => {
-        const elapsedSec = (now - v.startTime) / 1000;
-        const totalDuration = v.baseDurationSec + v.delaySec;
-        let progress = elapsedSec / totalDuration;
-        if (progress > 1) progress = 1; 
-        if (progress < 0) progress = 0;
+        let maxProgress = -1;
+        let bestVehicleId: string | null = null; 
+        
+        // [최적화] forEach 대신 for 루프 사용 (미세하지만 가장 빠름)
+        for (let i = 0; i < currentVehicles.length; i++) {
+          const v = currentVehicles[i];
+          
+          // 수학 연산 단순화
+          const elapsedSec = (now - v.startTime) / 1000;
+          const totalDuration = v.baseDurationSec + v.delaySec;
+          let progress = elapsedSec / totalDuration;
+          
+          if (progress > 1) progress = 1; 
+          if (progress < 0) progress = 0;
 
-        const remainingSec = totalDuration * (1 - progress);
-        const arrivalTime = addMinutes(new Date(), remainingSec / 60);
-        const etaTime = format(arrivalTime, "HH:mm");
-        const remainingMin = Math.ceil(remainingSec / 60);
-        const etaString = `${etaTime} (약 ${remainingMin}분 남음)`; 
+          // [최적화] ETA 계산 시 Date 객체 생성 최소화
+          const remainingSec = totalDuration * (1 - progress);
+          // date-fns addMinutes 대체 -> Native Math
+          const arrivalTimeMs = now + (remainingSec * 1000);
+          const arrivalDate = new Date(arrivalTimeMs); 
+          
+          // [최적화] 무거운 format 함수 대체 -> fastFormatTime 사용
+          const etaTime = fastFormatTime(arrivalDate);
+          const remainingMin = (remainingSec / 60) | 0; // Math.floor 대신 비트 연산자 사용 (조금 더 빠름)
+          
+          // 템플릿 리터럴은 그대로 유지 (비용 낮음)
+          const etaString = `${etaTime} (약 ${remainingMin + 1}분 남음)`; 
 
-        const currentLat = v.startPos.lat + (v.destPos.lat - v.startPos.lat) * progress;
-        const currentLng = v.startPos.lng + (v.destPos.lng - v.startPos.lng) * progress;
+          const currentLat = v.startPos.lat + (v.destPos.lat - v.startPos.lat) * progress;
+          const currentLng = v.startPos.lng + (v.destPos.lng - v.startPos.lng) * progress;
 
-        if (progress < 1 && progress > maxProgress) {
-            maxProgress = progress;
-            bestVehicleId = v.id;
+          if (progress < 1 && progress > maxProgress) {
+              maxProgress = progress;
+              bestVehicleId = v.id;
+          }
+
+          const isTarget = v.id === bestVehicleId;
+
+          // 마커 객체 생성 (배열 인덱스 직접 접근)
+          currentMarkers[i + 2] = {
+            lat: currentLat,
+            lng: currentLng,
+            title: v.id,
+            imageUrl: isTarget ? TRUCK_ICON_URL : ARROW_ICON,
+            isFocused: isTarget,
+            progress: progress,
+            startLat: v.startPos.lat,
+            startLng: v.startPos.lng,
+            destLat: v.destPos.lat,
+            destLng: v.destPos.lng,
+            driver: v.driver,
+            cargo: v.cargo,
+            eta: etaString 
+          };
         }
 
-        const isTarget = v.id === bestVehicleId;
+        // [중요] 이전 마커와 비교 로직을 넣을 수도 있지만, 
+        // 30FPS 제한을 걸었으므로 바로 업데이트해도 충분히 가벼움.
+        setMarkers(currentMarkers);
+        setTargetVehicleId(bestVehicleId);
+      }
 
-        currentMarkers.push({
-          lat: currentLat,
-          lng: currentLng,
-          title: v.id,
-          imageUrl: isTarget ? TRUCK_ICON_URL : ARROW_ICON,
-          isFocused: isTarget,
-          progress: progress,
-          startLat: v.startPos.lat,
-          startLng: v.startPos.lng,
-          destLat: v.destPos.lat,
-          destLng: v.destPos.lng,
-          driver: v.driver,
-          cargo: v.cargo,
-          eta: etaString 
-        });
-      });
-
-      setMarkers(currentMarkers);
-      setTargetVehicleId(bestVehicleId);
       animationFrameId = requestAnimationFrame(animate);
     };
 
-    animate();
+    animationFrameId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationFrameId);
   }, []);
 
   return { vehicles, markers, targetVehicleId, addDelayToVehicle };
 };
 
+/* --- Components (Strictly Memoized) --- */
+
+const KpiWidget = React.memo(() => (
+  <TopLeftWidget>
+    <KpiHeader>
+      <Activity size={16} color="#3b82f6" />
+      <span>Fleet KPI Dashboard</span>
+      <LiveBadge>LIVE</LiveBadge>
+    </KpiHeader>
+    <KpiGrid>
+      <KpiItem label="가동률" value="98.5" unit="%" trend="▲ 1.2%" trendColor="#10b981" />
+      <div className="divider" />
+      <KpiItem label="정시 도착" value="96" unit="%" trend="▼ 2.0%" trendColor="#ef4444" />
+      <div className="divider" />
+      <KpiItem label="평균 속도" value="78" unit="km/h" trend="-" trendColor="#94a3b8" />
+    </KpiGrid>
+  </TopLeftWidget>
+));
+KpiWidget.displayName = "KpiWidget";
+
+const RightInfoPanel = React.memo(({ 
+  currentTime, 
+  weather, 
+  etaDisplay, 
+  formatDuration 
+}: any) => (
+  <RightColumn>
+    <StatusWidget>
+      <TimeRow>
+        <div className="time">{currentTime ? format(currentTime, "HH:mm") : "00:00"}</div>
+        <div className="date">{currentTime ? format(currentTime, "yyyy.MM.dd (EEE)") : "-"}</div>
+      </TimeRow>
+      <WeatherRow>
+        <div className="temp-box">
+          {weather.icon} <span>{weather.temp}°C</span>
+        </div>
+        <span className="desc">{weather.desc}</span>
+      </WeatherRow>
+      <EtaBox>
+        <EtaRow>
+          <div className="route"><Navigation size={12} color="#1E40AF" /> <span>고모텍 → LG</span></div>
+          <div className="time">{formatDuration(etaDisplay.toLG)}</div>
+        </EtaRow>
+        <div className="line" />
+        <EtaRow>
+          <div className="route"><Navigation size={12} color="#1E40AF" /> <span>LG → 고모텍</span></div>
+          <div className="time">{formatDuration(etaDisplay.toBusan)}</div>
+        </EtaRow>
+      </EtaBox>
+    </StatusWidget>
+
+    <AlertWidget>
+      <WidgetTitle>
+        <Bell size={16} /> 실시간 알림 <span className="count">3</span>
+      </WidgetTitle>
+      <AlertList>
+        {MOCK_ALERTS.map((alert) => (
+          <AlertItem key={alert.id} $type={alert.type}>
+            <div className="icon-wrapper">
+              {alert.type === 'success' && <CheckCircle size={14} />}
+              {alert.type === 'warning' && <AlertTriangle size={14} />}
+              {alert.type === 'info' && <Radio size={14} />}
+            </div>
+            <div className="content">
+              <span className={`msg ${alert.msg.includes("정체") ? 'alert-red' : ''}`}>{alert.msg}</span>
+              <span className="time">{alert.time}</span>
+            </div>
+          </AlertItem>
+        ))}
+      </AlertList>
+    </AlertWidget>
+
+    <AnalyticsWidget>
+      <WidgetTitle><BarChart2 size={16} /> 통합 운영 현황</WidgetTitle>
+      <ChartRow>
+        <DonutContainer>
+          <svg viewBox="0 0 36 36">
+            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#E2E8F0" strokeWidth="3" />
+            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3B82F6" strokeWidth="3" strokeDasharray="60, 100" />
+            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#22C55E" strokeWidth="3" strokeDasharray="20, 100" strokeDashoffset="-60" />
+          </svg>
+          <div className="center-text">
+            <span className="num">5</span>
+            <span className="label">Total</span>
+          </div>
+        </DonutContainer>
+        <LegendBox>
+          <div className="item"><span className="dot" style={{ background: '#3B82F6' }} /> 운행중 (3)</div>
+          <div className="item"><span className="dot" style={{ background: '#22C55E' }} /> 대기 (1)</div>
+          <div className="item"><span className="dot" style={{ background: '#E2E8F0' }} /> 점검 (1)</div>
+        </LegendBox>
+      </ChartRow>
+      <div>
+        <SubTitle>연료 효율 추이 (Daily)</SubTitle>
+        <svg width="100%" height="40" viewBox="0 0 200 60" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d="M0,50 Q20,40 40,30 T80,25 T120,40 T160,15 T200,30 V60 H0 Z" fill="url(#chartGrad)" />
+          <path d="M0,50 Q20,40 40,30 T80,25 T120,40 T160,15 T200,30" fill="none" stroke="#3B82F6" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+      </div>
+    </AnalyticsWidget>
+
+    <ServerWidget>
+      <div className="row">
+        <div className="label"><Server size={12} /> API Latency</div>
+        <div className="val ok">12ms</div>
+      </div>
+      <div className="row">
+        <div className="label"><Zap size={12} /> System Uptime</div>
+        <div className="val">99.9%</div>
+      </div>
+    </ServerWidget>
+  </RightColumn>
+));
+RightInfoPanel.displayName = "RightInfoPanel";
+
+const BottomControlPanel = React.memo(({ currentTime }: { currentTime: Date | null }) => (
+  <BottomPanel>
+    <BottomGroup>
+      <div className="item active"><Truck size={16} /> 운행: 5대</div>
+      <div className="divider" />
+      <div className="item"><Activity size={16} /> 상태: 정상</div>
+      <div className="divider" />
+      <div className="item"><Navigation size={16} /> 경로 최적화: ON</div>
+    </BottomGroup>
+    <SystemTicker>
+      <span className="dot"></span> Updated: {currentTime ? format(currentTime, "HH:mm:ss") : "--:--:--"}
+    </SystemTicker>
+  </BottomPanel>
+));
+BottomControlPanel.displayName = "BottomControlPanel";
+
+/* --- Main Page --- */
+
 export default function LocalMapPage() {
   const [isMounted, setIsMounted] = useState(false);
-  
-  // 🟢 로딩 및 퇴장 애니메이션 상태 관리
   const [isLoading, setIsLoading] = useState(true);
-  const [isExiting, setIsExiting] = useState(false); // 사라지는 중인지 체크
+  const [isExiting, setIsExiting] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
@@ -160,17 +341,29 @@ export default function LocalMapPage() {
   
   const { vehicles, markers, targetVehicleId, addDelayToVehicle } = useVehicleSimulation(INITIAL_VEHICLES);
 
+  // [최적화] O(1) 조회를 위한 Map 생성 (useMemo로 연산 최소화)
+  const markerMap = useMemo(() => {
+    const map = new Map<string, VWorldMarker>();
+    // forEach보다 for...of가 근소하게 더 빠를 수 있으나, 가독성 유지
+    for (const m of markers) {
+      if(m.title) map.set(m.title, m);
+    }
+    return map;
+  }, [markers]);
+
   const targetTruckData = useMemo(() => {
     if (!targetVehicleId) return null;
     const v = vehicles.find(veh => veh.id === targetVehicleId);
     if (!v) return null;
 
-    const marker = markers.find(m => m.title === v.id);
+    const marker = markerMap.get(v.id);
     const progress = marker?.progress || 0;
     
+    // UI 업데이트용 연산은 비교적 드물게 발생하므로 여기서 수행
     const totalDuration = v.baseDurationSec + v.delaySec;
     const remainingSec = totalDuration * (1 - progress);
-    const arrivalTime = addMinutes(new Date(), remainingSec / 60);
+    const arrivalTimeMs = Date.now() + (remainingSec * 1000);
+    const arrivalDate = new Date(arrivalTimeMs);
 
     return {
       vehicleId: v.id,
@@ -178,7 +371,7 @@ export default function LocalMapPage() {
       departure: v.startPos === GOMOTEK_POS ? "GOMOTEK Busan" : "LG Electronics",
       arrival: v.destPos === GOMOTEK_POS ? "GOMOTEK Busan" : "LG Electronics",
       progress: Math.floor(progress * 100),
-      eta: format(arrivalTime, "HH:mm"),
+      eta: fastFormatTime(arrivalDate), // date-fns 제거
       remainingTime: `${Math.ceil(remainingSec / 60)} 분 남음`,
       distanceLeft: `${(v.totalDistanceKm * (1 - progress)).toFixed(1)} km`,
       speed: 82, 
@@ -187,7 +380,7 @@ export default function LocalMapPage() {
       driverName: v.driver,
       driverStatus: v.status === 'Delayed' ? '운행 중 (지연)' : '운행 중 (정상)'
     };
-  }, [vehicles, markers, targetVehicleId]);
+  }, [vehicles, markerMap, targetVehicleId]);
 
   const etaDisplay = useMemo(() => {
     const toLG = targetTruckData?.arrival.includes("LG") 
@@ -196,37 +389,30 @@ export default function LocalMapPage() {
     const toBusan = targetTruckData?.arrival.includes("Busan")
       ? parseInt(targetTruckData.remainingTime) * 60
       : 2450;
-    
     return { toLG, toBusan };
   }, [targetTruckData]);
 
-  const formatDuration = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const h = Math.floor(m / 60);
+  const formatDuration = useCallback((sec: number) => {
+    const m = (sec / 60) | 0; // bitwise floor
+    const h = (m / 60) | 0;
     const rm = m % 60;
     return h > 0 ? `${h}시간 ${rm}분` : `${m}분`;
-  }
+  }, []);
 
-  // 🟢 로딩 시뮬레이션 및 부드러운 퇴장 로직
   useEffect(() => {
     const interval = setInterval(() => {
       setLoadingProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
-          // 100% 도달 시 퇴장 애니메이션 시작 (0.8초간 Fade Out)
           setIsExiting(true);
-          setTimeout(() => {
-            setIsLoading(false); // 완전히 DOM에서 제거
-          }, 800); 
+          setTimeout(() => setIsLoading(false), 800); 
           return 100;
         }
-        return prev + 2; // 진행 속도
+        return prev + 2; 
       });
     }, 30);
-
     return () => clearInterval(interval);
   }, []);
-
 
   useEffect(() => {
     setIsMounted(true);
@@ -261,12 +447,9 @@ export default function LocalMapPage() {
 
   return (
     <>
-      {/* 🟢 로딩 오버레이 (isExiting 상태에 따라 투명도 변화) */}
       {isLoading && (
         <LoadingOverlay $isExiting={isExiting}>
           <LoadingContent>
-            
-            {/* 타이틀 영역: 심플하고 가독성 높게 */}
             <TitleWrapper>
               <Cpu size={32} color="#ef4444" strokeWidth={2.5} />
               <div>
@@ -274,8 +457,6 @@ export default function LocalMapPage() {
                 <SubTitleText>Real-time Fleet Management</SubTitleText>
               </div>
             </TitleWrapper>
-
-            {/* 트럭 애니메이션 */}
             <TruckAnimation>
               <DataWave />
               <Truck size={56} color="#ef4444" className="truck-icon" strokeWidth={1.5} />
@@ -283,8 +464,6 @@ export default function LocalMapPage() {
                 <span></span><span></span><span></span>
               </div>
             </TruckAnimation>
-
-            {/* 프로그래스 바 영역 */}
             <ProgressWrapper>
               <LoadingLabel>
                 <span>SYSTEM INITIALIZING</span>
@@ -297,34 +476,16 @@ export default function LocalMapPage() {
                 <Database size={10} /> Fetching vehicle data from server...
               </LoadingSubText>
             </ProgressWrapper>
-
           </LoadingContent>
         </LoadingOverlay>
       )}
       
       <Container>
-        {/* ... (이하 기존 대시보드 코드 동일) ... */}
         <MapWrapper>
-          <VWorldMap 
-            markers={markers} 
-            focusedTitle={targetVehicleId}
-          />
+          <VWorldMap markers={markers} focusedTitle={targetVehicleId} />
         </MapWrapper>
 
-        <TopLeftWidget>
-          <KpiHeader>
-            <Activity size={16} color="#3b82f6" />
-            <span>Fleet KPI Dashboard</span>
-            <LiveBadge>LIVE</LiveBadge>
-          </KpiHeader>
-          <KpiGrid>
-            <KpiItem label="가동률" value="98.5" unit="%" trend="▲ 1.2%" trendColor="#10b981" />
-            <div className="divider" />
-            <KpiItem label="정시 도착" value="96" unit="%" trend="▼ 2.0%" trendColor="#ef4444" />
-            <div className="divider" />
-            <KpiItem label="평균 속도" value="78" unit="km/h" trend="-" trendColor="#94a3b8" />
-          </KpiGrid>
-        </TopLeftWidget>
+        <KpiWidget />
 
         <VehicleListWidget>
           <div className="header">
@@ -332,7 +493,7 @@ export default function LocalMapPage() {
           </div>
           <div className="list-container">
             {vehicles.map((v) => {
-              const m = markers.find(mark => mark.title === v.id);
+              const m = markerMap.get(v.id);
               const progressPct = Math.floor((m?.progress || 0) * 100);
               const isDelayed = v.status === 'Delayed';
               return (
@@ -363,98 +524,12 @@ export default function LocalMapPage() {
           </CardOverlay>
         )}
 
-        <RightColumn>
-          <StatusWidget>
-            <TimeRow>
-              <div className="time">{currentTime ? format(currentTime, "HH:mm") : "00:00"}</div>
-              <div className="date">{currentTime ? format(currentTime, "yyyy.MM.dd (EEE)") : "-"}</div>
-            </TimeRow>
-            <WeatherRow>
-              <div className="temp-box">
-                {weather.icon} <span>{weather.temp}°C</span>
-              </div>
-              <span className="desc">{weather.desc}</span>
-            </WeatherRow>
-            <EtaBox>
-              <EtaRow>
-                <div className="route"><Navigation size={12} color="#1E40AF" /> <span>고모텍 → LG</span></div>
-                <div className="time">{formatDuration(etaDisplay.toLG)}</div>
-              </EtaRow>
-              <div className="line" />
-              <EtaRow>
-                <div className="route"><Navigation size={12} color="#1E40AF" /> <span>LG → 고모텍</span></div>
-                <div className="time">{formatDuration(etaDisplay.toBusan)}</div>
-              </EtaRow>
-            </EtaBox>
-          </StatusWidget>
-
-          <AlertWidget>
-            <WidgetTitle>
-              <Bell size={16} /> 실시간 알림 <span className="count">3</span>
-            </WidgetTitle>
-            <AlertList>
-              {MOCK_ALERTS.map((alert) => (
-                <AlertItem key={alert.id} $type={alert.type}>
-                  <div className="icon-wrapper">
-                    {alert.type === 'success' && <CheckCircle size={14} />}
-                    {alert.type === 'warning' && <AlertTriangle size={14} />}
-                    {alert.type === 'info' && <Radio size={14} />}
-                  </div>
-                  <div className="content">
-                    <span className={`msg ${alert.msg.includes("정체") ? 'alert-red' : ''}`}>{alert.msg}</span>
-                    <span className="time">{alert.time}</span>
-                  </div>
-                </AlertItem>
-              ))}
-            </AlertList>
-          </AlertWidget>
-
-          <AnalyticsWidget>
-            <WidgetTitle><BarChart2 size={16} /> 통합 운영 현황</WidgetTitle>
-            <ChartRow>
-              <DonutContainer>
-                <svg viewBox="0 0 36 36">
-                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#E2E8F0" strokeWidth="3" />
-                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3B82F6" strokeWidth="3" strokeDasharray="60, 100" />
-                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#22C55E" strokeWidth="3" strokeDasharray="20, 100" strokeDashoffset="-60" />
-                </svg>
-                <div className="center-text">
-                  <span className="num">5</span>
-                  <span className="label">Total</span>
-                </div>
-              </DonutContainer>
-              <LegendBox>
-                <div className="item"><span className="dot" style={{ background: '#3B82F6' }} /> 운행중 (3)</div>
-                <div className="item"><span className="dot" style={{ background: '#22C55E' }} /> 대기 (1)</div>
-                <div className="item"><span className="dot" style={{ background: '#E2E8F0' }} /> 점검 (1)</div>
-              </LegendBox>
-            </ChartRow>
-            <div>
-              <SubTitle>연료 효율 추이 (Daily)</SubTitle>
-              <svg width="100%" height="40" viewBox="0 0 200 60" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path d="M0,50 Q20,40 40,30 T80,25 T120,40 T160,15 T200,30 V60 H0 Z" fill="url(#chartGrad)" />
-                <path d="M0,50 Q20,40 40,30 T80,25 T120,40 T160,15 T200,30" fill="none" stroke="#3B82F6" strokeWidth="3" strokeLinecap="round" />
-              </svg>
-            </div>
-          </AnalyticsWidget>
-
-          <ServerWidget>
-            <div className="row">
-              <div className="label"><Server size={12} /> API Latency</div>
-              <div className="val ok">12ms</div>
-            </div>
-            <div className="row">
-              <div className="label"><Zap size={12} /> System Uptime</div>
-              <div className="val">99.9%</div>
-            </div>
-          </ServerWidget>
-        </RightColumn>
+        <RightInfoPanel 
+            currentTime={currentTime}
+            weather={weather}
+            etaDisplay={etaDisplay}
+            formatDuration={formatDuration}
+        />
 
         {hasWarning && (
           <WarningBanner>
@@ -471,24 +546,13 @@ export default function LocalMapPage() {
           </WarningBanner>
         )}
 
-        <BottomPanel>
-          <BottomGroup>
-            <div className="item active"><Truck size={16} /> 운행: 5대</div>
-            <div className="divider" />
-            <div className="item"><Activity size={16} /> 상태: 정상</div>
-            <div className="divider" />
-            <div className="item"><Navigation size={16} /> 경로 최적화: ON</div>
-          </BottomGroup>
-          <SystemTicker>
-            <span className="dot"></span> Updated: {currentTime ? format(currentTime, "HH:mm:ss") : "--:--:--"}
-          </SystemTicker>
-        </BottomPanel>
+        <BottomControlPanel currentTime={currentTime} />
       </Container>
     </>
   );
 }
 
-/* --- Sub Components --- */
+/* --- Sub Components (Memoized) --- */
 const KpiItem = React.memo(({ label, value, unit, trend, trendColor }: any) => (
   <StyledKpiItem>
     <div className="label">{label}</div>
@@ -498,7 +562,7 @@ const KpiItem = React.memo(({ label, value, unit, trend, trendColor }: any) => (
 ));
 KpiItem.displayName = 'KpiItem';
 
-/* --- Styles (기존과 동일 + 로딩 스타일 추가) --- */
+/* --- Styles (동일함) --- */
 const Container = styled.div`
   width: 100vw; height: calc(100vh - 64px); position: relative; overflow: hidden; background: #f8fafc; font-family: 'Pretendard', sans-serif;
 `;
@@ -617,8 +681,6 @@ const WarningContent = styled.div`
   color: white; .title { font-size: 14px; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; } .desc { font-size: 12px; font-weight: 500; line-height: 1.4; }
 `;
 
-// --- New Loading Styles (Enhanced Readability & Fade Out) ---
-
 const truckMove = keyframes`
   0% { transform: translateX(-10px) translateY(0px); }
   50% { transform: translateX(10px) translateY(-2px); }
@@ -629,7 +691,6 @@ const LoadingOverlay = styled.div<{ $isExiting: boolean }>`
   position: fixed;
   top: 0; left: 0; width: 100%; height: 100%;
   background: #ffffff;
-  /* Subtle grid pattern for tech feel without clutter */
   background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
   background-size: 24px 24px;
   z-index: 9999;
@@ -637,8 +698,6 @@ const LoadingOverlay = styled.div<{ $isExiting: boolean }>`
   justify-content: center;
   align-items: center;
   flex-direction: column;
-  
-  /* Fade out transition */
   opacity: ${props => props.$isExiting ? 0 : 1};
   transition: opacity 0.8s ease-in-out;
   pointer-events: ${props => props.$isExiting ? 'none' : 'all'};

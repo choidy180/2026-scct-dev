@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import styled, { css, createGlobalStyle, keyframes } from "styled-components";
 import { formatDistanceToNow, differenceInHours } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Clock, Box as BoxIcon, Info, Layers, BarChart3, Truck } from "lucide-react";
+import { Clock, Box as BoxIcon, Info, Layers, LayoutGrid, CheckCircle2, Truck } from "lucide-react";
 
 // --- Global Styles ---
 const GlobalStyle = createGlobalStyle`
@@ -12,10 +12,11 @@ const GlobalStyle = createGlobalStyle`
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Pretendard', sans-serif;
-    color: #1e293b;
-    overflow: hidden; /* 스크롤 방지 */
-    height: 100vh; width: 100vw;
-    background-color: #f1f5f9;
+    color: #334155;
+    overflow: hidden; /* 전체 스크롤 방지 */
+    height: 100vh; 
+    width: 100vw;
+    background-color: #f8fafc;
   }
 `;
 
@@ -41,19 +42,16 @@ interface SectionConfig {
 
 interface TooltipData {
   item: RackItem;
-  rect: DOMRect; // 박스의 화면상 위치 정보
+  rect: DOMRect;
 }
 
-// --- Grid Calculation Logic ---
+// --- Grid Calculation Logic (수정됨) ---
+// 요청사항: 내부 박스 크기 통일
+// 데이터 양과 관계없이 항상 4x4 (16칸) 그리드를 기본으로 사용하여 셀 크기를 고정합니다.
 const calculateGrid = (total: number) => {
-  if (total <= 6) return { rows: 2, cols: 3 }; 
-  if (total <= 8) return { rows: 2, cols: 4 }; 
-  if (total <= 10) return { rows: 2, cols: 5 }; 
-  if (total <= 12) return { rows: 2, cols: 6 }; 
-  if (total <= 16) return { rows: 4, cols: 4 }; 
-  
-  const cols = 4;
-  const rows = Math.ceil(total / cols);
+  const cols = 4; // 가로 4칸 고정
+  // 최소 4줄 보장 (데이터가 많으면 늘어남)
+  const rows = Math.max(4, Math.ceil(total / cols)); 
   return { rows, cols };
 };
 
@@ -65,11 +63,7 @@ export default function WarehouseDashboard() {
   const [showModal, setShowModal] = useState(false);
   const [data, setData] = useState<SectionConfig[]>([]);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
-  
-  // [NEW] 글로벌 툴팁 상태 관리 (박스 내부가 아닌, 전체 화면 레벨에서 관리)
   const [hoveredData, setHoveredData] = useState<TooltipData | null>(null);
-
-  const blurAmount = "14px"; 
 
   const stats = useMemo(() => {
     let newCount = 0, oldCount = 0, emptyCount = 0;
@@ -117,7 +111,8 @@ export default function WarehouseDashboard() {
         };
       });
 
-      while (items.length < total) {
+      // 빈 슬롯 채우기 (Grid 모양 및 셀 크기 유지를 위해 필수)
+      while (items.length < rows * cols) {
         items.push({ id: items.length + 1, label: items.length + 1, status: "EMPTY" });
       }
 
@@ -156,19 +151,9 @@ export default function WarehouseDashboard() {
     return () => clearInterval(timer);
   }, [mapApiToSections]);
 
-  const handleBuildingClick = (b: string) => {
-    if (b === "D") setActiveBuilding(b);
-    else setShowModal(true);
-  };
-
-  // [NEW] 마우스 핸들러: 박스의 좌표값을 캡쳐함
   const handleCellEnter = (e: React.MouseEvent, item: RackItem) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setHoveredData({ item, rect });
-  };
-
-  const handleCellLeave = () => {
-    setHoveredData(null);
   };
 
   if (isLoading) return <LoadingScreen progress={progress} />;
@@ -176,46 +161,75 @@ export default function WarehouseDashboard() {
   return (
     <>
       <GlobalStyle />
-      <BackgroundLayer><div className="img" /><div className="backdrop" style={{ backdropFilter: `blur(${blurAmount})` }} /></BackgroundLayer>
-      
       <Container>
-        <Header>
-          <StatsCard>
-            <div className="title-area"><BarChart3 size={18} /><span>D동 현황</span></div>
-            <div className="stats-content">
-              <StatItem color="#10b981" label="신규" value={stats.newCount} />
-              <StatItem color="#f59e0b" label="장기" value={stats.oldCount} />
-              <StatItem color="#cbd5e1" label="빈슬롯" value={stats.emptyCount} isEmpty />
-            </div>
-          </StatsCard>
+        <Sidebar>
+          <BrandLogo>
+            <div className="icon"><LayoutGrid size={20} color="white" /></div>
+            <span>WMS 비전</span>
+          </BrandLogo>
+          
           <NavGroup>
+            {/* 한글화: BUILDINGS -> 물류 센터 */}
+            <span className="label">물류 센터</span>
             {["A", "B", "C", "D", "E", "F", "G", "H"].map((b) => (
-              <NavButton key={b} $active={activeBuilding === b} onClick={() => handleBuildingClick(b)}>{b}동</NavButton>
+              <NavButton key={b} $active={activeBuilding === b} onClick={() => b !== "D" && setShowModal(true)}>
+                {activeBuilding === b && <div className="dot" />}
+                {b}동 창고
+              </NavButton>
             ))}
           </NavGroup>
-          <TimeCard>
-            <Clock size={18} className="icon"/>
-            <span className="time">{currentTime ? currentTime.toLocaleTimeString() : "Loading..."}</span>
-          </TimeCard>
-        </Header>
 
-        <MainContent>
-          <GridSystem>
-            {data.length > 0 ? data.map((sec) => (
-              <SectionWrapper key={sec.id}>
-                <Section 
-                  config={sec} 
-                  onCellEnter={handleCellEnter} 
-                  onCellLeave={handleCellLeave} 
-                />
-              </SectionWrapper>
-            )) : (
-              <div style={{ gridColumn: "1/-1", display:"flex", justifyContent:"center", alignItems:"center", color:"#64748b", fontWeight:600 }}>
-                데이터 수신 대기 중...
-              </div>
-            )}
-          </GridSystem>
-        </MainContent>
+          <TimeWidget>
+             <Clock size={16} className="icon"/>
+             <span>{currentTime ? currentTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "--:--"}</span>
+          </TimeWidget>
+        </Sidebar>
+
+        <MainArea>
+          <Header>
+            <PageTitle>
+              <h1>D동 실시간 적재 현황</h1>
+              {/* 한글화: Subtitle */}
+              <span className="subtitle">실시간 재고 통합 관제 시스템</span>
+            </PageTitle>
+            
+            <StatsGroup>
+              <StatCard $color="#84cc16">
+                <div className="label">신규 입고 (24h)</div>
+                <div className="value">{stats.newCount}</div>
+                <div className="icon-bg"><CheckCircle2 /></div>
+              </StatCard>
+              <StatCard $color="#10b981">
+                <div className="label">장기 보관</div>
+                <div className="value">{stats.oldCount}</div>
+                <div className="icon-bg"><BoxIcon /></div>
+              </StatCard>
+              <StatCard $color="#cbd5e1">
+                <div className="label">빈 슬롯</div>
+                <div className="value">{stats.emptyCount}</div>
+                <div className="icon-bg"><Layers /></div>
+              </StatCard>
+            </StatsGroup>
+          </Header>
+
+          <FullGridContainer>
+            <GridSystem>
+              {data.length > 0 ? data.map((sec) => (
+                <SectionWrapper key={sec.id}>
+                  <Section 
+                    config={sec} 
+                    onCellEnter={handleCellEnter} 
+                    onCellLeave={() => setHoveredData(null)} 
+                  />
+                </SectionWrapper>
+              )) : (
+                <div style={{ gridColumn: "1/-1", display:"flex", justifyContent:"center", alignItems:"center", color:"#94a3b8" }}>
+                  데이터 수신 대기 중...
+                </div>
+              )}
+            </GridSystem>
+          </FullGridContainer>
+        </MainArea>
 
         {showModal && (
           <ModalBackdrop onClick={() => setShowModal(false)}>
@@ -228,7 +242,6 @@ export default function WarehouseDashboard() {
           </ModalBackdrop>
         )}
 
-        {/* [NEW] 글로벌 툴팁 컴포넌트 (모든 레이어 최상단에 위치) */}
         {hoveredData && <GlobalTooltip data={hoveredData} />}
 
       </Container>
@@ -236,192 +249,259 @@ export default function WarehouseDashboard() {
   );
 }
 
-// --- Global Tooltip Component ---
+// --- Global Tooltip (한글화) ---
 const GlobalTooltip = ({ data }: { data: TooltipData }) => {
   const { item, rect } = data;
-  
-  // 화면 중앙 기준으로 위/아래 결정
   const isTopHalf = rect.top < window.innerHeight / 2;
   
-  // 위치 계산 (CSS in JS로 전달)
   const style = {
-    left: rect.left + rect.width / 2, // 박스 중앙
-    top: isTopHalf ? rect.bottom + 10 : rect.top - 10, // 상단이면 아래로, 하단이면 위로
-    transform: isTopHalf ? 'translateX(-50%)' : 'translateX(-50%) translateY(-100%)', // 툴팁 중심점 조정
+    left: rect.left + rect.width / 2,
+    top: isTopHalf ? rect.bottom + 12 : rect.top - 12,
+    transform: isTopHalf ? 'translateX(-50%)' : 'translateX(-50%) translateY(-100%)',
   };
 
   return (
     <FixedTooltipContainer style={style}>
       <div className="top">
-        <span className="id">Slot {item.label}</span>
+        {/* 한글화: Slot -> 위치 */}
+        <span className="id">위치 {item.label}</span>
         <span className={`badge ${item.status}`}>
-          {item.status === 'NEW' ? '신규' : item.status === 'OLD' ? '장기' : '빈슬롯'}
+          {/* 한글화: 상태값 */}
+          {item.status === 'NEW' ? '신규' : item.status === 'OLD' ? '장기' : '공석'}
         </span>
       </div>
       {item.status !== "EMPTY" ? (
         <div className="info">
-          <p><Truck size={11} strokeWidth={2.5}/> {item.vehicleId}</p>
-          <p><BoxIcon size={11} strokeWidth={2.5}/> {item.labelId || '-'}</p>
-          <p><Clock size={11} strokeWidth={2.5}/> {item.entryDate && formatDistanceToNow(item.entryDate, { locale: ko })} 전</p>
-          {item.workState && <p className="state">상태: {item.workState}</p>}
+          <p><Truck size={12} /> {item.vehicleId}</p>
+          <p><BoxIcon size={12} /> {item.labelId || '-'}</p>
+          <p><Clock size={12} /> {item.entryDate && formatDistanceToNow(item.entryDate, { locale: ko })} 전 입고</p>
         </div>
-      ) : <div className="info empty"><p>사용 가능</p></div>}
+      ) : <div className="info empty"><p>입고 가능</p></div>}
     </FixedTooltipContainer>
   );
 };
 
 // --- Sub Components ---
-
 const Section = ({ config, onCellEnter, onCellLeave }: { config: SectionConfig, onCellEnter: any, onCellLeave: any }) => (
-  <GlassCard>
-    <SectionTitle>{config.id} 구역</SectionTitle>
-    <RackGrid $rows={config.rows} $cols={config.cols}>
-      {config.items.map((item) => (
-        <Cell 
-          key={item.id} 
-          $status={item.status}
-          onMouseEnter={(e) => onCellEnter(e, item)}
-          onMouseLeave={onCellLeave}
-        >
-          <span className="num">{item.label}</span>
-        </Cell>
-      ))}
-    </RackGrid>
-  </GlassCard>
+  <CleanCard>
+    <div className="header">
+      {/* 한글화: ZONE -> 구역 */}
+      <span className="title">{config.id} 구역</span>
+      <span className="count">{config.items.filter(i => i.status !== 'EMPTY').length} / {config.items.length}</span>
+    </div>
+    <RackGridWrapper>
+      <RackGrid $rows={config.rows} $cols={config.cols}>
+        {config.items.map((item) => (
+          <Cell 
+            key={item.id} 
+            $status={item.status}
+            onMouseEnter={(e) => onCellEnter(e, item)}
+            onMouseLeave={onCellLeave}
+          >
+            {item.status !== 'EMPTY' && <div className="indicator" />}
+            <span className="num">{item.label}</span>
+          </Cell>
+        ))}
+      </RackGrid>
+    </RackGridWrapper>
+  </CleanCard>
 );
 
 const LoadingScreen = ({ progress }: { progress: number }) => (
   <LoadingContainer>
     <GlobalStyle />
     <LoadingContent>
-      <LogoArea><Layers size={64} color="#6366f1" className="bounce" /></LogoArea>
-      <LoadingText><h2>스마트 물류 관제</h2><p>실시간 데이터 동기화 중...</p></LoadingText>
-      <ProgressArea><div className="bar-bg"><div className="bar-fill" style={{ width: `${progress}%` }} /></div><span className="percent">{Math.floor(progress)}%</span></ProgressArea>
+      <LogoArea><Layers size={64} color="#84cc16" className="bounce" /></LogoArea>
+      {/* 한글화: 로딩 텍스트 */}
+      <LoadingText><h2>WMS 비전</h2><p>시스템 데이터를 불러오는 중...</p></LoadingText>
+      <ProgressArea><div className="bar-bg"><div className="bar-fill" style={{ width: `${progress}%` }} /></div></ProgressArea>
     </LoadingContent>
   </LoadingContainer>
 );
 
-const StatItem = ({ color, label, value, isEmpty }: any) => (
-  <div className="stat-group" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isEmpty ? '#fff' : color, border: isEmpty ? `2px solid ${color}` : 'none' }} />
-    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>{label}</span>
-    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#1e293b' }}>{value}</span>
-  </div>
-);
-
-// --- Styled Components ---
+// --- Styled Components (기존 유지) ---
 
 const bounce = keyframes` 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } `;
-const slideUp = keyframes` from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } `;
-const glassStyle = css` background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.6); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); `;
-
-const LoadingContainer = styled.div` position: fixed; inset: 0; background: #fff; z-index: 9999; display: flex; justify-content: center; align-items: center; `;
-const LoadingContent = styled.div` display: flex; flex-direction: column; align-items: center; width: 340px; `;
-const LogoArea = styled.div` margin-bottom: 24px; .bounce { animation: ${bounce} 2s infinite ease-in-out; } `;
-const LoadingText = styled.div` text-align: center; margin-bottom: 32px; h2 { font-size: 1.5rem; font-weight: 800; color: #1e293b; margin-bottom: 8px; } p { font-size: 0.9rem; color: #64748b; } `;
-const ProgressArea = styled.div` width: 100%; display: flex; flex-direction: column; gap: 8px; .bar-bg { width: 100%; height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden; } .bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); transition: width 0.2s; } .percent { font-size: 0.8rem; font-weight: 700; color: #6366f1; align-self: flex-end; } `;
-
-const BackgroundLayer = styled.div` position: fixed; inset: 0; z-index: -1; .img { position: absolute; inset: 0; background-image: url('/background.jpg'); background-size: cover; background-position: center; } .backdrop { position: absolute; inset: 0; background: rgba(255, 255, 255, 0.4); } `;
+const fadeIn = keyframes` from { opacity: 0; } to { opacity: 1; } `;
 
 const Container = styled.div` 
-  position: relative; width: 100vw; height: calc(100vh - 64px); 
-  display: flex; flex-direction: column; 
-  padding: 1.5vh 2vw; gap: 1.5vh; 
+  display: flex; width: 100vw; height: calc(100vh - 64px); background: #f8fafc;
   overflow: hidden; 
 `;
 
-const Header = styled.header` 
-  position: relative; display: flex; justify-content: space-between; align-items: center; 
-  height: 6vh; min-height: 50px; flex-shrink: 0; 
+const Sidebar = styled.aside`
+  width: 260px; height: 100%; background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  display: flex; flex-direction: column; padding: 24px;
+  flex-shrink: 0; z-index: 10;
 `;
 
-const StatsCard = styled.div` ${glassStyle} padding: 0 1.5vw; height: 100%; border-radius: 14px; display: flex; align-items: center; gap: 1.5vw; min-width: 300px; .title-area { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 800; color: #1e293b; padding-right: 1.5vw; border-right: 1px solid rgba(0,0,0,0.1); } .stats-content { display: flex; align-items: center; gap: 1.2vw; } `;
-const NavGroup = styled.div` position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(12px); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.4); `;
-const NavButton = styled.button<{ $active: boolean }>` border: none; background: ${(props) => (props.$active ? "#ffffff" : "transparent")}; color: ${(props) => (props.$active ? "#4f46e5" : "#475569")}; font-weight: ${(props) => (props.$active ? "800" : "600")}; padding: 0.8vh 1.2vw; border-radius: 10px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; box-shadow: ${(props) => (props.$active ? "0 2px 8px rgba(0,0,0,0.08)" : "none")}; &:hover { background: rgba(255,255,255,0.8); } `;
-const TimeCard = styled.div` ${glassStyle} height: 100%; padding: 0 1.5vw; border-radius: 14px; display: flex; align-items: center; gap: 8px; font-weight: 700; color: #334155; font-size: 1rem; .icon { color: #6366f1; } `;
+const BrandLogo = styled.div`
+  display: flex; align-items: center; gap: 12px; margin-bottom: 40px;
+  .icon { width: 32px; height: 32px; background: #0f172a; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  span { font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; }
+`;
 
-const MainContent = styled.main` 
-  flex: 1; width: 100%; height: 100%; 
-  display: flex; justify-content: center; align-items: center; 
-  min-height: 0; overflow: hidden;
+const NavGroup = styled.nav`
+  display: flex; flex-direction: column; gap: 8px; flex: 1;
+  .label { font-size: 18px; font-weight: 700; color: #4a4d50; margin-bottom: 8px; letter-spacing: 1px; }
+`;
+
+const NavButton = styled.button<{ $active: boolean }>`
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 12px 16px; border-radius: 12px; border: none;
+  background: ${props => props.$active ? '#0f172a' : 'transparent'};
+  color: ${props => props.$active ? '#ffffff' : '#64748b'};
+  font-weight: ${props => props.$active ? '600' : '500'};
+  cursor: pointer; transition: all 0.2s;
+  &:hover { background: ${props => props.$active ? '#0f172a' : '#f1f5f9'}; }
+  .dot { width: 6px; height: 6px; background: #84cc16; border-radius: 50%; }
+`;
+
+const TimeWidget = styled.div`
+  background: #f1f5f9; padding: 16px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: #334155; font-weight: 700; font-size: 14px;
+  .icon { color: #64748b; }
+`;
+
+const MainArea = styled.main`
+  flex: 1; display: flex; flex-direction: column; padding: 24px; gap: 20px; 
+  height: calc(100vh - 64px); overflow: hidden; 
+`;
+
+const Header = styled.header`
+  display: flex; justify-content: space-between; align-items: flex-end; flex-shrink: 0;
+  height: 80px; 
+`;
+
+const PageTitle = styled.div`
+  h1 { font-size: 26px; font-weight: 800; color: #0f172a; margin-bottom: 4px; letter-spacing: -1px; }
+  .subtitle { font-size: 13px; color: #64748b; font-weight: 500; }
+`;
+
+const StatsGroup = styled.div`
+  display: flex; gap: 16px;
+`;
+
+const StatCard = styled.div<{ $color: string }>`
+  background: white; width: 160px; padding: 16px; border-radius: 14px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  position: relative; overflow: hidden;
+  
+  .label { font-size: 14px; font-weight: 600; color: #64748b; margin-bottom: 6px; }
+  .value { font-size: 22px; font-weight: 800; color: #0f172a; }
+  .icon-bg { 
+    position: absolute; right: -8px; bottom: -8px; 
+    color: ${props => props.$color}; opacity: 0.15; 
+    transform: scale(2.2); 
+  }
+  &::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    background: ${props => props.$color};
+  }
+`;
+
+const FullGridContainer = styled.div`
+  flex: 1; /* 남은 높이(약 80vh)를 모두 차지 */
+  min-height: 0; 
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 스크롤 절대 금지 */
+  padding-bottom: 20px; /* 하단 여백 살짝 */
 `;
 
 const GridSystem = styled.div` 
+  flex: 1;
   display: grid; 
-  grid-template-columns: repeat(3, 1fr); 
-  grid-template-rows: repeat(4, minmax(0, 1fr)); 
-  gap: 1.2vh 1.2vw; 
-  width: 100%; height: 100%; 
-  max-width: 1600px; 
-  animation: ${slideUp} 0.5s ease-out; 
+  /* 가로 5칸 고정 */
+  grid-template-columns: repeat(5, 1fr);
+  /* 세로 3칸 고정 (화면 높이를 3등분하여 100% 사용) */
+  grid-template-rows: repeat(3, minmax(0, 1fr)); 
+  gap: 12px; 
+  height: 100%; /* 부모 높이 꽉 채움 */
+  animation: ${fadeIn} 0.5s ease-out; 
 `;
 
-const SectionWrapper = styled.div` display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; overflow: hidden;`;
-
-const GlassCard = styled.div` 
-  ${glassStyle} border-radius: 16px; padding: 0.8vh; 
-  display: flex; flex-direction: column; align-items: center; justify-content: center; 
-  width: 100%; height: 100%; 
+const SectionWrapper = styled.div` 
+  width: 100%; 
+  height: 100%; /* 할당된 그리드 칸(1/15)을 꽉 채움 */
+  min-height: 0;
 `;
 
-const SectionTitle = styled.div` 
-  font-size: 0.85rem; font-weight: 800; color: #1e293b; margin-bottom: 0.8vh; 
-  background: rgba(255,255,255,0.8); padding: 0.4vh 1vw; border-radius: 20px; flex-shrink: 0; 
+const CleanCard = styled.div`
+  background: #ffffff; 
+  border-radius: 12px; 
+  padding: 10px; /* 공간 확보를 위해 패딩 약간 축소 */
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  border: 1px solid #f1f5f9;
+  height: 100%; /* 부모 높이 100% */
+  display: flex;
+  flex-direction: column;
+  
+  .header {
+    flex-shrink: 0; 
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    .title { font-size: 14px; font-weight: 700; color: #334155; }
+    .count { font-size: 11px; font-weight: 600; color: #94a3b8; background: #f1f5f9; padding: 2px 6px; border-radius: 99px; }
+  }
+`;
+
+const RackGridWrapper = styled.div`
+  flex: 1; /* 남은 높이 모두 차지 */
+  width: 100%;
+  min-height: 0;
+  /* aspect-ratio 제거: 화면 꽉 채우기가 우선이므로 비율 고정 대신 flex로 채움 */
 `;
 
 const RackGrid = styled.div<{ $rows: number; $cols: number }>`
+  width: 100%;
+  height: 100%; /* 부모 영역 100% 채움 */
   display: grid;
-  grid-template-columns: repeat(${(props) => props.$cols}, 3.2vh); 
-  grid-template-rows: repeat(${(props) => props.$rows}, 3.2vh);
-  gap: 0.5vh;
-  place-content: center; align-items: center;
-  width: 100%; height: 100%; flex: 1;
+  /* 내부 4x4 박스도 균일하게 공간 분배 */
+  grid-template-columns: repeat(4, 1fr); 
+  grid-template-rows: repeat(4, 1fr);
+  gap: 4px; /* 간격 미세 조정 */
 `;
 
 const Cell = styled.div<{ $status: ProductStatus }>`
-  width: 100%; height: 100%; 
-  border-radius: 4px; display: flex; justify-content: center; align-items: center; position: relative; cursor: pointer; transition: transform 0.2s;
+  width: 100%; 
+  height: 100%; /* 셀 크기 꽉 채움 */
+  border-radius: 4px; 
+  display: flex; justify-content: center; align-items: center; 
+  position: relative; cursor: pointer; transition: all 0.2s;
   
-  .num { font-size: 1.4vh; font-weight: 700; z-index: 1; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
-  
-  &:hover { transform: scale(1.15); z-index: 10; }
+  .num { font-size: 12px; font-weight: 600; z-index: 1; opacity: 1; color: #5b5a5a }
+  .indicator { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.9); position: absolute; top: 3px; right: 3px; }
 
   ${(props) => {
     switch (props.$status) {
-      case "NEW": return css` background: linear-gradient(135deg, #34d399 0%, #059669 100%); border: 1px solid rgba(255,255,255,0.3); color: white; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25); `;
-      case "OLD": return css` background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); border: 1px solid rgba(255,255,255,0.3); color: white; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25); `;
-      case "EMPTY": return css` background: rgba(255,255,255,0.5); border: 1px solid #cbd5e1; color: #94a3b8; &:hover { background: #fff; border-color: #64748b; .num { opacity: 1; } } `;
+      case "NEW": return css` background: #84cc16; color: white; &:hover { background: #65a30d; } `;
+      case "OLD": return css` background: #10b981; color: white; &:hover { background: #059669; } `;
+      case "EMPTY": return css` background: #f8fafc; border: 1px solid #e2e8f0; color: #cbd5e1; &:hover { background: #f1f5f9; border-color: #94a3b8; } `;
     }
   }}
 `;
 
-/* [NEW] Fixed Tooltip - 절대 좌표를 사용하여 화면 어디서든 잘리지 않음 */
 const FixedTooltipContainer = styled.div`
-  position: fixed; 
-  z-index: 99999; /* 최상위 레이어 */
-  width: 160px; 
-  background: rgba(255, 255, 255, 0.98); 
-  backdrop-filter: blur(8px); 
-  padding: 10px; 
-  border-radius: 12px; 
-  box-shadow: 0 10px 30px rgba(0,0,0,0.25); 
-  border: 1px solid white; 
-  pointer-events: none; /* 마우스 이벤트 통과 (깜빡임 방지) */
-  transition: opacity 0.1s;
-
-  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; } 
-  .id { font-size: 0.8rem; font-weight: 800; color: #334155; } 
-  
-  .badge { font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 6px; 
-    &.NEW { background: #ecfdf5; color: #059669; } 
-    &.OLD { background: #fffbeb; color: #d97706; } 
+  position: fixed; z-index: 99999; width: 180px; background: #ffffff; padding: 12px; 
+  border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; pointer-events: none;
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9; } 
+  .id { font-size: 13px; font-weight: 700; color: #0f172a; } 
+  .badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; 
+    &.NEW { background: #ecfccb; color: #4d7c0f; } 
+    &.OLD { background: #d1fae5; color: #047857; } 
     &.EMPTY { background: #f1f5f9; color: #64748b; } 
   }
-
-  .info p { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; color: #64748b; font-weight: 600; margin-bottom: 3px; } 
-  .info .state { color: #3b82f6; margin-top: 4px; }
-  .info.empty .sub { color: #94a3b8; font-weight: 500; margin-left: 18px; } 
+  .info { display: flex; flex-direction: column; gap: 4px; }
+  .info p { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #64748b; font-weight: 500; } 
+  .info.empty p { color: #94a3b8; } 
 `;
 
-const ModalBackdrop = styled.div` position: fixed; inset: 0; background: rgba(0,0,0,0.2); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 999; `;
-const ModalCard = styled.div` background: white; padding: 32px; border-radius: 24px; text-align: center; width: 300px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.2); font-family: 'Pretendard', sans-serif; .icon { width: 60px; height: 60px; background: #6366f1; border-radius: 50%; display: flex; justify-content: center; align-items: center; margin: 0 auto 16px; } h3 { font-size: 1.25rem; font-weight: 800; color: #1e293b; margin-bottom: 8px; } p { font-size: 0.95rem; color: #64748b; margin-bottom: 24px; } button { width: 100%; padding: 12px; background: #1e293b; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; } `;
+const LoadingContainer = styled.div` position: fixed; inset: 0; background: #ffffff; z-index: 9999; display: flex; justify-content: center; align-items: center; `;
+const LoadingContent = styled.div` display: flex; flex-direction: column; align-items: center; width: 300px; `;
+const LogoArea = styled.div` margin-bottom: 24px; .bounce { animation: ${bounce} 2s infinite ease-in-out; } `;
+const LoadingText = styled.div` text-align: center; margin-bottom: 32px; h2 { font-size: 20px; font-weight: 800; color: #0f172a; } p { font-size: 13px; color: #64748b; } `;
+const ProgressArea = styled.div` width: 100%; .bar-bg { width: 100%; height: 4px; background: #f1f5f9; border-radius: 99px; overflow: hidden; } .bar-fill { height: 100%; background: #84cc16; transition: width 0.2s; } `;
+const ModalBackdrop = styled.div` position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center; z-index: 999; `;
+const ModalCard = styled.div` background: white; padding: 32px; border-radius: 20px; text-align: center; width: 320px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); h3 { font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 8px; } p { font-size: 14px; color: #64748b; margin-bottom: 24px; } button { width: 100%; padding: 14px; background: #0f172a; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; } .icon { width: 56px; height: 56px; background: #0f172a; border-radius: 16px; display: flex; justify-content: center; align-items: center; margin: 0 auto 20px; }`;
