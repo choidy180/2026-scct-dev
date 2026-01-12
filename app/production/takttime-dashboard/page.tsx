@@ -29,8 +29,8 @@ import {
   Server,
   Zap,
   CheckCircle2,
-  ShieldCheck, // 안전 상태 아이콘
-  ScanEye,     // 감시 중 아이콘
+  ShieldCheck,
+  ScanEye,
 } from "lucide-react";
 
 // --- [1. 상수 및 데이터 타입] ---
@@ -68,6 +68,7 @@ const AI_THRESHOLD = 80;
 const X_AXIS_HEIGHT = 30;
 const MARGIN = { top: 20, right: 20, left: 10, bottom: 0 };
 
+// 색상 상수 (불변 객체)
 const colors = {
   bgPage: "#F8F9FA",
   bgCard: "#FFFFFF",
@@ -100,88 +101,89 @@ const GlobalStyle = createGlobalStyle`
     font-family: 'Inter', sans-serif; 
     color: ${colors.textMain}; 
     overflow: hidden; 
+    /* 폰트 렌더링 최적화 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 `;
 
+// Keyframes (GPU 가속 활용)
 const spin = keyframes`from { transform: rotate(0deg); } to { transform: rotate(360deg); }`;
 const spinReverse = keyframes`from { transform: rotate(360deg); } to { transform: rotate(0deg); }`;
 const pulse = keyframes`0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; }`;
-const breathe = keyframes`0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; }`; // 숨쉬기 효과
+const breathe = keyframes`0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; }`;
 const slideUp = keyframes`from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; }`;
 const fadeIn = keyframes`from { opacity: 0; } to { opacity: 1; }`;
 const popIn = keyframes`0% { transform: scale(0.5); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); opacity: 1; }`;
 
-// Loading Styles
+// --- [스타일 최적화: 불필요한 Prop 전달 최소화, 고정 스타일은 CSS로 처리] ---
+
 const BootContainer = styled.div`position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: ${colors.bgPage}; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999;`;
 const ScannerWrapper = styled.div`position: relative; width: 140px; height: 140px; display: flex; justify-content: center; align-items: center; margin-bottom: 40px;`;
-const ScannerRing = styled.div<{ $size: number; $color: string; $reverse?: boolean }>`position: absolute; width: ${(props) => props.$size}px; height: ${(props) => props.$size}px; border: 2px solid transparent; border-top-color: ${(props) => props.$color}; border-left-color: ${(props) => props.$color}; border-radius: 50%; animation: ${(props) => (props.$reverse ? spinReverse : spin)} 1.5s linear infinite;`;
-const DynamicIconWrapper = styled.div`color: ${colors.primaryDark}; z-index: 2; display: flex; justify-content: center; align-items: center; animation: ${popIn} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; filter: drop-shadow(0 0 15px ${colors.primaryLight});`;
+const ScannerRing = styled.div<{ $size: number; $color: string; $reverse?: boolean }>`
+  position: absolute; 
+  width: ${(props) => props.$size}px; 
+  height: ${(props) => props.$size}px; 
+  border: 2px solid transparent; 
+  border-top-color: ${(props) => props.$color}; 
+  border-left-color: ${(props) => props.$color}; 
+  border-radius: 50%; 
+  animation: ${(props) => (props.$reverse ? spinReverse : spin)} 1.5s linear infinite;
+  will-change: transform;
+`;
+const DynamicIconWrapper = styled.div`color: ${colors.primaryDark}; z-index: 2; display: flex; justify-content: center; align-items: center; animation: ${popIn} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;`;
 const LoadingTextGroup = styled.div`display: flex; flex-direction: column; align-items: center; gap: 12px;`;
 const MainLoadingText = styled.div`font-size: 1.5rem; font-weight: 800; color: ${colors.textMain}; letter-spacing: 1px;`;
 const SubLoadingText = styled.div`font-size: 0.95rem; color: ${colors.textSub}; font-weight: 600; height: 20px;`;
 const StyledProgressTrack = styled.div`width: 320px; height: 6px; background: #E5E7EB; border-radius: 99px; margin-top: 24px; overflow: hidden; position: relative;`;
-const StyledProgressFill = styled.div`height: 100%; background: ${colors.primaryDark}; transition: width 0.3s ease-out; border-radius: 99px;`;
+const StyledProgressFill = styled.div`height: 100%; background: ${colors.primaryDark}; transition: width 0.3s ease-out; border-radius: 99px; will-change: width;`;
 
-// Layout Styles
 const PageLayout = styled.div<{ $visible: boolean }>`display: flex; width: 100vw; height: calc(100vh - 64px); overflow: hidden; background-color: ${colors.bgPage}; opacity: 0; ${(props) => props.$visible && css`animation: ${fadeIn} 0.8s ease-out forwards;`}`;
 const SidebarContainer = styled.div`width: 90px; height: 100%; background-color: ${colors.bgPage}; border-right: 1px solid ${colors.gridLine}; display: flex; flex-direction: column; align-items: center; padding: 24px 0; gap: 16px; z-index: 10; flex-shrink: 0;`;
-const SidebarButton = styled.button<{ $active: boolean }>`width: 60px; height: 60px; border-radius: 12px; font-family: "Rajdhani", sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; background: ${colors.bgCard}; color: ${(props) => (props.$active ? colors.primaryDark : colors.textSub)}; border: 1px solid ${(props) => (props.$active ? colors.primaryDark : colors.gridLine)}; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; &:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); color: ${colors.primaryDark}; border-color: ${colors.primaryDark}; } position: relative; overflow: hidden; &::after { content: ""; position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: ${(props) => props.$active ? colors.primaryDark : "transparent"}; }`;
+const SidebarButton = styled.button<{ $active: boolean }>`
+  width: 60px; height: 60px; border-radius: 12px; font-family: "Rajdhani", sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; 
+  background: ${colors.bgCard}; color: ${(props) => (props.$active ? colors.primaryDark : colors.textSub)}; 
+  border: 1px solid ${(props) => (props.$active ? colors.primaryDark : colors.gridLine)}; 
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, color 0.2s ease; 
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; 
+  &:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); color: ${colors.primaryDark}; border-color: ${colors.primaryDark}; } 
+  position: relative; overflow: hidden; 
+  &::after { content: ""; position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: ${(props) => props.$active ? colors.primaryDark : "transparent"}; }
+`;
 const MainContent = styled.div`flex: 1; height: 100%; display: flex; flex-direction: column; padding: 20px; gap: 20px; overflow: hidden;`;
 const TopChartWrapper = styled.div`flex: 1; min-height: 0; position: relative;`;
 const BottomChartWrapper = styled.div`flex: 1; min-height: 0;`;
 
 const TechCard = styled.div`
-  background: ${colors.bgCard}; 
-  width: 100%; 
-  height: 100%; 
-  border-radius: 16px; 
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); 
-  display: flex; 
-  flex-direction: row; 
-  align-items: stretch; 
-  position: relative; 
-  overflow: hidden; 
-  border: 1px solid ${colors.gridLine}; 
-  z-index: 1;
+  background: ${colors.bgCard}; width: 100%; height: 100%; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); 
+  display: flex; flex-direction: row; align-items: stretch; position: relative; overflow: hidden; border: 1px solid ${colors.gridLine}; z-index: 1;
 `;
 
 const InfoPanel = styled.div`width: 260px; border-right: 1px solid ${colors.gridLine}; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; flex-shrink: 0;`;
 const MainChartPanel = styled.div`flex: 1; display: flex; flex-direction: column; padding: 24px; min-width: 0; position: relative; border-right: 1px solid ${colors.gridLine};`;
 
-// [최적화 핵심] 오른쪽 고정 패널
 const RightFixedPanel = styled.div`
-  width: 280px;
-  background-color: #FAFAFA;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  transition: background-color 0.3s ease; /* 배경색 전환 애니메이션 */
+  width: 280px; background-color: #FAFAFA; display: flex; flex-direction: column; flex-shrink: 0; 
+  transition: background-color 0.3s ease; /* transition 속성을 구체적으로 명시 */
 `;
 
 const PanelHeader = styled.div<{ $isAlert: boolean }>`
-  padding: 16px;
-  border-bottom: 1px solid ${colors.gridLine};
-  font-weight: 700;
-  color: ${(props) => props.$isAlert ? colors.alertDark : colors.successDark};
-  background: ${(props) => props.$isAlert ? "#FEF2F2" : "#F0FDF4"};
-  font-size: 0.95rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 54px;
-  box-sizing: border-box;
-  transition: all 0.3s ease;
+  padding: 16px; border-bottom: 1px solid ${colors.gridLine}; font-weight: 700; 
+  color: ${(props) => props.$isAlert ? colors.alertDark : colors.successDark}; 
+  background: ${(props) => props.$isAlert ? "#FEF2F2" : "#F0FDF4"}; 
+  font-size: 0.95rem; display: flex; align-items: center; justify-content: space-between; height: 54px; box-sizing: border-box; 
+  transition: background-color 0.3s ease, color 0.3s ease;
 `;
 
 const PanelBody = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+  flex: 1; overflow-y: auto; padding: 12px; 
+  &::-webkit-scrollbar { width: 4px; } &::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+`;
+const rippleAnimation = keyframes`
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
 `;
 
-// [새로운 디자인] 정상 상태일 때 보여줄 인터랙티브 UI
 const SafeState = styled.div`
   height: 100%;
   display: flex;
@@ -202,9 +204,7 @@ const SafeState = styled.div`
     justify-content: center;
     position: relative;
     box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);
-    
-    /* 숨쉬는 애니메이션 */
-    animation: ${breathe} 3s infinite ease-in-out; 
+    animation: ${breathe} 3s infinite ease-in-out;
   }
 
   .radar-icon {
@@ -212,7 +212,6 @@ const SafeState = styled.div`
     z-index: 2;
   }
 
-  /* 퍼지는 파동 효과 */
   .ripple {
     position: absolute;
     width: 100%;
@@ -220,18 +219,23 @@ const SafeState = styled.div`
     border-radius: 50%;
     border: 1px solid ${colors.successLight};
     opacity: 0;
-    animation: ${css`
-      ${keyframes`
-        0% { transform: scale(1); opacity: 0.8; }
-        100% { transform: scale(1.6); opacity: 0; }
-      `} 2s infinite linear
-    `};
+    /* 수정된 부분: 분리한 애니메이션 변수 참조 */
+    animation: ${rippleAnimation} 2s infinite linear;
+    will-change: transform, opacity;
   }
-  
+
   .status-text {
     text-align: center;
-    .main { font-size: 1.1rem; font-weight: 700; color: ${colors.textMain}; margin-bottom: 6px; }
-    .sub { font-size: 0.85rem; color: ${colors.textSub}; }
+    .main {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: ${colors.textMain};
+      margin-bottom: 6px;
+    }
+    .sub {
+      font-size: 0.85rem;
+      color: ${colors.textSub};
+    }
   }
 `;
 
@@ -240,7 +244,7 @@ const HeaderGroup = styled.div<{ $themeColor?: "orange" | "sky" }>` .tag { displ
 const IconWrapper = styled.div<{ $themeColor?: "orange" | "sky" }>`width: 54px; height: 54px; background: linear-gradient(135deg, ${(props) => (props.$themeColor === "sky" ? "#F0F9FF" : "#FFF7ED")}, ${(props) => (props.$themeColor === "sky" ? "#E0F2FE" : "#FFEDD5")}); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: ${(props) => props.$themeColor === "sky" ? colors.secondaryDark : colors.primaryDark}; margin-bottom: 16px; border: 1px solid ${(props) => (props.$themeColor === "sky" ? "#E0F2FE" : "#FFEDD5")};`;
 const StatDisplay = styled.div`padding: 16px; border-radius: 12px; background: linear-gradient(to bottom right, #f9fafb, #f3f4f6); border: 1px solid ${colors.gridLine}; .label { font-size: 0.85rem; color: ${colors.textSub}; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; } .value { font-family: "Rajdhani", sans-serif; font-size: 2.4rem; font-weight: 700; color: ${colors.textMain}; line-height: 1; letter-spacing: -1px; span { font-size: 1rem; color: ${colors.textSub}; font-weight: 600; margin-left: 6px; } }`;
 const ToggleWrapper = styled.div`display: flex; align-items: center; gap: 12px; padding-top: 16px; border-top: 1px solid ${colors.gridLine}; span { font-size: 0.85rem; font-weight: 600; color: ${colors.textMain}; }`;
-const ToggleSwitch = styled.button<{ $isOn: boolean }>`width: 44px; height: 24px; border-radius: 99px; background: ${(props) => (props.$isOn ? colors.primaryDark : "#E5E7EB")}; border: none; position: relative; cursor: pointer; transition: all 0.2s ease; &::after { content: ""; position: absolute; top: 3px; left: ${(props) => (props.$isOn ? "23px" : "3px")}; width: 18px; height: 18px; border-radius: 50%; background: white; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); transition: all 0.2s; }`;
+const ToggleSwitch = styled.button<{ $isOn: boolean }>`width: 44px; height: 24px; border-radius: 99px; background: ${(props) => (props.$isOn ? colors.primaryDark : "#E5E7EB")}; border: none; position: relative; cursor: pointer; transition: background-color 0.2s ease; &::after { content: ""; position: absolute; top: 3px; left: ${(props) => (props.$isOn ? "23px" : "3px")}; width: 18px; height: 18px; border-radius: 50%; background: white; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); transition: left 0.2s ease; }`;
 const LegendBox = styled.div`display: flex; gap: 20px; margin-bottom: 6px; justify-content: flex-end; padding-right: 20px; flex-shrink: 0; .item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; color: ${colors.textSub}; } .color-box { width: 10px; height: 10px; border-radius: 3px; }`;
 const ChartArea = styled.div`flex: 1; min-height: 0; position: relative;`;
 const TransitionOverlay = styled.div<{ $active: boolean }>`position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 16px; background: rgba(255, 255, 255, 0.65); z-index: 50; opacity: ${(props) => (props.$active ? 1 : 0)}; pointer-events: ${(props) => (props.$active ? "all" : "none")}; transition: opacity 0.2s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; .spinner { color: ${colors.primaryDark}; animation: ${spin} 1s linear infinite; } .text { font-size: 0.95rem; font-weight: 600; color: ${colors.textMain}; letter-spacing: 0.5px; }`;
@@ -302,7 +306,6 @@ const ReferenceLabel = memo((props: ReferenceLabelProps) => {
   const rectWidth = text.length * 7 + 24;
   const rectHeight = 24;
   const margin = 6;
-  
   const rectX = x + width - rectWidth;
   const rectY = y - rectHeight - margin;
   const textX = rectX + rectWidth / 2;
@@ -317,32 +320,25 @@ const ReferenceLabel = memo((props: ReferenceLabelProps) => {
 });
 ReferenceLabel.displayName = "ReferenceLabel";
 
-// [로직 수정] 약 20% 확률로 지연 없는 데이터 생성
 const generateRandomData = (groupName: string) => {
   const count = 16;
   const baseRandom = groupName.charCodeAt(2) % 10;
-  
-  // 20% 확률로 완전 무결점(지연 없음) 상태 생성
+  // 20% 확률로 완전 무결점
   const isPerfectRun = Math.random() < 0.2;
 
   return Array.from({ length: count }, (_, i) => {
     let taktTotal;
-
     if (isPerfectRun) {
-      // 무결점 모드: 목표 타임(100) 이하로만 생성 (60 ~ 95)
       taktTotal = Math.floor(Math.random() * 35) + 60;
     } else {
-      // 일반 모드: 가끔 지연 발생
-      if ((i + baseRandom) % 4 === 3) taktTotal = Math.floor(Math.random() * 30) + 120; // 지연 발생
+      if ((i + baseRandom) % 4 === 3) taktTotal = Math.floor(Math.random() * 30) + 120;
       else if ((i + baseRandom) % 5 === 0) taktTotal = Math.floor(Math.random() * 20) + 60;
       else taktTotal = Math.floor(Math.random() * 30) + 80;
     }
-    
     const production = Math.floor(Math.random() * 40) + 90 + baseRandom * 2;
     const p1 = Math.floor(taktTotal * 0.4);
     const p2 = Math.floor(taktTotal * 0.35);
     const p3 = taktTotal - p1 - p2;
-    
     const aiRaw = Math.min(100, Math.floor(Math.random() * 40) + 60 + baseRandom);
     
     return {
@@ -379,6 +375,61 @@ const Sidebar = memo(({ activeGroup, onGroupChange, groups }: { activeGroup: str
   </SidebarContainer>
 ));
 Sidebar.displayName = "Sidebar";
+
+// [최적화] 상태 패널 컴포넌트 분리 (TopChart 재렌더링 시 영향 최소화)
+const StatusPanel = memo(({ alertedLots, onLotClick }: { alertedLots: ProcessData[], onLotClick: (lot: ProcessData) => void }) => {
+  const hasAlerts = alertedLots.length > 0;
+  
+  return (
+    <RightFixedPanel>
+      {hasAlerts ? (
+        <>
+          <PanelHeader $isAlert={true}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle size={16} color={colors.alertDark} />
+              지연 발생 ({alertedLots.length}건)
+            </div>
+            <PulseDot />
+          </PanelHeader>
+          <PanelBody>
+            {alertedLots.map((lot) => (
+              <AlertItem key={lot.name} onClick={() => onLotClick(lot)}>
+                <span className="name">{lot.name}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span className="val">{lot.taktTotal}s</span>
+                  <ChevronRight size={14} color={colors.textSub} />
+                </div>
+              </AlertItem>
+            ))}
+          </PanelBody>
+        </>
+      ) : (
+        <>
+          <PanelHeader $isAlert={false}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldCheck size={16} color={colors.successDark} />
+              상태 양호
+            </div>
+          </PanelHeader>
+          <PanelBody>
+            <SafeState>
+              <div className="radar-container">
+                <div className="ripple" />
+                <div className="ripple" style={{ animationDelay: '1s' }} />
+                <ScanEye className="radar-icon" size={40} />
+              </div>
+              <div className="status-text">
+                <div className="main">All Systems Normal</div>
+                <div className="sub">실시간 공정 감시 중</div>
+              </div>
+            </SafeState>
+          </PanelBody>
+        </>
+      )}
+    </RightFixedPanel>
+  );
+});
+StatusPanel.displayName = "StatusPanel";
 
 const TopChart = memo(({ data, isTransitioning, showDetail, onDetailToggle, alertedLots, onLotClick, mesMax }: any) => (
   <TechCard>
@@ -417,7 +468,8 @@ const TopChart = memo(({ data, isTransitioning, showDetail, onDetailToggle, aler
         )}
       </LegendBox>
       <ChartArea>
-        <ResponsiveContainer width="100%" height="100%">
+        {/* [최적화] debounce 추가하여 리사이징 시 연산 최소화 */}
+        <ResponsiveContainer width="100%" height="100%" debounce={50}>
           <ComposedChart data={data} margin={MARGIN}>
             <defs>
               <linearGradient id="normalTakt" x1="0" y1="0" x2="0" y2="1">
@@ -435,26 +487,12 @@ const TopChart = memo(({ data, isTransitioning, showDetail, onDetailToggle, aler
             <Tooltip content={<CustomTooltip showDetail={showDetail} type="MES" />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />
             {!showDetail ? (
               <>
-                <Bar 
-                  dataKey="taktBase" 
-                  stackId="takt" 
-                  barSize={34} 
-                  isAnimationActive={true} 
-                  animationDuration={600}
-                >
+                <Bar dataKey="taktBase" stackId="takt" barSize={34} isAnimationActive={true} animationDuration={600}>
                   {data.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill="url(#normalTakt)" radius={(entry.taktOver > 0 ? [0, 0, 6, 6] : [6, 6, 6, 6]) as any} />
                   ))}
                 </Bar>
-                <Bar 
-                  dataKey="taktOver" 
-                  stackId="takt" 
-                  fill="url(#overTakt)" 
-                  barSize={34} 
-                  radius={[6, 6, 0, 0] as any} 
-                  isAnimationActive={true} 
-                  animationDuration={600}
-                />
+                <Bar dataKey="taktOver" stackId="takt" fill="url(#overTakt)" barSize={34} radius={[6, 6, 0, 0] as any} isAnimationActive={true} animationDuration={600} />
               </>
             ) : (
               <>
@@ -469,71 +507,15 @@ const TopChart = memo(({ data, isTransitioning, showDetail, onDetailToggle, aler
                 </Bar>
               </>
             )}
-            <Line 
-              type="monotone" 
-              dataKey="production" 
-              stroke={colors.lineSolid} 
-              strokeWidth={3} 
-              dot={<CustomizedDot />} 
-              activeDot={{ r: 7, strokeWidth: 0, fill: colors.textMain }} 
-              isAnimationActive={true} 
-              animationDuration={800}
-              animationEasing="ease-in-out"
-            />
+            <Line type="monotone" dataKey="production" stroke={colors.lineSolid} strokeWidth={3} dot={<CustomizedDot />} activeDot={{ r: 7, strokeWidth: 0, fill: colors.textMain }} isAnimationActive={true} animationDuration={800} animationEasing="ease-in-out" />
             <ReferenceLine y={TARGET_TAKT_TIME} stroke={colors.alertDark} strokeDasharray="4 2" strokeWidth={2} label={<ReferenceLabel value={`목표 택트 (${TARGET_TAKT_TIME}초)`} />} />
           </ComposedChart>
         </ResponsiveContainer>
       </ChartArea>
     </MainChartPanel>
 
-    {/* [수정] 우측 고정 패널 */}
-    <RightFixedPanel>
-      {alertedLots.length > 0 ? (
-        <>
-          <PanelHeader $isAlert={true}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={16} color={colors.alertDark} />
-              지연 발생 ({alertedLots.length}건)
-            </div>
-            <PulseDot />
-          </PanelHeader>
-          <PanelBody>
-            {alertedLots.map((lot: any) => (
-              <AlertItem key={lot.name} onClick={() => onLotClick(lot)}>
-                <span className="name">{lot.name}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <span className="val">{lot.taktTotal}s</span>
-                  <ChevronRight size={14} color={colors.textSub} />
-                </div>
-              </AlertItem>
-            ))}
-          </PanelBody>
-        </>
-      ) : (
-        <>
-          {/* [UI 변경] 지연 없을 때 보여줄 인터랙티브 디자인 */}
-          <PanelHeader $isAlert={false}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldCheck size={16} color={colors.successDark} />
-              상태 양호
-            </div>
-          </PanelHeader>
-          <PanelBody>
-            <SafeState>
-              <div className="radar-container">
-                <div className="ripple" />
-                <div className="ripple" style={{ animationDelay: '1s' }} />
-                <ScanEye className="radar-icon" size={40} />
-              </div>
-              <div className="status-text">
-                <div className="main">All Systems Normal</div>
-                <div className="sub">실시간 공정 감시 중</div>
-              </div>
-            </SafeState>
-          </PanelBody>
-        </>
-      )}
-    </RightFixedPanel>
+    {/* 분리된 상태 패널 컴포넌트 */}
+    <StatusPanel alertedLots={alertedLots} onLotClick={onLotClick} />
   </TechCard>
 ));
 TopChart.displayName = "TopChart";
@@ -559,7 +541,7 @@ const BottomChart = memo(({ data, aiMax }: any) => (
         <div className="item"><div className="color-box" style={{ background: colors.alertDark }} />결함 의심</div>
       </LegendBox>
       <ChartArea>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" debounce={50}>
           <ComposedChart data={data} margin={MARGIN}>
             <defs>
               <linearGradient id="mintBarGrad" x1="0" y1="0" x2="0" y2="1">
@@ -571,26 +553,12 @@ const BottomChart = memo(({ data, aiMax }: any) => (
             <XAxis dataKey="name" axisLine={false} tickLine={false} dy={12} tick={{ fill: colors.textSub, fontSize: 11, fontWeight: 600 }} height={X_AXIS_HEIGHT} />
             <YAxis domain={[0, aiMax] as [number, number]} hide padding={{ top: 0, bottom: 0 }} />
             <Tooltip content={<CustomTooltip type="AI" />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />
-            <Bar 
-              dataKey="aiBase" 
-              stackId="ai" 
-              barSize={34} 
-              isAnimationActive={true} 
-              animationDuration={600}
-            >
+            <Bar dataKey="aiBase" stackId="ai" barSize={34} isAnimationActive={true} animationDuration={600}>
               {data.map((entry: any, index: number) => (
                 <Cell key={`cell-ai-${index}`} fill="url(#mintBarGrad)" radius={(entry.aiOver > 0 ? [0, 0, 6, 6] : [6, 6, 6, 6]) as any} />
               ))}
             </Bar>
-            <Bar 
-              dataKey="aiOver" 
-              stackId="ai" 
-              fill="url(#overTakt)" 
-              barSize={34} 
-              radius={[6, 6, 0, 0] as any} 
-              isAnimationActive={true} 
-              animationDuration={600}
-            />
+            <Bar dataKey="aiOver" stackId="ai" fill="url(#overTakt)" barSize={34} radius={[6, 6, 0, 0] as any} isAnimationActive={true} animationDuration={600} />
             <ReferenceLine y={AI_THRESHOLD} stroke={colors.alertDark} strokeDasharray="4 2" strokeWidth={2} label={<ReferenceLabel value={`결함 임계값 (${AI_THRESHOLD})`} />} />
           </ComposedChart>
         </ResponsiveContainer>
