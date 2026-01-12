@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Grip, CheckCircle, AlertTriangle, Database, ZoomIn, X, BarChart3, ScanLine, Wifi, Server, Cog } from 'lucide-react';
+import { Grip, CheckCircle, AlertTriangle, Database, ZoomIn, X, BarChart3, ScanLine, Wifi, Server, Cog, Info } from 'lucide-react';
 
 // ─── [CONFIG] 설정 및 테마 ───
 type ScreenMode = 'FHD' | 'QHD';
@@ -31,13 +31,15 @@ const theme = {
   cardBg: '#FFFFFF', 
   textPrimary: '#111827', 
   textSecondary: '#6B7280',
-  accent: '#6366F1',   // Indigo
+  accent: '#6366F1',   // Indigo (선택됨)
   success: '#10B981', 
   successBg: '#D1FAE5',
-  danger: '#EF4444',
+  danger: '#EF4444',   // Error
   dangerBg: '#FEE2E2',
   border: '#E5E7EB',
   shadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+  normalBtn: '#F9FAFB', // 기본 버튼 배경
+  normalText: '#6B7280' // 기본 버튼 텍스트
 };
 
 // ─── [DATA TYPES] ───
@@ -136,7 +138,6 @@ const ImageModal = ({ isOpen, onClose, data }: { isOpen: boolean, onClose: () =>
                     </div>
                     <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}><X size={24} color={theme.textSecondary} /></button>
                 </div>
-                {/* 모달 이미지: cover 속성 유지 */}
                 <div style={{ flex: 1, position: 'relative', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#000', border: `1px solid ${theme.border}` }}>
                     <img src={data.image} alt="Detail" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     {data.boxes.map((box, idx) => (
@@ -168,26 +169,22 @@ export default function FoamingCartPosition() {
     }, []);
 
     useEffect(() => {
-        // [데이터 생성 로직] 박스가 이미지 밖으로 나가지 않도록 좌표 제한
         const dummyData: CartData[] = Array.from({ length: 26 }, (_, i) => {
             const id = `C${i + 1}`;
             const isError = Math.random() < 0.2; 
             
             const generateSafeBox = (baseTop: number, baseLeft: number, color: string) => {
-                const height = 8 + Math.random() * 6; // 8~14% 높이
-                const width = 8 + Math.random() * 6;  // 8~14% 너비
-                
-                // 경계값 체크 (100%를 넘지 않도록 Math.min 사용)
+                const height = 8 + Math.random() * 6;
+                const width = 8 + Math.random() * 6;
                 const top = Math.min(Math.max(baseTop + (Math.random() * 10 - 5), 0), 100 - height);
                 const left = Math.min(Math.max(baseLeft + (Math.random() * 10 - 5), 0), 100 - width);
-
                 return { top, left, width, height, color };
             };
 
             const boxes = [
-                generateSafeBox(40, 20, '#EF4444'), // Red
-                generateSafeBox(45, 45, '#3B82F6'), // Blue
-                generateSafeBox(55, 65, '#10B981')  // Green
+                generateSafeBox(40, 20, '#EF4444'),
+                generateSafeBox(45, 45, '#3B82F6'),
+                generateSafeBox(55, 65, '#10B981')
             ];
 
             return {
@@ -244,37 +241,66 @@ export default function FoamingCartPosition() {
                 </div>
             </div>
 
-            {/* [BUTTON SCROLL AREA - 가로 스크롤 적용 + 커스텀 스크롤바] */}
+            {/* [BUTTON AREA - 그리드 적용 및 범례 추가] */}
             <div style={{ 
                 marginBottom: layout.gap,
                 position: 'relative', 
                 borderRadius: layout.borderRadius, boxShadow: theme.shadow,
                 backgroundColor: theme.cardBg,
                 border: `1px solid ${theme.border}`,
-                padding: '16px 12px' // 상하 패딩을 주어 스크롤바 공간 확보
+                padding: '20px 24px', // 내부 패딩
+                display: 'flex', flexDirection: 'column', gap: '16px'
             }}>
-                <div className="button-scroll-container" style={{ 
-                    display: 'flex', gap: '8px', 
-                    overflowX: 'auto', whiteSpace: 'nowrap',
-                    paddingBottom: '8px', // 스크롤바와 컨텐츠 간격
-                    alignItems: 'center',
+                {/* 1. 상태 라벨 (범례) 영역 */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.border}`, paddingBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 700, color: theme.textPrimary }}>
+                        <Info size={16} color={theme.textSecondary} />
+                        대차 목록 (Cart List)
+                    </div>
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '12px', fontWeight: 600, color: theme.textSecondary }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: theme.normalBtn, border: `1px solid ${theme.border}` }}></div>
+                            <span>정상(대기)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: theme.accent }}></div>
+                            <span>선택됨</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: theme.dangerBg, border: `1px solid ${theme.danger}40` }}></div>
+                            <span style={{ color: theme.danger }}>오류 감지</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. 버튼 그리드 컨테이너 (스크롤 제거 -> Grid 적용) */}
+                <div style={{ 
+                    display: 'grid', 
+                    // FHD 기준 대략 한 줄에 13~14개씩 들어가서 2줄로 보이도록 설정 (반응형)
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))', 
+                    gap: '10px', 
+                    width: '100%'
                 }}>
                     {cartDataList.map((cart) => {
                         const isSelected = selectedCartId === cart.id;
                         const isError = cart.status === 'Error';
                         
-                        let bg = '#F9FAFB';
-                        let color = '#6B7280';
-                        let border = '1px solid #E5E7EB';
+                        let bg = theme.normalBtn;
+                        let color = theme.normalText;
+                        let border = `1px solid ${theme.border}`;
 
                         if (isError) {
-                            bg = isSelected ? theme.danger : '#FEF2F2';
+                            // 오류 상태
+                            bg = isSelected ? theme.danger : theme.dangerBg;
                             color = isSelected ? 'white' : theme.danger;
                             border = isSelected ? `1px solid ${theme.danger}` : `1px solid ${theme.danger}40`;
                         } else if (isSelected) {
+                            // 선택됨 상태
                             bg = theme.accent;
                             color = 'white';
                             border = `1px solid ${theme.accent}`;
+                        } else {
+                            // 일반 상태 (hover 효과를 위해 기본값 유지)
                         }
 
                         return (
@@ -282,46 +308,21 @@ export default function FoamingCartPosition() {
                                 key={cart.id}
                                 onClick={() => setSelectedCartId(cart.id)}
                                 style={{
-                                    flexShrink: 0, width: '64px', height: '40px', borderRadius: '10px', border,
+                                    height: '40px', borderRadius: '8px', border,
                                     backgroundColor: bg, color: color,
                                     fontSize: '14px', fontWeight: 700, cursor: 'pointer',
                                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                     boxShadow: isSelected ? '0 4px 6px rgba(0,0,0,0.1)' : 'none',
-                                    transform: isSelected ? 'translateY(-1px)' : 'none'
+                                    transform: isSelected ? 'translateY(-1px)' : 'none',
+                                    // 기본 상태일 때 hover 효과
+                                    ...(!isSelected && !isError ? { ':hover': { backgroundColor: '#E5E7EB' } } : {})
                                 }}
                             >
                                 {cart.id}
                             </button>
                         );
                     })}
-                    {/* 끝 여백 확보 */}
-                    <div style={{ width: '20px', flexShrink: 0 }} />
                 </div>
-                
-                {/* [Scroll Mask] 스크롤 가능 힌트 (우측 그라데이션) */}
-                <div style={{
-                    position: 'absolute', top: '16px', right: '1px', bottom: '16px', width: '40px',
-                    background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.9))',
-                    pointerEvents: 'none', borderRadius: `0 ${layout.borderRadius} ${layout.borderRadius} 0`
-                }} />
-
-                {/* 커스텀 스크롤바 스타일 */}
-                <style jsx>{`
-                    .button-scroll-container::-webkit-scrollbar {
-                        height: 6px;
-                    }
-                    .button-scroll-container::-webkit-scrollbar-track {
-                        background: #F3F4F6;
-                        border-radius: 3px;
-                    }
-                    .button-scroll-container::-webkit-scrollbar-thumb {
-                        background: #CBD5E1;
-                        border-radius: 3px;
-                    }
-                    .button-scroll-container::-webkit-scrollbar-thumb:hover {
-                        background: #94A3B8;
-                    }
-                `}</style>
             </div>
 
             {/* [MAIN CONTENT] */}
@@ -349,20 +350,18 @@ export default function FoamingCartPosition() {
                         </div>
                     </div>
 
-                    {/* 이미지 영역: object-fit: cover 적용 및 박스 좌표 동기화 */}
+                    {/* 이미지 영역 */}
                     <div style={{ 
                         flex: 1, position: 'relative', borderRadius: '16px', overflow: 'hidden', 
                         border: `1px solid ${theme.border}`, backgroundColor: '#000',
                         boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
                     }}>
-                        {/* 이미지와 박스를 감싸는 컨테이너 */}
                         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
                             <img 
                                 src={currentData.image} 
                                 alt="Cart View" 
                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                             />
-                            
                             {/* 바운딩 박스 */}
                             {currentData.boxes.map((box, idx) => (
                                 <div key={idx} style={{
@@ -376,7 +375,6 @@ export default function FoamingCartPosition() {
                             ))}
                         </div>
 
-                        {/* 확대 버튼 */}
                         <button 
                             onClick={() => setIsModalOpen(true)}
                             style={{
