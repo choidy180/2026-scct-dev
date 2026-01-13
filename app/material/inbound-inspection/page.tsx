@@ -13,12 +13,10 @@ import {
   LuMaximize,
   LuMinimize,
   LuX,
-  LuPlay,
-  LuFileText,
   LuBox,
   LuLayers,
   LuClipboardCheck,
-  // LuCheckCircle 제거 -> lucide-react 사용
+  LuFileText,
 } from "react-icons/lu";
 
 // --- Icons (lucide-react) ---
@@ -29,11 +27,7 @@ import {
   Save,
   CheckCircle2,
   Activity,
-  Box,
-  Calendar,
-  Layers,
   FileBadge,
-  PackageCheck,
   ScanBarcode,
   ListTodo,
   ScanEye,
@@ -43,7 +37,14 @@ import {
   Search,
   MoreHorizontal,
   Truck,
-  PieChart as PieIcon
+  PieChart as PieIcon,
+  History,
+  RefreshCw,
+  Signal,
+  WifiOff,
+  Calendar,
+  Box,
+  Layers
 } from "lucide-react";
 
 // --- Charts ---
@@ -53,8 +54,7 @@ import {
   XAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
-  PieChart
+  ResponsiveContainer
 } from 'recharts';
 
 // ─── [1. INTERFACES] ─────────────────────────────
@@ -101,10 +101,6 @@ interface StyledFullScreenProps {
   $isFullScreen: boolean;
 }
 
-interface StyledStatusProps {
-  $status: 'ok' | 'fail';
-}
-
 interface StyledFadeProps {
   $isFadingOut: boolean;
 }
@@ -121,6 +117,8 @@ interface StepItemProps {
 // ─── [2. CONSTANTS] ─────────────────────────────────────
 
 const PORT = 8080;
+const ARRIVAL_HOUR = 13;
+const ARRIVAL_MINUTE = 12;
 
 const PROCESS_STEPS = [
   { id: 1, label: "바코드 디코딩", icon: <Barcode size={14} /> },
@@ -150,7 +148,7 @@ const generateDummyItems = (): ItemData[] => {
       code: `MEE${Math.floor(60000000 + Math.random() * 90000000)}`,
       name: i % 2 === 0 ? "HEATER, PLATE" : "COOLING FAN_V2",
       type: i === 0 ? "무검사" : (Math.random() > 0.5 ? "정밀검사" : "육안검사"),
-      date: "2026-01-07",
+      date: "2026-01-13",
       vendor: "엘지전자(주)",
       qty: Math.floor(Math.random() * 5000) + 1000,
       quality: "Y",
@@ -158,6 +156,24 @@ const generateDummyItems = (): ItemData[] => {
     });
   }
   return items;
+};
+
+// --- History Dummy Data Generator ---
+const generateHistoryData = () => {
+  const companies = ['에이치물산', '동양철강', '태성산업', '한화물류', '경동택배', '미래해운', '세진공업', '대원강업', '삼보모터스', '대한통운'];
+  return Array.from({ length: 20 }).map((_, i) => {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() - (i * 15 + 5)); 
+    const h = String(date.getHours()).padStart(2, '0');
+    const m = String(date.getMinutes()).padStart(2, '0');
+
+    return {
+      id: i,
+      company: companies[i % companies.length],
+      time: `${h}:${m}`,
+      status: Math.random() > 0.15 ? '정상' : '검수필요'
+    };
+  });
 };
 
 // ─── [4. FIREBASE CONFIG] ───────────────────────────────
@@ -213,53 +229,29 @@ const hideScrollbar = css`
 
 // Keyframes
 const fadeIn = keyframes`
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 `;
 
 const rotateLens = keyframes`
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 `;
 
 const pulseRing = keyframes`
-  0% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 20px rgba(59, 130, 246, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-  }
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  70% { box-shadow: 0 0 0 20px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
 `;
 
 const blinkCursor = keyframes`
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 `;
 
 const glareMove = keyframes`
-  0% {
-    left: -50%;
-  }
-  100% {
-    left: 150%;
-  }
+  0% { left: -50%; }
+  100% { left: 150%; }
 `;
 
 // --- Layout Components ---
@@ -287,7 +279,6 @@ const Column = styled.div`
   overflow: hidden;
 `;
 
-// Common Card
 const Card = styled.div`
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -299,12 +290,10 @@ const Card = styled.div`
   position: relative;
 `;
 
-// Top Card (Vehicle Info)
 const TopCard = styled(Card)`
   flex-shrink: 0;
 `;
 
-// Bottom Card (Stats)
 const FullHeightCard = styled(Card)`
   flex: 1;
   min-height: 0;
@@ -314,7 +303,7 @@ const FullHeightCard = styled(Card)`
 `;
 
 const CardTitle = styled.h2`
-  font-size: 1.1rem;
+  font-size: 1.4rem;
   font-weight: 800;
   color: #0f172a;
   margin: 0;
@@ -326,9 +315,9 @@ const CardTitle = styled.h2`
 
 const VehicleImagePlaceholder = styled.div`
   width: 100%;
-  height: 150px;
+  height: 140px;
   background: #f1f5f9;
-  border-radius: 8px;
+  border-radius: 8px 8px 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -336,157 +325,213 @@ const VehicleImagePlaceholder = styled.div`
   font-weight: 700;
   font-size: 1.2rem;
   border: 1px solid #e2e8f0;
-  margin-bottom: 0;
+  border-bottom: none;
 `;
 
-const VehiclePlateBox = styled.div`
+const PlateContainer = styled.div`
   background: #1e293b;
-  color: white;
-  padding: 12px 20px;
+  border-radius: 0 0 8px 8px;
+  height: 42px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
-  margin-bottom: 16px;
-  flex-shrink: 0;
+  justify-content: space-between;
+  padding-left: 20px;
+  overflow: hidden;
+  margin-bottom: 20px;
 
   .label {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    font-weight: 600;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 500;
   }
-  .value {
-    font-size: 1.5rem;
-    font-weight: 800;
+
+  .plate-badge {
+    height: 100%;
+    background: #3b82f6;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.5px;
   }
 `;
 
 const InfoRow = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   align-items: center;
-  font-size: 0.9rem;
+  font-size: 1rem;
 
   .label {
     color: #64748b;
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    
+    &::before {
+      content: '';
+      display: block;
+      width: 4px;
+      height: 4px;
+      background: #94a3b8;
+      border-radius: 50%;
+    }
   }
   .value {
     color: #0f172a;
-    font-weight: 700;
+    font-weight: 800;
+  }
+  .highlight-box {
+      background: #3b82f6;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-weight: 600;
   }
 `;
 
-const StatScoreRow = styled.div`
-  display: flex;
+const DwellTimeBadge = styled.span<{ $isWarning: boolean }>`
+  font-weight: 800;
+  color: ${props => props.$isWarning ? '#fff' : '#0f172a'};
+  background: ${props => props.$isWarning ? 'rgba(239, 68, 68, 0.9)' : 'transparent'};
+  padding: ${props => props.$isWarning ? '4px 10px' : '0'};
+  border-radius: 4px;
+`;
+
+const CompactScoreRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-bottom: 16px;
   flex-shrink: 0;
 `;
 
-const StatScoreBox = styled.div<{ $type: 'pass' | 'fail' }>`
-  flex: 1;
-  background: ${props => props.$type === 'pass' ? '#10b981' : '#ef4444'};
-  border-radius: 12px;
-  padding: 14px;
-  color: white;
-  text-align: center;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+const CompactScoreBox = styled.div<{ $type: 'pass' | 'fail' }>`
+  background: ${props => props.$type === 'pass' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'};
+  border: 1px solid ${props => props.$type === 'pass' ? '#10b981' : '#ef4444'};
+  border-radius: 8px;
+  padding: 6px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 
   .label {
-    font-size: 0.8rem;
+    font-size: 1rem;
     font-weight: 700;
-    opacity: 0.9;
-    margin-bottom: 4px;
+    color: ${props => props.$type === 'pass' ? '#15803d' : '#b91c1c'};
   }
   .value {
     font-size: 1.4rem;
     font-weight: 900;
+    color: ${props => props.$type === 'pass' ? '#15803d' : '#b91c1c'};
   }
 `;
 
 const ChartContainer = styled.div`
   flex-shrink: 0;
   width: 100%;
-  height: 140px;
-  margin-bottom: 10px;
+  height: 120px;
+  margin-bottom: 12px;
   display: flex;
   flex-direction: column;
 `;
 
 const HistoryListContainer = styled.div`
   flex: 1;
-  overflow-y: auto;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  padding-top: 10px;
+  min-height: 0;
   border-top: 1px solid #f1f5f9;
-
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
-    border-radius: 4px;
-  }
-
-  .title {
-    font-size: 0.8rem;
+  padding-top: 8px;
+  
+  .h-title {
+    font-size: 0.9rem;
     font-weight: 700;
     color: #64748b;
-    margin-bottom: 10px;
+    padding: 0 4px 8px 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     flex-shrink: 0;
-    position: sticky;
-    top: 0;
-    background: white;
+  }
+
+  .h-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 8px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
   }
 `;
 
-const HistoryItemRow = styled.div`
+const HistoryItem = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #f1f5f9;
+  border-radius: 6px;
   margin-bottom: 8px;
-  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 
   .comp {
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: #334155;
   }
-  .time {
-    font-size: 0.8rem;
-    color: #94a3b8;
+  .info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    .status {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        &.ok { background: #dcfce7; color: #166534; }
+        &.bad { background: #fee2e2; color: #991b1b; }
+    }
+    .time {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        font-family: monospace;
+    }
   }
 `;
 
 // --- Right Panel Specifics ---
 
 const VideoCard = styled(motion.div)<StyledFullScreenProps>`
-  background: #1e293b;
+  /* background: #1e293b; */
   border-radius: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   flex: 1;
   position: relative;
-  border: 1px solid #334155;
+  border: 1px solid #e2e8f0;
   
   ${({ $isFullScreen }) => $isFullScreen && css`
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
-    height: 100vh;
+    height: calc(100vh - 64px);
     z-index: 999;
     border-radius: 0;
     margin: 0;
@@ -508,7 +553,7 @@ const VideoHeader = styled.div`
     gap: 12px;
 
     h3 {
-      font-size: 1.1rem;
+      font-size: 1.4rem;
       font-weight: 800;
       color: #1e293b;
       margin: 0;
@@ -534,8 +579,8 @@ const IpInputWrapper = styled.div`
   input {
     border: none;
     background: transparent;
-    font-size: 0.85rem;
-    width: 100px;
+    font-size: 1rem;
+    width: 140px;
     color: #334155;
     outline: none;
     text-align: right;
@@ -557,7 +602,7 @@ const PinkButton = styled.button`
   padding: 8px 16px;
   border-radius: 6px;
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: .9rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -570,19 +615,96 @@ const PinkButton = styled.button`
   }
 `;
 
-const VideoContent = styled.div`
-  flex: 1;
+// [UPDATED] Error State to Fill Height
+const StyledErrorState = styled.div`
+  position: absolute; /* Changed to absolute to force fill */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   background: #0f172a;
-  position: relative;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  color: #475569;
   overflow: hidden;
+  z-index: 10;
 
-  .no-signal {
-    color: #475569;
-    font-weight: 600;
-    font-size: 1.2rem;
+  .grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .content-box {
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 40px;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    max-width: 400px;
+    text-align: center;
+  }
+
+  .icon-wrapper {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -5px;
+      border-radius: 50%;
+      border: 2px solid rgba(239, 68, 68, 0.3);
+      border-top-color: transparent;
+      animation: ${rotateLens} 2s linear infinite;
+    }
+  }
+
+  h2 {
+    color: #ef4444;
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: 1px;
+  }
+  
+  p {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .barcode-layer {
+    position: absolute;
+    /* bottom: 40px; */
+    opacity: 0.3;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255,255,255,0.5);
+    font-family: monospace;
+    font-size: 0.8rem;
   }
 `;
 
@@ -657,17 +779,20 @@ const MainGridInternal = styled.div`
     padding: 16px;
     background: radial-gradient(circle at 10% 10%, rgba(30, 41, 59, 0.8), transparent);
     overflow: hidden;
+    cursor: pointer; /* Clickable */
   }
   .right-pane {
     flex: 1;
     display: flex;
     flex-direction: column;
     background: rgba(0,0,0,0.3);
-    min-width: 280px;
+    min-width: 320px;
     min-height: 0;
+    overflow: hidden;
   }
 `;
 
+// RPA View & Camera
 const RPAProcessView = styled(motion.div)`
   position: absolute;
   inset: 0;
@@ -836,6 +961,17 @@ const CameraFrame = styled(motion.div)`
       box-shadow: 0 5px 15px rgba(239, 68, 68, 0.4);
     }
   }
+  
+  .simulated-barcode-view {
+    width: 100%;
+    height: 100%;
+    background: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    color: #fff;
+  }
 `;
 
 const CompletionPopup = styled(motion.div)`
@@ -895,6 +1031,207 @@ const SlidePanel = styled(motion.div)`
   box-shadow: -20px 0 50px rgba(0,0,0,0.5);
   background: #f8fafc;
 `;
+
+// --- New Right Panel Styled Components ---
+const RightContentContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  gap: 16px;
+  overflow: hidden;
+`;
+
+const TopInfoSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+`;
+
+const InfoInputBox = styled.div`
+  display: flex;
+  background: #0f172a;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  height: 42px;
+  align-items: center;
+
+  .label-area {
+    width: 90px;
+    background: #1e293b;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border-right: 1px solid rgba(255,255,255,0.1);
+    gap: 6px;
+  }
+  .value-area {
+    flex: 1;
+    padding: 0 12px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 1rem;
+    letter-spacing: 0.5px;
+  }
+`;
+
+const SplitRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+`;
+
+const ListSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    font-weight: 800;
+  }
+  .list-scroll-view {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    ${hideScrollbar}
+  }
+`;
+
+const DetailSection = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  
+  .title-area {
+    margin-bottom: 20px;
+    margin-top: 10px;
+    h1 {
+      font-size: 2rem;
+      font-weight: 900;
+      color: #fff;
+      margin: 0;
+      line-height: 1;
+      letter-spacing: -1px;
+    }
+  }
+
+  .grid-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .grid-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+
+    .lbl {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .val {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      text-align: right;
+    }
+    .val.qty {
+      color: #10b981;
+      font-size: 1.2rem;
+      font-weight: 800;
+    }
+  }
+`;
+
+const LogSection = styled.div`
+  flex-shrink: 0;
+  margin-top: 10px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+  padding: 12px;
+  
+  .log-head {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #60a5fa;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+  .log-body {
+    font-family: 'Pretendard', monospace;
+    font-size: 0.75rem;
+    color: #cbd5e1;
+    line-height: 1.5;
+    opacity: 0.9;
+    white-space: pre-wrap;
+  }
+`;
+
+const ItemCard = styled.div<ItemCardProps>`
+  min-width: 110px;
+  height: 90px;
+  background: ${(props) => props.$active ? 'rgba(59, 130, 246, 0.2)' : 'rgba(30, 41, 59, 0.5)'};
+  border: 1px solid ${(props) => props.$active ? '#60a5fa' : 'rgba(255,255,255,0.1)'};
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: ${(props) => props.$active ? '0 0 15px rgba(59, 130, 246, 0.2)' : 'none'};
+
+  &:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.3);
+  }
+
+  .c {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: ${(props) => props.$active ? '#60a5fa' : '#cbd5e1'};
+  }
+  .n {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .q {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    margin-top: auto;
+  }
+`;
+
 
 // --- Loading Screen Styles ---
 
@@ -1387,182 +1724,6 @@ const BoardContainer = styled.div`
   }
 `;
 
-const ProductListArea = styled.div`
-  height: auto;
-  border-bottom: 1px solid rgba(255,255,255,0.15);
-  flex-shrink: 0;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: rgba(255,255,255,0.02);
-
-  .label {
-    font-size: 1rem;
-    font-weight: 800;
-    color: #cbd5e1;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    letter-spacing: 0.5px;
-  }
-  .list-scroller {
-    flex: 1;
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    ${hideScrollbar}
-  }
-`;
-
-const ItemCard = styled.div<ItemCardProps>`
-  min-width: 120px;
-  height: 100%;
-  background: ${(props) => props.$active ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)'};
-  border: 1px solid ${(props) => props.$active ? '#60a5fa' : 'rgba(255,255,255,0.1)'};
-  border-radius: 8px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: ${(props) => props.$active ? '0 0 15px rgba(59, 130, 246, 0.2)' : 'none'};
-
-  &:hover {
-    background: rgba(255,255,255,0.15);
-    border-color: rgba(255,255,255,0.3);
-  }
-
-  .code {
-    font-size: 0.8rem;
-    font-weight: 800;
-    font-family: monospace;
-    letter-spacing: -0.5px;
-    color: ${(props) => props.$active ? '#60a5fa' : '#e2e8f0'};
-  }
-  .name {
-    font-size: 0.7rem;
-    color: #cbd5e1;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .qty {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: ${(props) => props.$active ? '#60a5fa' : '#94a3b8'};
-  }
-`;
-
-const DetailArea = styled.div`
-  flex: 1;
-  padding: 24px;
-  overflow-y: auto;
-  ${hideScrollbar}
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-height: 0;
-
-  .vendor-label {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    font-weight: 600;
-    margin-bottom: 4px;
-  }
-
-  .product-title {
-    font-size: 2rem;
-    font-weight: 900;
-    color: #ffffff;
-    line-height: 1.1;
-    margin-bottom: 12px;
-    letter-spacing: -0.5px;
-  }
-
-  .status-text {
-    font-size: 1rem;
-    font-weight: 700;
-    color: #10b981;
-    margin-bottom: 24px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .grid-info {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-    margin-bottom: 20px;
-  }
-
-  .info-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    padding-bottom: 12px;
-
-    .label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #cbd5e1;
-      font-size: 0.9rem;
-      font-weight: 600;
-    }
-
-    .value {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #ffffff;
-      font-family: 'Pretendard', monospace;
-    }
-
-    .value.highlight {
-      color: #10b981;
-      font-size: 1.2rem;
-      font-weight: 800;
-    }
-
-    .value.inspection {
-      color: #ffffff;
-      text-decoration: underline;
-      text-decoration-color: #ef4444;
-      text-decoration-style: wavy;
-      text-underline-offset: 4px;
-    }
-  }
-
-  .system-log-box {
-    margin-top: auto;
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(59, 130, 246, 0.2);
-    border-radius: 12px;
-    padding: 16px;
-    
-    .log-title {
-      font-size: 0.8rem;
-      font-weight: 800;
-      color: #60a5fa;
-      margin-bottom: 8px;
-      letter-spacing: 0.5px;
-    }
-
-    .log-content {
-      font-family: 'Pretendard', monospace;
-      font-size: 0.75rem;
-      color: #cbd5e1;
-      line-height: 1.6;
-      opacity: 0.9;
-    }
-  }
-`;
-
 // ─── [6. SUB-COMPONENTS] ──────────────────────────────
 
 const MemoizedInventoryItem = React.memo(({ item }: { item: InventoryItem }) => ( <div className="inv-item"> <div className="icon"><Layers size={14}/></div> <div className="info"><div className="c">{item.code}</div><div className="l">{item.loc}</div></div> <div className="q">{item.qty}</div> </div> )); MemoizedInventoryItem.displayName = 'MemoizedInventoryItem';
@@ -1602,7 +1763,10 @@ const RPAStatusView = React.memo(({ step, showComplete, isWearableConnected, str
             {isWearableConnected && streamUrl ? (
                 <iframe src={streamUrl} style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} />
             ) : (
-                <img src="/images/barcode.png" alt="Live Feed" />
+                <div className="simulated-barcode-view">
+                    <ScanBarcode size={64} color="white" style={{opacity:0.8, marginBottom: 8}} />
+                    <span style={{fontSize:'0.8rem', color:'#94a3b8'}}>SIMULATING SCAN...</span>
+                </div>
             )}
             <div className="scan-overlay"> <div className="tag">STANDBY</div> </div>
           </CameraFrame>
@@ -1615,63 +1779,17 @@ RPAStatusView.displayName = 'RPAStatusView';
 
 const LoadingComponent = React.memo(({ loading, isFadingOut, progress, currentLog }: any) => { if (!loading && !isFadingOut) return null; return ( <NewLoadingScreen $isFadingOut={isFadingOut}> <div className="background-grid"></div> <div className="loader-content"> <LensCore> <div className="outer-ring"></div> <div className="inner-ring"></div> <div className="core-lens"><ScanEye size={32} color="white" /></div> </LensCore> <div className="brand-text"> <span className="small">WEARABLE AI SYSTEM</span> <h1 className="large">VISION OS <span className="version">v2.0</span></h1> </div> <TechProgressWrapper> <div className="bar-bg"><motion.div className="bar-fill" style={{ width: `${progress}%` }}><div className="bar-glare"></div></motion.div></div> <div className="progress-info"><span className="log-text"><span className="cursor">&gt;</span> {currentLog}</span><span className="percentage">{Math.floor(progress)}%</span></div> </TechProgressWrapper> </div> </NewLoadingScreen> ); }); LoadingComponent.displayName = 'LoadingComponent';
 
-// Item Detail View (Right Panel Content)
-const ItemDetailView = React.memo(({ activeItem }: { activeItem: ItemData | null }) => (
-  <DetailArea>
-    <AnimatePresence mode="wait">
-      {activeItem && (
-        <motion.div
-          key={activeItem.id}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.2 }}
-          style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
-        >
-          {/* Header Section */}
-          <div className="vendor-label">{activeItem.vendor}</div>
-          <div className="product-title">{activeItem.name}</div>
-          <div className="status-text"><CheckCircle2 size={18} /> PASS (정상)</div>
+const MemoizedItemCard = React.memo(({ item, selectedId, onClick }: { item: ItemData, selectedId: number, onClick: (id: number) => void }) => ( 
+  <ItemCard $active={selectedId === item.id} onClick={() => onClick(item.id)} > 
+    <div className="c">{item.code}</div> 
+    <div className="n">{item.name}</div> 
+    <div className="q">{item.qty.toLocaleString()} EA</div> 
+  </ItemCard> 
+)); 
+MemoizedItemCard.displayName = 'MemoizedItemCard';
 
-          {/* Grid Information */}
-          <div className="grid-info">
-            <div className="info-row">
-              <div className="label"><LuBox size={16} /> 품목코드</div>
-              <div className="value">{activeItem.code}</div>
-            </div>
-            <div className="info-row">
-              <div className="label"><LuLayers size={16} /> 프로젝트</div>
-              <div className="value">{activeItem.project}</div>
-            </div>
-            <div className="info-row">
-              <div className="label"><LuClipboardCheck size={16} /> 입고수량</div>
-              <div className="value highlight">{activeItem.qty?.toLocaleString()} <span style={{fontSize: '0.8em', color: '#94a3b8'}}>EA</span></div>
-            </div>
-            <div className="info-row">
-              <div className="label"><LuFileText size={16} /> 검사구분명</div>
-              <div className="value inspection">무검사</div>
-            </div>
-          </div>
+// ─── [7. AIDashboardModal (REFACTORED RIGHT PANE)] ──────────────────────
 
-          {/* System Log Box */}
-          <div className="system-log-box">
-            <div className="log-title">SYSTEM LOG</div>
-            <div className="log-content">
-              [INFO] ERP 데이터 대조 완료.<br/>
-              [INFO] PO 번호 매칭 성공 (PO-2026-01-088)<br/>
-              [WARN] 창고 관리 시스템(WMS) 적재 위치 최적화 계산 중...
-            </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  </DetailArea>
-));
-ItemDetailView.displayName = 'ItemDetailView';
-
-const MemoizedItemCard = React.memo(({ item, selectedId, onClick }: { item: ItemData, selectedId: number, onClick: (id: number) => void }) => ( <ItemCard $active={selectedId === item.id} onClick={() => onClick(item.id)} > <div className="code">{item.code}</div> <div className="name">{item.name}</div> <div className="qty">{item.qty.toLocaleString()} EA</div> </ItemCard> )); MemoizedItemCard.displayName = 'MemoizedItemCard';
-
-// AIDashboardModal
 function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () => void, streamUrl?: string | null, streamStatus: string }) {
   const [viewMode, setViewMode] = useState<'scan' | 'rpa'>('scan');
   const [items, setItems] = useState<ItemData[]>([]);
@@ -1679,14 +1797,17 @@ function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () =>
   const [rpaStep, setRpaStep] = useState(0);
   const [showComplete, setShowComplete] = useState(false);
   
+  // [수정] 모달 내에서는 streamStatus가 ok일때만 iframe을 보여주고
+  // 그렇지 않으면(error/checking) 가상 바코드 화면을 보여주도록 처리
   const isWearableConnected = streamStatus === 'ok' && !!streamUrl;
 
   useEffect(() => {
     const data = generateDummyItems();
     setItems(data);
     if(data.length > 0) setSelectedId(data[0].id);
-    const timer = setTimeout(() => { setViewMode('rpa'); startRPAProcess(); }, 2500);
-    return () => clearTimeout(timer);
+    // Remove auto-start timer
+    // const timer = setTimeout(() => { setViewMode('rpa'); startRPAProcess(); }, 2500);
+    // return () => clearTimeout(timer);
   }, []);
 
   const startRPAProcess = useCallback(() => {
@@ -1701,13 +1822,136 @@ function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () =>
   }, []);
 
   const handleItemClick = useCallback((id: number) => { setSelectedId(id); }, []);
+  
+  // [NEW] Handle Scan Area Click to proceed
+  const handleScanClick = useCallback(() => {
+      if(viewMode === 'scan') {
+          setViewMode('rpa');
+          startRPAProcess();
+      }
+  }, [viewMode, startRPAProcess]);
+
   const activeItem = useMemo(() => items.find(i => i.id === selectedId) || (items.length > 0 ? items[0] : null), [items, selectedId]);
 
-  return ( <OverlayContainer initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} > <HeaderBar> <div className="brand"><ScanBarcode color="#60a5fa" strokeWidth={3}/> VISION AI SCANNER</div> <button className="close-btn" onClick={onClose}><LuX size={20} strokeWidth={3}/></button> </HeaderBar> <MainGridInternal> <AnimatePresence> {showComplete && ( <CompletionPopup initial={{ opacity: 0, scale: 0.5, x: "-50%", y: "-50%" }} animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }} exit={{ opacity: 0, scale: 0.8, x: "-50%", y: "-50%" }} transition={{ type: "spring", bounce: 0.5 }} > <div className="icon-check"><CheckCircle2 size={48} strokeWidth={4} /></div> <div className="text">RPA PROCESSING COMPLETE</div> </CompletionPopup> )} </AnimatePresence> <div className="left-pane"> <LayoutGroup> 
-    {viewMode === 'rpa' && <RPAStatusView step={rpaStep} showComplete={showComplete} isWearableConnected={isWearableConnected} streamUrl={streamUrl} />} 
-    {viewMode === 'scan' && ( <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 20 }}> <CameraFrame> 
-        {isWearableConnected ? <iframe src={streamUrl || ''} style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} /> : <img src="/images/barcode.png" alt="Live Feed" />}
-        <motion.div className="scan-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} > <div className="guide"> <motion.div className="line" animate={{ top: ['10%', '90%', '10%'] }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} /> </div> <div className="tag">SCANNING...</div> </motion.div> </CameraFrame> </motion.div> )} </LayoutGroup> </div> <div className="right-pane"> <ProductListArea> <div className="label"><ListTodo size={14}/> 입고 예정 리스트 (Live)</div> <div className="list-scroller"> {items.map(item => ( <MemoizedItemCard key={item.id} item={item} selectedId={selectedId} onClick={handleItemClick} /> ))} </div> </ProductListArea> <ItemDetailView activeItem={activeItem} /> </div> </MainGridInternal> </OverlayContainer> );
+  return ( 
+    <OverlayContainer initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} > 
+      <HeaderBar> 
+        <div className="brand"><ScanBarcode color="#60a5fa" strokeWidth={3}/> VISION AI SCANNER</div> 
+        <button className="close-btn" onClick={onClose}><LuX size={20} strokeWidth={3}/></button> 
+      </HeaderBar> 
+      <MainGridInternal> 
+        <AnimatePresence> 
+          {showComplete && ( 
+            <CompletionPopup initial={{ opacity: 0, scale: 0.5, x: "-50%", y: "-50%" }} animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }} exit={{ opacity: 0, scale: 0.8, x: "-50%", y: "-50%" }} transition={{ type: "spring", bounce: 0.5 }} > 
+              <div className="icon-check"><CheckCircle2 size={48} strokeWidth={4} /></div> 
+              <div className="text">RPA PROCESSING COMPLETE</div> 
+            </CompletionPopup> 
+          )} 
+        </AnimatePresence> 
+        
+        {/* Left Pane (Camera/RPA) - Now Clickable */}
+        <div className="left-pane" onClick={handleScanClick}> 
+          <LayoutGroup> 
+            {viewMode === 'rpa' && <RPAStatusView step={rpaStep} showComplete={showComplete} isWearableConnected={isWearableConnected} streamUrl={streamUrl} />} 
+            {viewMode === 'scan' && ( 
+              <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 20 }}> 
+                <CameraFrame> 
+                  {isWearableConnected ? <iframe src={streamUrl || ''} style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} /> : (
+                      // [수정] 연결 안된 경우(이미지/가상 스캔 모션)
+                      <div className="simulated-barcode-view">
+                          {/* 만약 이미지가 있다면 img 태그 사용, 없다면 아이콘 대체 */}
+                          <img src="/images/barcode.png" alt="Scanning Target" onError={(e) => e.currentTarget.style.display='none'} style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.6 }} />
+                          {/* 이미지 로드 실패 시 백업 아이콘은 위 div의 배경색과 함께 처리됨 */}
+                      </div>
+                  )}
+                  <motion.div className="scan-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} > <div className="guide"> <motion.div className="line" animate={{ top: ['10%', '90%', '10%'] }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} /> </div> <div className="tag">SCANNING...</div> </motion.div> 
+                </CameraFrame> 
+              </motion.div> 
+            )} 
+          </LayoutGroup> 
+        </div> 
+        
+        {/* Right Pane (Detail Info) */}
+        <div className="right-pane"> 
+          <RightContentContainer>
+            <TopInfoSection>
+              <InfoInputBox>
+                <div className="label-area"><Calendar size={13}/> 송장번호</div>
+                <div className="value-area">CB0005732017</div>
+              </InfoInputBox>
+              <SplitRow>
+                <InfoInputBox>
+                  <div className="label-area"><Calendar size={13}/> 입고일자</div>
+                  <div className="value-area">2026-01-13</div>
+                </InfoInputBox>
+                <InfoInputBox>
+                  <div className="label-area"><Truck size={13}/> 거래처명</div>
+                  <div className="value-area">엘지전자(주)</div>
+                </InfoInputBox>
+              </SplitRow>
+            </TopInfoSection>
+
+            <ListSection>
+              <div className="header"><ListTodo size={14}/> 입고 예정 리스트 (Live)</div>
+              <div className="list-scroll-view">
+                {items.map(item => (
+                  <MemoizedItemCard key={item.id} item={item} selectedId={selectedId} onClick={handleItemClick} />
+                ))}
+              </div>
+            </ListSection>
+
+            <DetailSection>
+               <AnimatePresence mode="wait">
+                 {activeItem && (
+                   <motion.div
+                    key={activeItem.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ display: 'flex', flexDirection: 'column', flex: 1 }}
+                   >
+                     <div className="title-area">
+                        <h1>{activeItem.name}</h1>
+                     </div>
+
+                     <div className="grid-table">
+                        <div className="grid-row">
+                          <div className="lbl"><Box size={15}/> 품목코드</div>
+                          <div className="val">{activeItem.code}</div>
+                        </div>
+                        <div className="grid-row">
+                          <div className="lbl"><Layers size={15}/> 프로젝트</div>
+                          <div className="val">{activeItem.project}</div>
+                        </div>
+                        <div className="grid-row">
+                          <div className="lbl"><LuClipboardCheck size={15}/> 입고수량</div>
+                          <div className="val qty">{activeItem.qty.toLocaleString()} <span style={{fontSize: '0.8em', fontWeight: 600, color: '#64748b'}}>EA</span></div>
+                        </div>
+                        <div className="grid-row">
+                          <div className="lbl"><LuFileText size={15}/> 검사구분명</div>
+                          <div className="val">{activeItem.type}</div>
+                        </div>
+                     </div>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
+            </DetailSection>
+
+            <LogSection>
+               <div className="log-head">SYSTEM LOG</div>
+               <div className="log-body">
+[INFO] ERP 데이터 대조 완료.<br/>
+[INFO] PO 번호 매칭 성공 (PO-2026-01-088)<br/>
+[WARN] 창고 관리 시스템(WMS) 적재 위치 최적화 계산 중...
+               </div>
+            </LogSection>
+
+          </RightContentContainer>
+        </div> 
+      </MainGridInternal> 
+    </OverlayContainer> 
+  );
 }
 
 // ─── [ROOT COMPONENT] ──────────────────────────────────────
@@ -1727,6 +1971,69 @@ export default function SmartFactoryDashboard() {
   
   const [isFullScreen, setIsFullScreen] = useState(false);
   const previousDataRef = useRef<string>(""); 
+  
+  // Real-time Dwell Logic
+  const [now, setNow] = useState<Date>(new Date());
+  const [dwellString, setDwellString] = useState("0분");
+  const [isLongDwell, setIsLongDwell] = useState(false);
+  
+  // Arrival Time State (Initialized once on mount)
+  const [arrivalTime] = useState(() => {
+    const now = new Date();
+    // 30% chance for long dwell (> 1 hour), 70% chance for normal dwell
+    const isLong = Math.random() < 0.3; 
+    const minutesAgo = isLong 
+        ? Math.floor(Math.random() * 120) + 65 // 65 to 185 mins ago
+        : Math.floor(Math.random() * 50) + 5;  // 5 to 55 mins ago
+        
+    return new Date(now.getTime() - minutesAgo * 60000);
+  });
+
+  const arrivalTimeString = useMemo(() => {
+    const h = String(arrivalTime.getHours()).padStart(2, '0');
+    const m = String(arrivalTime.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }, [arrivalTime]);
+
+  // History Data
+  const [historyItems, setHistoryItems] = useState<{id:number, company:string, time:string, status:string}[]>([]);
+
+  useEffect(() => {
+      setHistoryItems(generateHistoryData());
+  }, []);
+
+  // Update current time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Calculate dwell time
+  useEffect(() => {
+    const diffMs = now.getTime() - arrivalTime.getTime();
+    
+    // 만약 현재 시간이 도착시간 이전이면 0분으로 표시 (방어코드)
+    if (diffMs < 0) {
+      setDwellString("0분");
+      setIsLongDwell(false);
+    } else {
+      const diffMins = Math.floor(diffMs / 60000);
+      const hours = Math.floor(diffMins / 60);
+      const minutes = diffMins % 60;
+      
+      // 1시간 초과 여부 체크
+      setIsLongDwell(diffMins >= 60);
+      
+      if (hours > 0) {
+        setDwellString(`${hours}시간 ${minutes}분`);
+      } else {
+        setDwellString(`${minutes}분`);
+      }
+    }
+  }, [now, arrivalTime]);
+
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1767,26 +2074,30 @@ export default function SmartFactoryDashboard() {
     const unsubscribe = onValue(logsRef, (snapshot) => {
       const currentString = JSON.stringify(snapshot.val() || {});
       if (initialLoad) {
-        previousDataRef.current = currentString;
         initialLoad = false;
         return;
       }
-      if (currentString !== previousDataRef.current) {
-        setShowDashboard(true);
-        previousDataRef.current = currentString;
-      }
+      // DB change detection -> Open Modal
+      setShowDashboard(true);
     });
     return () => unsubscribe();
   }, []);
 
-  // [수정] IP 입력 시 자동 연결 로직 추가
+  // [수정] IP 입력 시 5초 타임아웃 연결 로직
   useEffect(() => {
     if (streamHost) {
       setStreamStatus("checking");
-      // 즉시 연결 시도 (실제 환경에서는 연결 확인 로직 필요)
+      
       const timer = setTimeout(() => {
-        setStreamStatus("ok");
-      }, 500);
+         // 5초 뒤에도 여전히 checking이면 error로 간주
+         setStreamStatus(prev => prev === "checking" ? "error" : prev); 
+      }, 5000); 
+
+      // (데모용) 실제로는 여기서 Ping 등을 체크하겠지만, 
+      // 현재는 5초 뒤 에러 화면을 보기 위해 성공 로직을 제거하거나 주석 처리함.
+      // 만약 '성공' 케이스를 보고 싶으면 아래 줄 주석 해제
+      // setTimeout(() => setStreamStatus("ok"), 2000);
+
       return () => clearTimeout(timer);
     }
   }, [streamHost]);
@@ -1796,6 +2107,10 @@ export default function SmartFactoryDashboard() {
   const closeDashboard = useCallback(() => { setShowDashboard(false); }, []);
   const closeMapBoard = useCallback(() => { setShowMapBoard(false); }, []);
   const toggleFullScreen = useCallback(() => { setIsFullScreen(prev => !prev); }, []);
+  const handleRetry = useCallback(() => { 
+      setStreamStatus("checking"); 
+      setTimeout(() => setStreamStatus("error"), 2000); 
+  }, []);
 
   const chartData = useMemo(() => [
       { name: 'A사', 합격: 85, 불량: 15 }, 
@@ -1812,7 +2127,7 @@ export default function SmartFactoryDashboard() {
 
       {!loading && (
         <DashboardContainer $show={!loading}>
-            {/* Left Column */}
+            {/* Left Column (Updated to match Image) */}
             <Column>
                 {/* Vehicle Info Card */}
                 <TopCard>
@@ -1820,43 +2135,47 @@ export default function SmartFactoryDashboard() {
                     <VehicleImagePlaceholder>
                         차량사진 CCTV
                     </VehicleImagePlaceholder>
-                    <VehiclePlateBox>
+                    
+                    <PlateContainer>
                         <span className="label">차량 번호</span>
-                        <span className="value">12우 1545</span>
-                    </VehiclePlateBox>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div className="plate-badge">
+                            89소 7383
+                        </div>
+                    </PlateContainer>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', padding: '0 8px' }}>
                         <InfoRow>
-                            <span className="label">• 공급업체</span>
-                            <span className="value">(주)퓨처로지스</span>
+                            <span className="label">공급업체</span>
+                            <span className="value highlight-box">세진공업 (주)</span>
                         </InfoRow>
                         <InfoRow>
-                            <span className="label">• 도착시간</span>
-                            <span className="value">13:12</span>
+                            <span className="label">도착시간</span>
+                            <span className="value">{arrivalTimeString}</span>
                         </InfoRow>
                         <InfoRow>
-                            <span className="label">• 출차예정</span>
-                            <span className="value">13:12</span>
-                        </InfoRow>
-                        <InfoRow>
-                            <span className="label">• 운전자</span>
-                            <span className="value">김철수</span>
+                            <span className="label">체류시간</span>
+                            {/* Dwell Time Logic Applied Here */}
+                            <DwellTimeBadge $isWarning={isLongDwell}>
+                                {dwellString}
+                            </DwellTimeBadge>
                         </InfoRow>
                     </div>
                 </TopCard>
 
-                {/* Stats Card */}
+                {/* Stats Card & Recent History */}
                 <FullHeightCard>
                     <CardTitle>통계 및 이력</CardTitle>
-                    <StatScoreRow>
-                        <StatScoreBox $type="pass">
-                            <div className="label">합격률</div>
-                            <div className="value">98.5%</div>
-                        </StatScoreBox>
-                        <StatScoreBox $type="fail">
-                            <div className="label">불량률</div>
-                            <div className="value">1.5%</div>
-                        </StatScoreBox>
-                    </StatScoreRow>
+                    {/* [UPDATED] Compact Score Board */}
+                    <CompactScoreRow>
+                        <CompactScoreBox $type="pass">
+                            <span className="label">합격률</span>
+                            <span className="value">98.5%</span>
+                        </CompactScoreBox>
+                        <CompactScoreBox $type="fail">
+                            <span className="label">불량률</span>
+                            <span className="value">1.5%</span>
+                        </CompactScoreBox>
+                    </CompactScoreRow>
                     
                     <ChartContainer>
                         <ResponsiveContainer width="100%" height="100%">
@@ -1870,37 +2189,25 @@ export default function SmartFactoryDashboard() {
                         </ResponsiveContainer>
                     </ChartContainer>
 
+                    {/* New Recent History Section (Scrollable inside the card) */}
                     <HistoryListContainer>
-                        <div className="title">최근이력</div>
-                        <HistoryItemRow>
-                            <span className="comp">에이치물산</span>
-                            <span className="time">11:00</span>
-                        </HistoryItemRow>
-                        <HistoryItemRow>
-                            <span className="comp">동양철강</span>
-                            <span className="time">10:45</span>
-                        </HistoryItemRow>
-                        <HistoryItemRow>
-                            <span className="comp">태성산업</span>
-                            <span className="time">10:20</span>
-                        </HistoryItemRow>
-                        <HistoryItemRow>
-                            <span className="comp">한화물류</span>
-                            <span className="time">10:10</span>
-                        </HistoryItemRow>
-                        <HistoryItemRow>
-                            <span className="comp">경동택배</span>
-                            <span className="time">09:50</span>
-                        </HistoryItemRow>
-                        <HistoryItemRow>
-                            <span className="comp">미래해운</span>
-                            <span className="time">09:30</span>
-                        </HistoryItemRow>
+                        <div className="h-title"><History size={16} />최근 이력</div>
+                        <div className="h-scroll-area">
+                            {historyItems.map((h, i) => (
+                                <HistoryItem key={i}>
+                                    <span className="comp">{h.company}</span>
+                                    <div className="info">
+                                        <span className={`status ${h.status === '정상' ? 'ok' : 'bad'}`}>{h.status}</span>
+                                        <span className="time">{h.time}</span>
+                                    </div>
+                                </HistoryItem>
+                            ))}
+                        </div>
                     </HistoryListContainer>
                 </FullHeightCard>
             </Column>
 
-            {/* Right Column (Video Feed) */}
+            {/* Right Column (Video Feed) - Unchanged */}
             <Column>
                 <VideoCard 
                     layout
@@ -1930,19 +2237,53 @@ export default function SmartFactoryDashboard() {
                         </div>
                     </VideoHeader>
 
-                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-                        {/* Stream or Placeholder */}
-                            <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 1 }}>
+                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
+                         {/* [UPDATED] Interactive Error/Standby UI 
+                             If streamStatus is 'ok', show iframe. 
+                             Otherwise show styled error/standby screen.
+                         */}
+                         <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 1 }}>
                             {streamStatus === "ok" && streamUrl ? (
                                 <iframe 
                                     src={streamUrl} 
                                     style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} 
                                     title="Stream"
+                                    onError={() => setStreamStatus("error")} 
                                 />
                             ) : (
-                                <VideoContent>
-                                    <div className="no-signal">No Signal</div>
-                                </VideoContent>
+                                <StyledErrorState>
+                                    <div className="grid-bg"></div>
+                                    <div className="content-box">
+                                        <div className="icon-wrapper">
+                                            {streamStatus === 'checking' ? (
+                                                <RefreshCw className="spin" size={32} color="#ef4444" />
+                                            ) : (
+                                                <Signal size={32} color="#ef4444" />
+                                            )}
+                                        </div>
+                                        {streamStatus === 'checking' ? (
+                                            <>
+                                                <h2>CONNECTING...</h2>
+                                                <p>Establishing secure connection to {streamHost}...</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <h2>SIGNAL LOST</h2>
+                                                <p>Connection to Camera ({streamHost}) is unstable or unreachable.</p>
+                                                <div style={{marginTop: 10, display: 'flex', gap: 10, justifyContent: 'center'}}>
+                                                    <PinkButton onClick={handleRetry} style={{background: '#334155'}}>
+                                                        <RefreshCw size={14} style={{marginRight: 6}}/> RETRY
+                                                    </PinkButton>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                    {/* [FIXED] Barcode Overlay always visible on error/idle */}
+                                    <div className="barcode-layer">
+                                         <ScanBarcode size={120} color="white" style={{opacity: 0.8}} />
+                                         <span>WAITING FOR SCANNER SIGNAL...</span>
+                                    </div>
+                                </StyledErrorState>
                             )}
                         </motion.div>
 

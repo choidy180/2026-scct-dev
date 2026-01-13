@@ -1,45 +1,76 @@
 'use client';
 
 import React from 'react';
-import styled, { createGlobalStyle } from 'styled-components';
-import { FiCpu, FiAlertCircle, FiCheckCircle, FiMoreHorizontal, FiSend, FiVideo, FiActivity } from 'react-icons/fi';
+import styled, { createGlobalStyle, css } from 'styled-components';
+import { 
+  FiCpu, FiAlertCircle, FiCheckCircle, FiMoreHorizontal, 
+  FiSend, FiVideo, FiActivity, FiBox, FiTruck, FiSettings, FiMenu 
+} from 'react-icons/fi';
 
-// --- Global Style for Font (Pretendard) ---
-// 실제 프로젝트에서는 layout.tsx나 globals.css에 import 하는 것이 좋습니다.
+// --- 1. Global Style (Pretendard & Reset) ---
 const GlobalStyle = createGlobalStyle`
   @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
   
-  body {
+  * {
+    box-sizing: border-box;
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #F1F5F9; /* 배경: 차분한 그레이 */
+    color: #1E293B;
+    overflow: hidden; /* 전체 페이지 스크롤 방지 */
+  }
+
+  /* 스크롤바 디자인 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 3px;
   }
 `;
 
-// --- Type Definitions ---
+// --- 2. Theme Definitions ---
+const theme = {
+  primary: '#10B981', // Emerald Green
+  primaryGradient: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+  error: '#EF4444',
+  warning: '#F59E0B',
+  bg: '#F8FAFC',
+  cardBg: '#FFFFFF',
+  textMain: '#0F172A',
+  textSub: '#64748B',
+  radius: '20px',
+  shadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
+};
 
-interface StatusStyleProps {
-  $isError?: boolean;
-  $isWarning?: boolean;
+// --- Types ---
+interface StatusProps {
+  $level?: 'normal' | 'warning' | 'error';
 }
 
-interface MessageStyleProps {
+interface MessageProps {
   $isUser?: boolean;
 }
 
-interface ButtonStyleProps {
-  $primary?: boolean;
-  $danger?: boolean;
-}
-
-// --- Layout & Container ---
+// --- Layout Components ---
 
 const DashboardContainer = styled.div`
   width: 100%;
-  height: calc(100vh - 64px); /* 요청하신 높이 적용 */
-  background-color: #F8FAFC; /* 배경을 조금 더 차분한 쿨톤 화이트로 변경 */
-  padding: 24px;
-  box-sizing: border-box;
-  overflow: hidden; /* 내부 스크롤만 허용하고 전체 스크롤 방지 */
-  color: #111827; /* 기본 텍스트를 진한 검정 계열로 변경 (가독성 UP) */
+  height: calc(100vh - 64px); /* 요청하신 높이 고정 */
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  background-color: ${theme.bg};
+  overflow: hidden; /* 내부 요소가 넘쳐도 전체 스크롤 안 생기게 */
 `;
 
 const Header = styled.header`
@@ -47,402 +78,422 @@ const Header = styled.header`
   justify-content: space-between;
   align-items: center;
   height: 60px;
-  margin-bottom: 20px;
   flex-shrink: 0;
+  margin-bottom: 20px;
 `;
 
-const TitleSection = styled.div`
+const TitleGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+`;
+
+const SubTitle = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${theme.textSub};
+  margin-bottom: 2px;
+  letter-spacing: -0.2px;
 `;
 
 const MainTitle = styled.h1`
-  font-size: 26px;
-  font-weight: 800; /* 폰트 두께 강화 */
-  color: #111827;
-  letter-spacing: -0.5px;
+  font-size: 24px;
+  font-weight: 800;
+  color: ${theme.textMain};
   margin: 0;
 `;
 
-const SubTitle = styled.p`
-  font-size: 14px;
-  color: #6B7280; /* 너무 연하지 않은 그레이로 변경 */
-  font-weight: 500;
-  margin: 0;
-`;
-
-const AlertBadge = styled.div`
-  background-color: #FEF3C7; /* 따뜻한 노란색 배경 */
-  color: #92400E; /* 진한 갈색 텍스트로 가독성 확보 */
-  padding: 10px 24px;
-  border-radius: 9999px;
-  font-weight: 700;
-  font-size: 14px;
+const HeaderActions = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
-  border: 1px solid #FCD34D;
+  gap: 12px;
+`;
+
+const AlertBanner = styled.div`
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #DC2626;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: pulse 2s infinite;
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
+    70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  }
 `;
 
 const MainGrid = styled.div`
   display: grid;
-  grid-template-columns: 1.4fr 1.1fr 1fr; /* CCTV 영역을 조금 더 확보 */
-  gap: 24px;
-  height: calc(100% - 80px); /* 헤더 제외한 높이 꽉 채우기 */
+  grid-template-columns: 1.3fr 1.1fr 1fr; /* 비율 조정: CCTV 넓게, 채팅 좁게 */
+  gap: 20px;
+  flex: 1; /* 남은 높이 모두 차지 */
+  min-height: 0; /* Grid 자식 스크롤 처리를 위한 필수 속성 */
 `;
 
-// --- Common Card Component ---
-
+// --- Common Card ---
 const Card = styled.div`
-  background-color: #FFFFFF;
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.03); /* 그림자를 은은하게 줄임 */
-  border: 1px solid #E5E7EB; /* 경계선 추가로 가독성 확보 */
+  background-color: ${theme.cardBg};
+  border-radius: ${theme.radius};
+  box-shadow: ${theme.shadow};
+  border: 1px solid #E2E8F0;
   display: flex;
   flex-direction: column;
-  position: relative;
   overflow: hidden;
+  height: 100%; /* 부모 그리드 높이 꽉 채움 */
 `;
 
 const CardHeader = styled.div`
+  padding: 20px 24px 0 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   flex-shrink: 0;
 `;
 
-const CardTitle = styled.h3`
-  font-size: 18px;
+const CardTitle = styled.h2`
+  font-size: 17px;
   font-weight: 700;
-  color: #111827;
+  color: ${theme.textMain};
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0;
 `;
 
-// --- Left Column: CCTV ---
-
+// --- Column 1: CCTV (Visuals) ---
 const VideoColumn = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
   height: 100%;
+  min-height: 0;
 `;
 
-const VideoCard = styled(Card)`
+const VideoWrapper = styled(Card)`
   flex: 1;
-  padding: 0;
+  position: relative;
+  background: #000;
   border: none;
-  background-color: #000; /* 영상 로딩 전 검은 배경 */
 `;
 
-const VideoHeaderOverlay = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
+const VideoImage = styled.img`
   width: 100%;
-  padding: 16px 20px;
-  background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 100%);
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.85;
+  transition: opacity 0.3s;
+  
+  ${VideoWrapper}:hover & {
+    opacity: 1;
+  }
+`;
+
+const OverlayTop = styled.div`
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
   display: flex;
   justify-content: space-between;
+  align-items: center;
   z-index: 10;
 `;
 
-const StreamTag = styled.div`
-  background-color: rgba(255, 255, 255, 0.95);
+const CamBadge = styled.div`
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
+  color: white;
   padding: 6px 12px;
   border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #111827;
+  font-size: 12px;
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255,255,255,0.1);
 `;
 
-const VideoPlaceholder = styled.div`
-  width: 100%;
-  height: 100%;
-  background-color: #E5E7EB;
+const StatusOverlay = styled.div`
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  background: #EF4444; /* Recording Red */
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
   display: flex;
-  justify-content: center;
   align-items: center;
-  position: relative;
-  overflow: hidden;
+  gap: 4px;
 `;
 
-// 시각적 가이드라인 (Overlay)
 const DetectionBox = styled.div`
   position: absolute;
   top: 35%;
-  left: 25%;
-  width: 140px;
-  height: 140px;
-  border: 2px solid #10B981; /* 선명한 그린 */
-  background-color: rgba(16, 185, 129, 0.1);
-  border-radius: 8px;
-  
+  left: 45%;
+  width: 100px;
+  height: 100px;
+  border: 2px solid #10B981;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 4px;
+
   &::after {
-    content: 'Object ID: 8821';
+    content: 'ID:8821 (정상)';
     position: absolute;
-    top: -24px;
-    left: 0;
-    background-color: #10B981;
+    top: -22px;
+    left: -2px;
+    background: #10B981;
     color: white;
     font-size: 11px;
-    font-weight: 700;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: 2px;
+    white-space: nowrap;
   }
 `;
 
-// --- Middle Column: Status Grid ---
-
-const StatusColumn = styled(Card)`
-  height: 100%;
+// --- Column 2: Status (Scrollable) ---
+const ScrollContent = styled.div`
+  flex: 1;
   overflow-y: auto;
-  
-  /* 스크롤바 숨김 (깔끔하게) */
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  padding: 0 24px 24px 24px;
 `;
 
-const SectionTitle = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  color: #6B7280;
+const SectionLabel = styled.div`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${theme.textSub};
   margin-top: 8px;
   margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-`;
-
-const StatusGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 32px;
-`;
-
-const StatusItem = styled.div<StatusStyleProps>`
-  background-color: ${(props) => (props.$isError ? '#FEF2F2' : props.$isWarning ? '#FFFBEB' : '#F3F4F6')};
-  border: 1px solid ${(props) => (props.$isError ? '#FECACA' : props.$isWarning ? '#FDE68A' : 'transparent')};
-  padding: 16px;
-  border-radius: 16px;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 12px;
-  transition: transform 0.2s;
-  
-  &:hover {
-    transform: translateY(-2px);
+  align-items: center;
+  gap: 6px;
+
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #F1F5F9;
   }
 `;
 
-const StatusHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  align-items: center;
-`;
-
-const SlotLabel = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: #6B7280;
-`;
-
-const StatusValue = styled.span<StatusStyleProps>`
-  font-size: 17px;
-  font-weight: 800; /* 숫자 강조 */
-  color: ${(props) => (props.$isError ? '#DC2626' : props.$isWarning ? '#D97706' : '#111827')};
-`;
-
-const IconWrapper = styled.div<StatusStyleProps>`
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background-color: ${(props) => (props.$isError ? '#FEE2E2' : props.$isWarning ? '#FEF3C7' : '#FFFFFF')};
-  color: ${(props) => (props.$isError ? '#DC2626' : props.$isWarning ? '#D97706' : '#10B981')};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-`;
-
-// --- Right Column: Chat ---
-
-const ChatColumn = styled(Card)`
-  height: 100%;
+const StatusList = styled.div`
   display: flex;
   flex-direction: column;
-  padding: 0; /* 채팅창은 내부 패딩을 다르게 가져감 */
-`;
-
-const ChatHeaderContainer = styled.div`
-  padding: 24px 24px 16px 24px;
-  border-bottom: 1px solid #F3F4F6;
-  display: flex;
-  align-items: center;
   gap: 12px;
 `;
 
-const ChatAvatar = styled.div`
-  width: 44px;
-  height: 44px;
+const StatusItem = styled.div<StatusProps>`
+  background: ${(props) => 
+    props.$level === 'error' ? '#FEF2F2' : 
+    props.$level === 'warning' ? '#FFFBEB' : 
+    '#F8FAFC'};
+  border: 1px solid ${(props) => 
+    props.$level === 'error' ? '#FECACA' : 
+    props.$level === 'warning' ? '#FDE68A' : 
+    'transparent'};
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: transform 0.2s;
+
+  &:hover {
+    transform: translateX(4px);
+  }
+`;
+
+const ItemInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+const ItemName = styled.span`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${theme.textMain};
+`;
+
+const ItemSub = styled.span`
+  font-size: 12px;
+  color: ${theme.textSub};
+`;
+
+const ItemValueGroup = styled.div`
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 80px;
+`;
+
+const ValueText = styled.span<StatusProps>`
+  font-size: 16px;
+  font-weight: 800;
+  color: ${(props) => 
+    props.$level === 'error' ? theme.error : 
+    props.$level === 'warning' ? theme.warning : 
+    theme.primary};
+`;
+
+const ProgressBar = styled.div<StatusProps>`
+  width: 100%;
+  height: 6px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 3px;
+  overflow: hidden;
+  
+  div {
+    height: 100%;
+    background: ${(props) => 
+      props.$level === 'error' ? theme.error : 
+      props.$level === 'warning' ? theme.warning : 
+      theme.primary};
+  }
+`;
+
+// --- Column 3: Chat ---
+const ChatContainer = styled(Card)`
+  padding: 0; /* 내부 패딩 제거 */
+`;
+
+const ChatHeaderArea = styled.div`
+  padding: 20px;
+  border-bottom: 1px solid #F1F5F9;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+`;
+
+const BotIcon = styled.div`
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  background: ${theme.primaryGradient};
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
 `;
 
-const ChatBody = styled.div`
+const ChatMessages = styled.div`
   flex: 1;
-  overflow-y: auto;
+  background: #F8FAFC;
   padding: 20px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background-color: #FAFAFA; /* 채팅 영역 배경을 아주 연한 회색으로 */
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background-color: #E5E7EB;
-    border-radius: 3px;
-  }
 `;
 
-const MessageBubble = styled.div<MessageStyleProps>`
-  max-width: 90%;
-  padding: 14px 18px;
-  border-radius: 18px;
-  font-size: 14px;
-  line-height: 1.6; /* 줄간격 넉넉하게 */
+const Bubble = styled.div<MessageProps>`
+  max-width: 85%;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-radius: 16px;
   position: relative;
   
-  /* User: Blue / AI: White with border */
-  align-self: ${(props) => (props.$isUser ? 'flex-end' : 'flex-start')};
-  background-color: ${(props) => (props.$isUser ? '#2563EB' : '#FFFFFF')};
-  color: ${(props) => (props.$isUser ? '#FFFFFF' : '#374151')};
-  border: ${(props) => (props.$isUser ? 'none' : '1px solid #E5E7EB')};
+  align-self: ${(props) => props.$isUser ? 'flex-end' : 'flex-start'};
+  background: ${(props) => props.$isUser ? '#3B82F6' : '#FFFFFF'};
+  color: ${(props) => props.$isUser ? '#FFFFFF' : '#334155'};
+  border: ${(props) => props.$isUser ? 'none' : '1px solid #E2E8F0'};
   
-  border-bottom-right-radius: ${(props) => (props.$isUser ? '4px' : '18px')};
-  border-top-left-radius: ${(props) => (props.$isUser ? '18px' : '4px')};
-  
-  box-shadow: ${(props) => (props.$isUser 
-    ? '0 4px 12px rgba(37, 99, 235, 0.2)' 
-    : '0 2px 4px rgba(0,0,0,0.03)')};
+  /* 말풍선 꼬리 효과 */
+  border-top-left-radius: ${(props) => !props.$isUser ? '4px' : '16px'};
+  border-bottom-right-radius: ${(props) => props.$isUser ? '4px' : '16px'};
+
+  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
 `;
 
-const TimeStamp = styled.div<MessageStyleProps>`
-  font-size: 11px;
-  color: ${(props) => (props.$isUser ? 'rgba(255,255,255,0.8)' : '#9CA3AF')};
-  margin-top: 6px;
+const TimeStamp = styled.div<MessageProps>`
+  font-size: 10px;
+  margin-top: 4px;
+  opacity: 0.7;
   text-align: right;
-  font-weight: 500;
 `;
 
-const ChatFooter = styled.div`
-  padding: 16px 20px;
-  background-color: #FFFFFF;
-  border-top: 1px solid #F3F4F6;
+const ChatInputArea = styled.div`
+  padding: 16px;
+  background: white;
+  border-top: 1px solid #F1F5F9;
 `;
 
-const ActionButtons = styled.div`
+const SuggestionRow = styled.div`
   display: flex;
-  flex-direction: column;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  &::-webkit-scrollbar { display: none; }
 `;
 
-const ButtonGroup = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-`;
-
-const ActionButton = styled.button<ButtonStyleProps>`
-  width: 100%;
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  font-family: 'Pretendard', sans-serif;
-  font-weight: 700;
-  font-size: 14px;
+const Chip = styled.button`
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid transparent;
+  padding: 6px 12px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.2s;
-  
-  /* Primary: Green / Secondary: Gray / Danger: Red Outline */
-  background-color: ${(props) => (props.$primary ? '#10B981' : '#F3F4F6')};
-  color: ${(props) => (props.$primary ? '#FFFFFF' : '#4B5563')};
-  
+
   &:hover {
-    filter: brightness(0.95);
-    transform: translateY(-1px);
+    background: #E2E8F0;
+    color: #1E293B;
   }
 `;
 
-const InputWrapper = styled.div`
-  background-color: #F3F4F6;
-  border-radius: 24px;
-  padding: 6px 6px 6px 16px;
+const InputBox = styled.div`
   display: flex;
   align-items: center;
-  border: 1px solid transparent;
-  
+  background: #F8FAFC;
+  border-radius: 24px;
+  padding: 8px 8px 8px 20px;
+  border: 1px solid #E2E8F0;
+
   &:focus-within {
-    border-color: #2563EB;
-    background-color: #FFFFFF;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    border-color: #3B82F6;
+    background: white;
   }
 `;
 
-const ChatInput = styled.input`
+const InputField = styled.input`
   flex: 1;
   border: none;
   background: transparent;
   outline: none;
-  font-size: 14px;
-  color: #111827;
-  font-family: 'Pretendard', sans-serif;
-  
-  &::placeholder {
-    color: #9CA3AF;
-  }
+  font-size: 13px;
+  color: #1E293B;
 `;
 
 const SendBtn = styled.button`
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background-color: #2563EB;
-  color: white;
+  background: #3B82F6;
   border: none;
+  color: white;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: background 0.2s;
-  
-  &:hover {
-    background-color: #1D4ED8;
-  }
+  &:hover { background: #2563EB; }
 `;
 
 // --- Main Component ---
@@ -452,168 +503,161 @@ const SmartFactoryDashboard: React.FC = () => {
     <>
       <GlobalStyle />
       <DashboardContainer>
+        
         {/* Header */}
         <Header>
-          <TitleSection>
-            <SubTitle>Real-time Monitoring System</SubTitle>
+          <TitleGroup>
+            <SubTitle>실시간 공정 모니터링 시스템</SubTitle>
             <MainTitle>Smart Factory Ops</MainTitle>
-          </TitleSection>
-          
-          <AlertBadge>
-            <FiAlertCircle size={18} />
-            <span>Line 2: 자재 공급 지연 감지 (Critical)</span>
-          </AlertBadge>
+          </TitleGroup>
+
+          <HeaderActions>
+            {/* 알림 배너 */}
+            <AlertBanner>
+              <FiAlertCircle size={16} />
+              <span>경고: 2번 라인 자재 공급 지연 (3분 경과)</span>
+            </AlertBanner>
+            
+            {/* 설정 아이콘 */}
+            <div style={{ padding: 10, background: 'white', borderRadius: '12px', border: '1px solid #E2E8F0', cursor: 'pointer' }}>
+              <FiSettings color="#64748B" size={20} />
+            </div>
+          </HeaderActions>
         </Header>
 
+        {/* Main Grid Content */}
         <MainGrid>
-          {/* 1. Video Feeds */}
+          
+          {/* 1. CCTV Monitoring */}
           <VideoColumn>
-            <VideoCard>
-              <VideoHeaderOverlay>
-                <StreamTag><FiVideo /> CAM-207: 조립 라인 A</StreamTag>
-                <FiMoreHorizontal color="#fff" size={24} style={{ cursor: 'pointer' }} />
-              </VideoHeaderOverlay>
-              <VideoPlaceholder>
-                {/* Simulated Video Content */}
-                <div style={{ width: '100%', height: '100%', background: 'linear-gradient(120deg, #f3f4f6 30%, #e5e7eb 50%, #f3f4f6 70%)', backgroundSize: '200% 100%', animation: 'shimmer 2s infinite' }} />
-                <DetectionBox />
-              </VideoPlaceholder>
-            </VideoCard>
+            <VideoWrapper>
+              <OverlayTop>
+                <CamBadge><FiVideo /> CAM-01 조립 라인 A</CamBadge>
+                <FiMoreHorizontal color="white" style={{ cursor: 'pointer' }} />
+              </OverlayTop>
+              {/* 이미지: 공장 로봇 팔 */}
+              <VideoImage src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop" alt="Assembly Line" />
+              <DetectionBox />
+              <StatusOverlay>● 실시간 녹화중</StatusOverlay>
+            </VideoWrapper>
 
-            <VideoCard>
-              <VideoHeaderOverlay>
-                <StreamTag><FiVideo /> CAM-217: 물류 이동로</StreamTag>
-                <FiMoreHorizontal color="#fff" size={24} style={{ cursor: 'pointer' }} />
-              </VideoHeaderOverlay>
-              <VideoPlaceholder>
-                <div style={{ width: '100%', height: '100%', background: '#F3F4F6' }} />
-                <div style={{ position: 'absolute', bottom: '20px', right: '20px', background: 'rgba(0,0,0,0.7)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>LIVE</div>
-              </VideoPlaceholder>
-            </VideoCard>
+            <VideoWrapper>
+              <OverlayTop>
+                <CamBadge><FiVideo /> CAM-02 자재 창고 B</CamBadge>
+                <FiMoreHorizontal color="white" style={{ cursor: 'pointer' }} />
+              </OverlayTop>
+              {/* 이미지: 물류 창고 */}
+              <VideoImage src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2070&auto=format&fit=crop" alt="Warehouse" />
+              <StatusOverlay style={{ background: '#3B82F6' }}>● 모니터링 중</StatusOverlay>
+            </VideoWrapper>
           </VideoColumn>
 
           {/* 2. Status Data */}
-          <StatusColumn>
+          <Card>
             <CardHeader>
-              <CardTitle><FiActivity size={20} color="#2563EB" /> 자재 적재 현황</CardTitle>
-              <FiMoreHorizontal size={20} color="#9CA3AF" style={{ cursor: 'pointer' }} />
+              <CardTitle><FiBox color="#10B981" /> 자재 적재 현황</CardTitle>
+              <FiMoreHorizontal color="#94A3B8" style={{ cursor: 'pointer' }} />
             </CardHeader>
+            
+            <ScrollContent>
+              <SectionLabel>A구역: 조립 공정 (GR-51)</SectionLabel>
+              <StatusList>
+                <StatusItem $level="normal">
+                  <ItemInfo>
+                    <ItemName>적재함 A-01</ItemName>
+                    <ItemSub>볼트/너트 (규격 12mm)</ItemSub>
+                  </ItemInfo>
+                  <ItemValueGroup>
+                    <ValueText $level="normal">정상 (94%)</ValueText>
+                    <ProgressBar $level="normal"><div style={{ width: '94%' }} /></ProgressBar>
+                  </ItemValueGroup>
+                </StatusItem>
 
-            <SectionTitle>Zone GR51 (Assembly)</SectionTitle>
-            <StatusGrid>
-              <StatusItem>
-                <StatusHeader>
-                  <SlotLabel>Slot 01</SlotLabel>
-                  <IconWrapper>
-                    <FiCheckCircle />
-                  </IconWrapper>
-                </StatusHeader>
-                <StatusValue>정상 (100%)</StatusValue>
-              </StatusItem>
-              
-              <StatusItem>
-                <StatusHeader>
-                  <SlotLabel>Slot 07</SlotLabel>
-                  <IconWrapper>
-                    <FiCheckCircle />
-                  </IconWrapper>
-                </StatusHeader>
-                <StatusValue>85% 잔여</StatusValue>
-              </StatusItem>
-            </StatusGrid>
+                <StatusItem $level="normal">
+                  <ItemInfo>
+                    <ItemName>적재함 A-02</ItemName>
+                    <ItemSub>메인 프레임 패널</ItemSub>
+                  </ItemInfo>
+                  <ItemValueGroup>
+                    <ValueText $level="normal">충분 (82%)</ValueText>
+                    <ProgressBar $level="normal"><div style={{ width: '82%' }} /></ProgressBar>
+                  </ItemValueGroup>
+                </StatusItem>
+              </StatusList>
 
-            <SectionTitle>Zone GR52 (Logistics)</SectionTitle>
-            <StatusGrid>
-              <StatusItem $isError>
-                <StatusHeader>
-                  <SlotLabel>Slot 07</SlotLabel>
-                  <IconWrapper $isError>
-                    <FiAlertCircle />
-                  </IconWrapper>
-                </StatusHeader>
-                <StatusValue $isError>보급 필요</StatusValue>
-              </StatusItem>
+              <SectionLabel style={{ marginTop: 24, color: '#F59E0B' }}>
+                <FiAlertCircle /> B구역: 물류 보관 (LOG-04)
+              </SectionLabel>
+              <StatusList>
+                <StatusItem $level="error">
+                  <ItemInfo>
+                    <ItemName>적재함 B-04</ItemName>
+                    <ItemSub style={{ color: '#EF4444', fontWeight: 600 }}>전자 회로 기판 (PCB)</ItemSub>
+                  </ItemInfo>
+                  <ItemValueGroup>
+                    <ValueText $level="error">재고 없음</ValueText>
+                    <ProgressBar $level="error"><div style={{ width: '5%' }} /></ProgressBar>
+                  </ItemValueGroup>
+                </StatusItem>
 
-              <StatusItem $isWarning>
-                <StatusHeader>
-                  <SlotLabel>Slot 02</SlotLabel>
-                  <IconWrapper $isWarning>
-                    <FiAlertCircle />
-                  </IconWrapper>
-                </StatusHeader>
-                <StatusValue $isWarning>지연 예측</StatusValue>
-              </StatusItem>
-              
-              <StatusItem>
-                <StatusHeader>
-                  <SlotLabel>Slot 03</SlotLabel>
-                  <IconWrapper>
-                    <FiCheckCircle />
-                  </IconWrapper>
-                </StatusHeader>
-                <StatusValue>정상</StatusValue>
-              </StatusItem>
-
-              <StatusItem>
-                <StatusHeader>
-                  <SlotLabel>Slot 04</SlotLabel>
-                  <IconWrapper>
-                    <FiCheckCircle />
-                  </IconWrapper>
-                </StatusHeader>
-                <StatusValue>대기 중</StatusValue>
-              </StatusItem>
-            </StatusGrid>
-          </StatusColumn>
+                <StatusItem $level="warning">
+                  <ItemInfo>
+                    <ItemName>적재함 B-05</ItemName>
+                    <ItemSub>배터리 모듈</ItemSub>
+                  </ItemInfo>
+                  <ItemValueGroup>
+                    <ValueText $level="warning">부족 (15%)</ValueText>
+                    <ProgressBar $level="warning"><div style={{ width: '15%' }} /></ProgressBar>
+                  </ItemValueGroup>
+                </StatusItem>
+              </StatusList>
+            </ScrollContent>
+          </Card>
 
           {/* 3. AI Chat */}
-          <ChatColumn>
-            <ChatHeaderContainer>
-              <ChatAvatar><FiCpu /></ChatAvatar>
+          <ChatContainer>
+            <ChatHeaderArea>
+              <BotIcon><FiCpu /></BotIcon>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontWeight: 700, fontSize: '15px', color: '#111827' }}>AI 관제 어시스턴트</span>
-                <span style={{ fontSize: '12px', color: '#10B981', fontWeight: 600 }}>● Online</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>AI 관제 어시스턴트</span>
+                <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>● 온라인 (대기중)</span>
               </div>
-            </ChatHeaderContainer>
+            </ChatHeaderArea>
 
-            <ChatBody>
-              <MessageBubble>
-                <strong>[자동 감지]</strong> CAM-207 구역에서 자재 적재 오류가 발생했습니다. Slot 32 소진율이 예상보다 15% 빠릅니다.
-                <TimeStamp>10:05 AM</TimeStamp>
-              </MessageBubble>
-
-              <MessageBubble>
-                <strong>[예측 경고]</strong> 현재 속도라면 10분 내로 라인 정지 가능성이 있습니다. (확률 85%)
-                <TimeStamp>10:07 AM</TimeStamp>
-              </MessageBubble>
+            <ChatMessages>
+              <Bubble>
+                <strong>[자동 감지]</strong> B-04 적재함(PCB) 재고가 소진되었습니다. 공정 지연이 예상됩니다.
+                <TimeStamp>오전 10:05</TimeStamp>
+              </Bubble>
               
-              <MessageBubble $isUser>
-                GR-Panel A 구역으로 예비 자재 배차해줘.
-                <TimeStamp $isUser>10:08 AM</TimeStamp>
-              </MessageBubble>
+              <Bubble $isUser>
+                예비 자재 창고에서 AGV(무인운송차) 배차해줘.
+                <TimeStamp $isUser>오전 10:08</TimeStamp>
+              </Bubble>
 
-               <MessageBubble>
-                확인했습니다. 현재 가용 가능한 AGV 3대 중 <strong>#04호기</strong>를 배차합니다. 예상 도착 시간은 3분입니다.
-                <TimeStamp>10:08 AM</TimeStamp>
-              </MessageBubble>
-            </ChatBody>
+              <Bubble>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <FiTruck size={14} color="#10B981" />
+                  <span style={{ fontWeight: 700 }}>명령 확인</span>
+                </div>
+                AGV #04호기를 배차했습니다. 예상 도착 시간은 <strong>3분</strong>입니다.
+                <TimeStamp>오전 10:09</TimeStamp>
+              </Bubble>
+            </ChatMessages>
 
-            <ChatFooter>
-              <ActionButtons>
-                <ActionButton $primary>승인: AGV #04 배차 시작</ActionButton>
-                <ButtonGroup>
-                  <ActionButton>CCTV 상세 보기</ActionButton>
-                  <ActionButton>물류팀 호출</ActionButton>
-                </ButtonGroup>
-              </ActionButtons>
-              
-              <InputWrapper>
-                <ChatInput placeholder="지시 사항을 입력하세요..." />
-                <SendBtn><FiSend size={16} /></SendBtn>
-              </InputWrapper>
-            </ChatFooter>
+            <ChatInputArea>
+              <SuggestionRow>
+                <Chip>CCTV 화면 확대</Chip>
+                <Chip>물류팀 호출</Chip>
+                <Chip>보고서 생성</Chip>
+              </SuggestionRow>
+              <InputBox>
+                <InputField placeholder="작업 지시사항을 입력하세요..." />
+                <SendBtn><FiSend size={14} /></SendBtn>
+              </InputBox>
+            </ChatInputArea>
+          </ChatContainer>
 
-          </ChatColumn>
         </MainGrid>
       </DashboardContainer>
     </>
