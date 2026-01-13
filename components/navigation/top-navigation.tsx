@@ -1,37 +1,27 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styled, { css } from 'styled-components';
 import { usePathname, useRouter } from 'next/navigation';
 import { FiBell, FiSettings, FiGrid, FiInfo } from 'react-icons/fi';
 
 // --- Types ---
-type SubMenuItemType = {
+export type SubMenuItemType = {
   label: string;
   href: string;
-  detail: string; // 서브메뉴 상세 설명
+  detail: string;
 };
 
-type MenuDataType = {
-  // description 제거됨
+export type MenuDataType = {
   items: SubMenuItemType[];
 };
 
 // --- Data ---
-// 메인 설명(description) 필드를 제거했습니다.
 const subMenuData: Record<string, MenuDataType> = {
   "AI 자재입고관리": {
     items: [
-      { 
-        label: "입고검수", 
-        href: "/material/inbound-inspection",
-        detail: "입고된 자재의 수량 및 품질을 AI 비전으로 검사하고 불량품을 자동으로 분류합니다."
-      },
-      { 
-        label: "자재창고", 
-        href: "/material/warehouse",
-        detail: "창고 내 자재의 위치를 시각화하고 적재 효율을 분석합니다."
-      },
+      { label: "입고검수", href: "/material/inbound-inspection", detail: "입고된 자재의 수량 및 품질을 AI 비전으로 검사하고 불량품을 자동으로 분류합니다." },
+      { label: "자재창고", href: "/material/warehouse", detail: "창고 내 자재의 위치를 시각화하고 적재 효율을 분석합니다." },
     ]
   },
   "AI 생산관리": {
@@ -44,7 +34,8 @@ const subMenuData: Record<string, MenuDataType> = {
       { label: "발포 누설액 체크", href: "/production/leak-detection", detail: "화학 용액의 누설 여부를 카메라로 감지하여 알림을 보냅니다." },
       { label: "가스켓 이상 탐지", href: "/production/gasket-check", detail: "가스켓의 부착 상태와 손상 여부를 검사합니다." },
       { label: "필름부착확인", href: "/production/film-attachment", detail: "보호 필름이 기포 없이 정확하게 부착되었는지 확인합니다." },
-      { label: "Pysical AI", href: "/production/pysical-ai", detail: "물리적 환경 변수를 학습하여 최적의 설비 세팅값을 제안합니다." }
+      { label: "Pysical AI", href: "/production/pysical-ai", detail: "물리적 환경 변수를 학습하여 최적의 설비 세팅값을 제안합니다." },
+      { label: "Pysical AI2", href: "/production/smart-factory-dashboard", detail: "물리적 환경 변수를 학습하여 최적의 설비 세팅값을 제안합니다." }
     ]
   },
   "AI 운송관리": {
@@ -55,6 +46,8 @@ const subMenuData: Record<string, MenuDataType> = {
     ]
   },
 };
+
+const MENU_KEYS = Object.keys(subMenuData);
 
 // --- Styled Components ---
 
@@ -67,10 +60,14 @@ const NavWrapper = styled.div<{ $isDisabled: boolean }>`
 `;
 
 const NavContainer = styled.nav`
-  height: 64px; background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  height: 64px; background: rgba(255, 255, 255, 0.95);
+  /* 블러 효과는 유지하되 성능을 위해 값 조절 (너무 높으면 렉 유발) */
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   position: relative; z-index: 10000; font-family: var(--font-pretendard), sans-serif;
   display: flex; justify-content: center;
+  /* 하드웨어 가속 힌트 */
+  will-change: transform; 
 `;
 
 const NavInner = styled.div`
@@ -85,11 +82,15 @@ const LogoArea = styled.div`
 
 const MenuArea = styled.div`
   display: flex; align-items: center; gap: 4px; position: relative; height: 100%;
+  transform: translateZ(0); 
 `;
 
 const MenuGlider = styled.div`
   position: absolute; height: 36px; background-color: #FFF0F3; border-radius: 8px; z-index: 0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); top: 50%; transform: translateY(-50%);
+  /* 부드러운 이동 애니메이션 */
+  transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1), width 0.3s cubic-bezier(0.2, 0, 0.2, 1);
+  top: 50%; 
+  will-change: transform, width;
 `;
 
 const MenuItem = styled.button<{ $isActive?: boolean }>`
@@ -108,27 +109,31 @@ const IconActions = styled.div`
 
 const SubMenuWrapper = styled.div<{ $isOpen: boolean }>`
   position: fixed; top: 64px; left: 0; width: 100%; z-index: 20000; 
-  background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-  display: grid; 
-  grid-template-rows: ${props => (props.$isOpen ? '1fr' : '0fr')};
-  opacity: ${props => (props.$isOpen ? '1' : '0')}; 
+  background: rgba(255, 255, 255, 0.98);
+  /* 그림자 단순화로 렌더링 성능 향상 */
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.04);
+  
+  /* Layout Thrashing 방지: max-height 대신 transform/opacity 사용 */
+  opacity: ${props => (props.$isOpen ? '1' : '0')};
   visibility: ${props => (props.$isOpen ? 'visible' : 'hidden')};
-  transition: grid-template-rows 0.35s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.35s ease, visibility 0.35s;
+  transform: translateY(${props => (props.$isOpen ? '0' : '-8px')});
+  
+  /* 닫힐 때도 부드럽게 사라지도록 transition 설정 */
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out, visibility 0.2s;
+  
   pointer-events: ${props => (props.$isOpen ? 'auto' : 'none')};
+  will-change: opacity, transform;
+  overflow: hidden;
 `;
 
 const SubMenuInner = styled.div`
-  overflow: hidden; width: 100%; display: flex; justify-content: center; min-height: 0;
+  width: 100%; display: flex; justify-content: center;
 `;
 
-const SubMenuContent = styled.div<{ $isOpen: boolean }>`
+const SubMenuContent = styled.div`
   width: 100%; max-width: 1680px; 
-  // 상단 설명을 제거했으므로 패딩을 깔끔하게 조정 (위아래 24px)
   padding: 24px 24px; 
   display: flex; flex-direction: column; 
-  transform: translateY(${props => (props.$isOpen ? '0' : '-10px')});
-  transition: transform 0.35s cubic-bezier(0.33, 1, 0.68, 1);
 `;
 
 const SubMenuList = styled.div`
@@ -147,17 +152,22 @@ const NavItemText = styled.div<{ $isActive: boolean; $isHovered: boolean }>`
   }
 `;
 
-// 서브메뉴 상세 설명 (스르륵 나타나는 영역)
 const DetailSection = styled.div<{ $isVisible: boolean }>`
-  display: grid;
-  grid-template-rows: ${props => (props.$isVisible ? '1fr' : '0fr')};
+  /* 성능을 위해 height 애니메이션 제거, opacity만 사용 */
+  display: ${props => props.$isVisible ? 'block' : 'none'}; 
   opacity: ${props => (props.$isVisible ? '1' : '0')};
-  margin-top: ${props => (props.$isVisible ? '16px' : '0')};
-  transition: all 0.3s ease;
+  margin-top: 16px;
+  animation: ${props => props.$isVisible ? 'fadeIn 0.3s ease' : 'none'};
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
 `;
 
 const DetailInner = styled.div`
-  overflow: hidden; min-height: 0;
+  min-height: 0;
+  padding-bottom: 2px; 
 `;
 
 const DetailBox = styled.div`
@@ -169,9 +179,12 @@ const DetailBox = styled.div`
 `;
 
 const Overlay = styled.div<{ $isOpen: boolean }>`
-  position: fixed; top: 64px; left: 0; width: 100vw; height: calc(100vh - 64px); background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(4px);
-  opacity: ${props => (props.$isOpen ? '1' : '0')}; visibility: ${props => (props.$isOpen ? 'visible' : 'hidden')};
-  transition: opacity 0.3s ease, visibility 0.3s; z-index: 15000; 
+  position: fixed; top: 64px; left: 0; width: 100vw; height: calc(100vh - 64px); 
+  background: rgba(0, 0, 0, 0.1); 
+  opacity: ${props => (props.$isOpen ? '1' : '0')}; 
+  visibility: ${props => (props.$isOpen ? 'visible' : 'hidden')};
+  transition: opacity 0.3s ease, visibility 0.3s; 
+  z-index: 15000; 
   pointer-events: ${props => (props.$isOpen ? 'auto' : 'none')};
 `;
 
@@ -181,21 +194,37 @@ interface TopNavigationProps {
 }
 
 export default function TopNavigation({ isLoading = false }: TopNavigationProps) {
-  const [gliderStyle, setGliderStyle] = useState({ left: 0, width: 0 });
+  const [gliderStyle, setGliderStyle] = useState({ x: 0, width: 0 });
+  
+  // hoveredMenu: 실제 마우스가 올라간 메뉴 (Logic용)
   const [hoveredMenu, setHoveredMenu] = useState<string | null>(null);
+  
+  // lastActiveMenu: 닫히는 애니메이션 동안 내용을 보여주기 위한 상태 (View용)
+  const [lastActiveMenu, setLastActiveMenu] = useState<string | null>(null);
+  
   const [hoveredSubItem, setHoveredSubItem] = useState<SubMenuItemType | null>(null);
   
   const pathname = usePathname();
   const router = useRouter();
+  
   const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
-  const menus = Object.keys(subMenuData);
+  const menuAreaRef = useRef<HTMLDivElement>(null);
 
-  const getCurrentActiveMenu = () => {
+  // [중요] 메뉴가 활성화되면 내용을 기억(setLastActiveMenu)
+  // 마우스가 떠나서 hoveredMenu가 null이 되어도, lastActiveMenu는 남아있어 내용이 사라지지 않음
+  useEffect(() => {
+    if (hoveredMenu) {
+      setLastActiveMenu(hoveredMenu);
+    }
+  }, [hoveredMenu]);
+
+  const getCurrentActiveMenu = useCallback(() => {
     if (pathname.includes('/transport')) return "AI 운송관리";
     if (pathname.includes('/production')) return "AI 생산관리";
     if (pathname.includes('/material')) return "AI 자재입고관리"; 
     return "AI 운송관리"; 
-  };
+  }, [pathname]);
+
   const currentActiveMenu = getCurrentActiveMenu();
 
   const handleMenuClick = (e: React.MouseEvent, menu: string) => {
@@ -208,25 +237,45 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
   const handleSubMenuClick = (e: React.MouseEvent, href: string) => {
     e.preventDefault(); e.stopPropagation();
     if (isLoading) return;
-    setHoveredMenu(null);
+    setHoveredMenu(null); // 닫기 트리거
     setHoveredSubItem(null);
     router.push(href);
   };
 
-  const updateGliderPosition = () => {
-    const activeIndex = menus.indexOf(currentActiveMenu);
+  const updateGliderPosition = useCallback(() => {
+    const activeIndex = MENU_KEYS.indexOf(currentActiveMenu);
     const currentTabElement = tabsRef.current[activeIndex];
-    if (currentTabElement) {
-      setGliderStyle({ left: currentTabElement.offsetLeft, width: currentTabElement.offsetWidth });
+    const parentElement = menuAreaRef.current;
+
+    if (currentTabElement && parentElement) {
+      const parentRect = parentElement.getBoundingClientRect();
+      const childRect = currentTabElement.getBoundingClientRect();
+      const relativeX = childRect.left - parentRect.left;
+      
+      setGliderStyle(prev => {
+        if (Math.abs(prev.x - relativeX) < 0.5 && Math.abs(prev.width - childRect.width) < 0.5) {
+          return prev;
+        }
+        return { x: relativeX, width: childRect.width };
+      });
     }
-  };
+  }, [currentActiveMenu]);
 
   useEffect(() => {
     updateGliderPosition();
-    if (document.fonts) { document.fonts.ready.then(updateGliderPosition); }
-    window.addEventListener("resize", updateGliderPosition);
-    return () => window.removeEventListener("resize", updateGliderPosition);
-  }, [currentActiveMenu]); 
+    const resizeObserver = new ResizeObserver(() => {
+      updateGliderPosition();
+    });
+
+    if (menuAreaRef.current) {
+      resizeObserver.observe(menuAreaRef.current);
+    }
+    tabsRef.current.forEach(tab => {
+      if (tab) resizeObserver.observe(tab);
+    });
+
+    return () => resizeObserver.disconnect();
+  }, [updateGliderPosition]);
 
   const handleNavLeave = () => {
     setHoveredMenu(null);
@@ -237,7 +286,8 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
     setHoveredSubItem(null);
   }, [hoveredMenu]);
 
-  tabsRef.current = [];
+  // 렌더링 시 사용할 메뉴 키 결정 (현재 호버 중이거나, 아니면 방금 닫힌 메뉴)
+  const displayMenuKey = hoveredMenu || lastActiveMenu;
 
   return (
     <NavWrapper onMouseLeave={handleNavLeave} $isDisabled={isLoading}>
@@ -248,9 +298,14 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
             물류 자원 회전율 및 운송 최적화 관제
           </LogoArea>
           
-          <MenuArea>
-            <MenuGlider style={{ left: gliderStyle.left, width: gliderStyle.width }} />
-            {menus.map((menu, index) => (
+          <MenuArea ref={menuAreaRef}>
+            <MenuGlider 
+              style={{ 
+                transform: `translate(${gliderStyle.x}px, -50%)`, 
+                width: gliderStyle.width 
+              }} 
+            />
+            {MENU_KEYS.map((menu, index) => (
               <MenuItem 
                 key={menu}
                 ref={(el) => { tabsRef.current[index] = el }}
@@ -269,16 +324,16 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
         </NavInner>
       </NavContainer>
 
+      {/* $isOpen은 현재 마우스 상태(hoveredMenu)를 따라감 */}
       <SubMenuWrapper $isOpen={!!hoveredMenu && !isLoading}>
         <SubMenuInner>
-          <SubMenuContent $isOpen={!!hoveredMenu && !isLoading}>
+          <SubMenuContent>
             
-            {hoveredMenu && subMenuData[hoveredMenu] && (
+            {/* 내용은 displayMenuKey(마지막 활성 상태)를 따라감 -> 닫힐 때 내용 유지 */}
+            {displayMenuKey && subMenuData[displayMenuKey] && (
               <>
-                {/* 상단 설명(MenuDescription) 제거됨 */}
-                
                 <SubMenuList>
-                  {subMenuData[hoveredMenu].items.map((subItem) => (
+                  {subMenuData[displayMenuKey].items.map((subItem: SubMenuItemType) => (
                     <NavItemText 
                       key={subItem.label} 
                       $isActive={pathname === subItem.href}
@@ -291,7 +346,6 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
                   ))}
                 </SubMenuList>
 
-                {/* 하단 상세 설명 (유지) */}
                 <DetailSection $isVisible={!!hoveredSubItem}>
                     <DetailInner>
                         <DetailBox>
