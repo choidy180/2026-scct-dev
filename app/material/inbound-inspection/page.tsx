@@ -299,12 +299,12 @@ const Card = styled.div`
   position: relative;
 `;
 
-// Top Card (Vehicle Info) - Fixed Height behavior
+// Top Card (Vehicle Info)
 const TopCard = styled(Card)`
   flex-shrink: 0;
 `;
 
-// Bottom Card (Stats) - Fill remaining space
+// Bottom Card (Stats)
 const FullHeightCard = styled(Card)`
   flex: 1;
   min-height: 0;
@@ -586,7 +586,7 @@ const VideoContent = styled.div`
   }
 `;
 
-// --- Modal & Overlay Styles (Missing Definitions Added) ---
+// --- Modal & Overlay Styles ---
 
 const OverlayContainer = styled(motion.div)`
   position: absolute;
@@ -895,8 +895,6 @@ const SlidePanel = styled(motion.div)`
   box-shadow: -20px 0 50px rgba(0,0,0,0.5);
   background: #f8fafc;
 `;
-
-// --- Loading Screen Styles ---
 
 const NewLoadingScreen = styled.div<StyledFadeProps>`
   position: fixed;
@@ -1592,6 +1590,7 @@ const WarehouseBoard = ({ onClose }: { onClose: () => void }) => {
 };
 
 const RPAStatusView = React.memo(({ step, showComplete, isWearableConnected }: { step: number, showComplete: boolean, isWearableConnected?: boolean }) => {
+  // 최적화: 웨어러블 연결 상태에 따라 이미지 소스를 메모이제이션
   const imageSrc = useMemo(() => {
     return isWearableConnected ? "/images/wearable_capture.png" : "/images/barcode.png";
   }, [isWearableConnected]);
@@ -1603,6 +1602,7 @@ const RPAStatusView = React.memo(({ step, showComplete, isWearableConnected }: {
       <div className="pip-container">
         <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%' }}>
           <CameraFrame>
+            {/* [수정] 동적으로 계산된 imageSrc 사용 */}
             <img src={imageSrc} alt="Live Feed" />
             <div className="scan-overlay"> <div className="tag">STANDBY</div> </div>
           </CameraFrame>
@@ -1680,6 +1680,7 @@ function AIDashboardModal({ onClose }: { onClose: () => void }) {
   const [showComplete, setShowComplete] = useState(false);
   
   // 웨어러블 연결 상태 (기본값: false = 바코드 이미지)
+  // 추후 실제 웨어러블 연결 감지 로직으로 대체 가능
   const [isWearableConnected, setIsWearableConnected] = useState(false);
 
   useEffect(() => {
@@ -1705,6 +1706,7 @@ function AIDashboardModal({ onClose }: { onClose: () => void }) {
   const activeItem = useMemo(() => items.find(i => i.id === selectedId) || (items.length > 0 ? items[0] : null), [items, selectedId]);
 
   return ( <OverlayContainer initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} > <HeaderBar> <div className="brand"><ScanBarcode color="#60a5fa" strokeWidth={3}/> VISION AI SCANNER</div> <button className="close-btn" onClick={onClose}><LuX size={20} strokeWidth={3}/></button> </HeaderBar> <MainGridInternal> <AnimatePresence> {showComplete && ( <CompletionPopup initial={{ opacity: 0, scale: 0.5, x: "-50%", y: "-50%" }} animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }} exit={{ opacity: 0, scale: 0.8, x: "-50%", y: "-50%" }} transition={{ type: "spring", bounce: 0.5 }} > <div className="icon-check"><CheckCircle2 size={48} strokeWidth={4} /></div> <div className="text">RPA PROCESSING COMPLETE</div> </CompletionPopup> )} </AnimatePresence> <div className="left-pane"> <LayoutGroup> 
+    {/* [수정] isWearableConnected 전달 */}
     {viewMode === 'rpa' && <RPAStatusView step={rpaStep} showComplete={showComplete} isWearableConnected={isWearableConnected} />} 
     {viewMode === 'scan' && ( <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 20 }}> <CameraFrame> <img src="/images/barcode.png" alt="Live Feed" /> <motion.div className="scan-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} > <div className="guide"> <motion.div className="line" animate={{ top: ['10%', '90%', '10%'] }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} /> </div> <div className="tag">SCANNING...</div> </motion.div> </CameraFrame> </motion.div> )} </LayoutGroup> </div> <div className="right-pane"> <ProductListArea> <div className="label"><ListTodo size={14}/> 입고 예정 리스트 (Live)</div> <div className="list-scroller"> {items.map(item => ( <MemoizedItemCard key={item.id} item={item} selectedId={selectedId} onClick={handleItemClick} /> ))} </div> </ProductListArea> <ItemDetailView activeItem={activeItem} /> </div> </MainGridInternal> </OverlayContainer> );
 }
@@ -1777,6 +1779,18 @@ export default function SmartFactoryDashboard() {
     });
     return () => unsubscribe();
   }, []);
+
+  // [수정] IP 입력 시 자동 연결 로직 추가
+  useEffect(() => {
+    if (streamHost) {
+      setStreamStatus("checking");
+      // 즉시 연결 시도 (실제 환경에서는 연결 확인 로직 필요)
+      const timer = setTimeout(() => {
+        setStreamStatus("ok");
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [streamHost]);
 
   const manualTrigger = useCallback(() => { setShowDashboard(true); }, []);
   const toggleMapBoard = useCallback(() => { setShowMapBoard(true); }, []);
@@ -1903,10 +1917,7 @@ export default function SmartFactoryDashboard() {
                                 <span className="label">CAM IP</span>
                                 <input 
                                     value={streamHost} 
-                                    onChange={(e) => { 
-                                        setStreamHost(e.target.value.trim()); 
-                                        setStreamStatus("idle"); 
-                                    }} 
+                                    onChange={(e) => setStreamHost(e.target.value.trim())} 
                                     placeholder="192.168.xx.xx" 
                                 />
                             </IpInputWrapper>
