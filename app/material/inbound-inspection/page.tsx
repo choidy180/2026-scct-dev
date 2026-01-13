@@ -896,6 +896,8 @@ const SlidePanel = styled(motion.div)`
   background: #f8fafc;
 `;
 
+// --- Loading Screen Styles ---
+
 const NewLoadingScreen = styled.div<StyledFadeProps>`
   position: fixed;
   top: 0;
@@ -1589,12 +1591,7 @@ const WarehouseBoard = ({ onClose }: { onClose: () => void }) => {
   return ( <BoardContainer> <div className="board-header"> <div className="title"><LayoutGrid size={24} color="#3b82f6"/> D동 실시간 적재 현황판</div> <button className="close-btn" onClick={onClose}><XIcon size={28}/></button> </div> <div className="board-body"> <div className="left-col"> <div className="summary-card"> <h3><PieIcon size={16}/> 종합 적재 현황</h3> <div className="chart-area"> <div className="pie-mock"><span className="val">48%</span></div> <div className="legend"> <div><span className="dot blue"></span>사용: <b>48</b></div> <div><span className="dot green"></span>여유: <b>52</b></div> </div> </div> </div> <div className="inv-list-wrapper"> <div className="search-row"> <h3><PackageIcon size={16}/> 재고 리스트</h3> <div className="s-box"><Search size={14}/><input placeholder="검색..." onChange={e=>setSearchTerm(e.target.value)}/></div> </div> <div className="list-scroll"> {filteredInventory.map((item, i) => ( <MemoizedInventoryItem key={i} item={item} /> ))} </div> </div> </div> <div className="map-col"> <div className="map-legend"> <span className="badge empty">여유</span><span className="badge active">사용</span><span className="badge full">만차</span> </div> <div className="zone-wrapper"> {mapData.map(zone => <ZoneColumn key={zone.id} zone={zone} />)} </div> </div> </div> </BoardContainer> )
 };
 
-const RPAStatusView = React.memo(({ step, showComplete, isWearableConnected }: { step: number, showComplete: boolean, isWearableConnected?: boolean }) => {
-  // 최적화: 웨어러블 연결 상태에 따라 이미지 소스를 메모이제이션
-  const imageSrc = useMemo(() => {
-    return isWearableConnected ? "/images/wearable_capture.png" : "/images/barcode.png";
-  }, [isWearableConnected]);
-
+const RPAStatusView = React.memo(({ step, showComplete, isWearableConnected, streamUrl }: { step: number, showComplete: boolean, isWearableConnected?: boolean, streamUrl?: string | null }) => {
   return (
     <RPAProcessView initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.3 }} >
       <div className="rpa-header"> <h2><Cpu size={24} color="#60a5fa" strokeWidth={2.5}/> AUTO PROCESSING</h2> <p>Vision AI 데이터 분석 및 ERP 자동 입고 처리를 진행합니다.</p> </div>
@@ -1602,8 +1599,11 @@ const RPAStatusView = React.memo(({ step, showComplete, isWearableConnected }: {
       <div className="pip-container">
         <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%' }}>
           <CameraFrame>
-            {/* [수정] 동적으로 계산된 imageSrc 사용 */}
-            <img src={imageSrc} alt="Live Feed" />
+            {isWearableConnected && streamUrl ? (
+                <iframe src={streamUrl} style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} />
+            ) : (
+                <img src="/images/barcode.png" alt="Live Feed" />
+            )}
             <div className="scan-overlay"> <div className="tag">STANDBY</div> </div>
           </CameraFrame>
         </motion.div>
@@ -1672,16 +1672,14 @@ ItemDetailView.displayName = 'ItemDetailView';
 const MemoizedItemCard = React.memo(({ item, selectedId, onClick }: { item: ItemData, selectedId: number, onClick: (id: number) => void }) => ( <ItemCard $active={selectedId === item.id} onClick={() => onClick(item.id)} > <div className="code">{item.code}</div> <div className="name">{item.name}</div> <div className="qty">{item.qty.toLocaleString()} EA</div> </ItemCard> )); MemoizedItemCard.displayName = 'MemoizedItemCard';
 
 // AIDashboardModal
-function AIDashboardModal({ onClose }: { onClose: () => void }) {
+function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () => void, streamUrl?: string | null, streamStatus: string }) {
   const [viewMode, setViewMode] = useState<'scan' | 'rpa'>('scan');
   const [items, setItems] = useState<ItemData[]>([]);
   const [selectedId, setSelectedId] = useState<number>(0);
   const [rpaStep, setRpaStep] = useState(0);
   const [showComplete, setShowComplete] = useState(false);
   
-  // 웨어러블 연결 상태 (기본값: false = 바코드 이미지)
-  // 추후 실제 웨어러블 연결 감지 로직으로 대체 가능
-  const [isWearableConnected, setIsWearableConnected] = useState(false);
+  const isWearableConnected = streamStatus === 'ok' && !!streamUrl;
 
   useEffect(() => {
     const data = generateDummyItems();
@@ -1706,9 +1704,10 @@ function AIDashboardModal({ onClose }: { onClose: () => void }) {
   const activeItem = useMemo(() => items.find(i => i.id === selectedId) || (items.length > 0 ? items[0] : null), [items, selectedId]);
 
   return ( <OverlayContainer initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} > <HeaderBar> <div className="brand"><ScanBarcode color="#60a5fa" strokeWidth={3}/> VISION AI SCANNER</div> <button className="close-btn" onClick={onClose}><LuX size={20} strokeWidth={3}/></button> </HeaderBar> <MainGridInternal> <AnimatePresence> {showComplete && ( <CompletionPopup initial={{ opacity: 0, scale: 0.5, x: "-50%", y: "-50%" }} animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }} exit={{ opacity: 0, scale: 0.8, x: "-50%", y: "-50%" }} transition={{ type: "spring", bounce: 0.5 }} > <div className="icon-check"><CheckCircle2 size={48} strokeWidth={4} /></div> <div className="text">RPA PROCESSING COMPLETE</div> </CompletionPopup> )} </AnimatePresence> <div className="left-pane"> <LayoutGroup> 
-    {/* [수정] isWearableConnected 전달 */}
-    {viewMode === 'rpa' && <RPAStatusView step={rpaStep} showComplete={showComplete} isWearableConnected={isWearableConnected} />} 
-    {viewMode === 'scan' && ( <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 20 }}> <CameraFrame> <img src="/images/barcode.png" alt="Live Feed" /> <motion.div className="scan-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} > <div className="guide"> <motion.div className="line" animate={{ top: ['10%', '90%', '10%'] }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} /> </div> <div className="tag">SCANNING...</div> </motion.div> </CameraFrame> </motion.div> )} </LayoutGroup> </div> <div className="right-pane"> <ProductListArea> <div className="label"><ListTodo size={14}/> 입고 예정 리스트 (Live)</div> <div className="list-scroller"> {items.map(item => ( <MemoizedItemCard key={item.id} item={item} selectedId={selectedId} onClick={handleItemClick} /> ))} </div> </ProductListArea> <ItemDetailView activeItem={activeItem} /> </div> </MainGridInternal> </OverlayContainer> );
+    {viewMode === 'rpa' && <RPAStatusView step={rpaStep} showComplete={showComplete} isWearableConnected={isWearableConnected} streamUrl={streamUrl} />} 
+    {viewMode === 'scan' && ( <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 20 }}> <CameraFrame> 
+        {isWearableConnected ? <iframe src={streamUrl || ''} style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} /> : <img src="/images/barcode.png" alt="Live Feed" />}
+        <motion.div className="scan-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} > <div className="guide"> <motion.div className="line" animate={{ top: ['10%', '90%', '10%'] }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} /> </div> <div className="tag">SCANNING...</div> </motion.div> </CameraFrame> </motion.div> )} </LayoutGroup> </div> <div className="right-pane"> <ProductListArea> <div className="label"><ListTodo size={14}/> 입고 예정 리스트 (Live)</div> <div className="list-scroller"> {items.map(item => ( <MemoizedItemCard key={item.id} item={item} selectedId={selectedId} onClick={handleItemClick} /> ))} </div> </ProductListArea> <ItemDetailView activeItem={activeItem} /> </div> </MainGridInternal> </OverlayContainer> );
 }
 
 // ─── [ROOT COMPONENT] ──────────────────────────────────────
@@ -1917,7 +1916,10 @@ export default function SmartFactoryDashboard() {
                                 <span className="label">CAM IP</span>
                                 <input 
                                     value={streamHost} 
-                                    onChange={(e) => setStreamHost(e.target.value.trim())} 
+                                    onChange={(e) => { 
+                                        setStreamHost(e.target.value.trim()); 
+                                        setStreamStatus("idle"); 
+                                    }} 
                                     placeholder="192.168.xx.xx" 
                                 />
                             </IpInputWrapper>
@@ -1966,7 +1968,7 @@ export default function SmartFactoryDashboard() {
                         {/* Modals placed inside */}
                             <AnimatePresence>
                             {showDashboard && (
-                                <AIDashboardModal onClose={closeDashboard} />
+                                <AIDashboardModal onClose={closeDashboard} streamUrl={streamUrl} streamStatus={streamStatus} />
                             )}
                         </AnimatePresence>
                     </div>
