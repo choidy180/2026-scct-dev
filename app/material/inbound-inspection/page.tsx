@@ -932,14 +932,7 @@ const CameraFrame = styled(motion.div)`
     align-items: center;
     justify-content: center;
 
-    .line {
-      position: absolute;
-      width: 100%;
-      height: 3px;
-      background: #ef4444;
-      box-shadow: 0 0 25px #ef4444;
-      z-index: 5;
-    }
+    /* 빨간 라인 제거됨 */
     .guide {
       border: 2px solid rgba(255,255,255,0.5);
       width: 85%;
@@ -1788,7 +1781,7 @@ const MemoizedItemCard = React.memo(({ item, selectedId, onClick }: { item: Item
 )); 
 MemoizedItemCard.displayName = 'MemoizedItemCard';
 
-// ─── [7. AIDashboardModal (REFACTORED RIGHT PANE)] ──────────────────────
+// ─── [7. AIDashboardModal (MODAL COMPONENT)] ──────────────────────
 
 function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () => void, streamUrl?: string | null, streamStatus: string }) {
   const [viewMode, setViewMode] = useState<'scan' | 'rpa'>('scan');
@@ -1796,30 +1789,66 @@ function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () =>
   const [selectedId, setSelectedId] = useState<number>(0);
   const [rpaStep, setRpaStep] = useState(0);
   const [showComplete, setShowComplete] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   
   // [수정] 모달 내에서는 streamStatus가 ok일때만 iframe을 보여주고
   // 그렇지 않으면(error/checking) 가상 바코드 화면을 보여주도록 처리
   const isWearableConnected = streamStatus === 'ok' && !!streamUrl;
 
+  // [중요] 초기 진입 시 실행 방지를 위한 Ref
+  const initialMount = useRef(true);
+
   useEffect(() => {
     const data = generateDummyItems();
     setItems(data);
     if(data.length > 0) setSelectedId(data[0].id);
-    // Remove auto-start timer
-    // const timer = setTimeout(() => { setViewMode('rpa'); startRPAProcess(); }, 2500);
-    // return () => clearTimeout(timer);
+    return () => {
+        if(timerRef.current) clearInterval(timerRef.current);
+    }
   }, []);
 
   const startRPAProcess = useCallback(() => {
-    let step = 1; setRpaStep(step);
-    const interval = setInterval(() => {
+    // 기존 타이머가 돌고 있다면 정지
+    if(timerRef.current) clearInterval(timerRef.current);
+
+    let step = 1; 
+    setRpaStep(step);
+    setShowComplete(false); // 재실행 시 완료 팝업 초기화
+
+    timerRef.current = setInterval(() => {
       step++;
       if (step > 5) {
-        clearInterval(interval); setShowComplete(true);
+        if(timerRef.current) clearInterval(timerRef.current); 
+        setShowComplete(true);
         setTimeout(() => { setShowComplete(false); }, 2000);
-      } else { setRpaStep(step); }
+      } else { 
+          setRpaStep(step); 
+      }
     }, 1200);
   }, []);
+
+  // [수정 2] 모달 내부에서는 'log' DB의 변화를 감지하여 RPA 시작
+  useEffect(() => {
+    if (!db) return;
+    const logRef = ref(db, 'logs');
+    
+    // [중요] 모달이 켜지고 '나서' 발생하는 변경사항만 감지
+    // 초기 로드(initialMount.current === true) 시점에는 실행 X
+    const unsubscribe = onValue(logRef, (snapshot) => {
+        // 첫 번째 콜백(컴포넌트 마운트 시)은 무조건 실행됨. 이를 무시.
+        if (initialMount.current) {
+            initialMount.current = false;
+            return;
+        }
+
+        // [중요] 두 번째 호출부터는(즉, 데이터 변화 시) 무조건 실행
+        // 삭제(null), 생성, 수정 모두 포함
+        setViewMode('rpa');
+        startRPAProcess();
+    });
+
+    return () => unsubscribe();
+  }, [startRPAProcess]);
 
   const handleItemClick = useCallback((id: number) => { setSelectedId(id); }, []);
   
@@ -1864,7 +1893,12 @@ function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () =>
                           {/* 이미지 로드 실패 시 백업 아이콘은 위 div의 배경색과 함께 처리됨 */}
                       </div>
                   )}
-                  <motion.div className="scan-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} > <div className="guide"> <motion.div className="line" animate={{ top: ['10%', '90%', '10%'] }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} /> </div> <div className="tag">SCANNING...</div> </motion.div> 
+                  <motion.div className="scan-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} > 
+                    <div className="guide"> 
+                      {/* [수정 3] 빨간색 스캔 라인 제거 완료 */}
+                    </div> 
+                    <div className="tag">SCANNING...</div> 
+                  </motion.div> 
                 </CameraFrame> 
               </motion.div> 
             )} 
@@ -1877,16 +1911,16 @@ function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () =>
             <TopInfoSection>
               <InfoInputBox>
                 <div className="label-area"><Calendar size={13}/> 송장번호</div>
-                <div className="value-area">CB0005732017</div>
+                <div className="value-area">0135250C00004</div>
               </InfoInputBox>
               <SplitRow>
                 <InfoInputBox>
                   <div className="label-area"><Calendar size={13}/> 입고일자</div>
-                  <div className="value-area">2026-01-13</div>
+                  <div className="value-area">2026-01-08</div>
                 </InfoInputBox>
                 <InfoInputBox>
                   <div className="label-area"><Truck size={13}/> 거래처명</div>
-                  <div className="value-area">엘지전자(주)</div>
+                  <div className="value-area">세진공업(주)</div>
                 </InfoInputBox>
               </SplitRow>
             </TopInfoSection>
@@ -1901,50 +1935,50 @@ function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () =>
             </ListSection>
 
             <DetailSection>
-               <AnimatePresence mode="wait">
-                 {activeItem && (
-                   <motion.div
-                    key={activeItem.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.2 }}
-                    style={{ display: 'flex', flexDirection: 'column', flex: 1 }}
-                   >
-                     <div className="title-area">
+                <AnimatePresence mode="wait">
+                  {activeItem && (
+                    <motion.div
+                     key={activeItem.id}
+                     initial={{ opacity: 0, x: 20 }}
+                     animate={{ opacity: 1, x: 0 }}
+                     exit={{ opacity: 0, x: -20 }}
+                     transition={{ duration: 0.2 }}
+                     style={{ display: 'flex', flexDirection: 'column', flex: 1 }}
+                    >
+                      <div className="title-area">
                         <h1>{activeItem.name}</h1>
-                     </div>
+                      </div>
 
-                     <div className="grid-table">
-                        <div className="grid-row">
-                          <div className="lbl"><Box size={15}/> 품목코드</div>
-                          <div className="val">{activeItem.code}</div>
-                        </div>
-                        <div className="grid-row">
-                          <div className="lbl"><Layers size={15}/> 프로젝트</div>
-                          <div className="val">{activeItem.project}</div>
-                        </div>
-                        <div className="grid-row">
-                          <div className="lbl"><LuClipboardCheck size={15}/> 입고수량</div>
-                          <div className="val qty">{activeItem.qty.toLocaleString()} <span style={{fontSize: '0.8em', fontWeight: 600, color: '#64748b'}}>EA</span></div>
-                        </div>
-                        <div className="grid-row">
-                          <div className="lbl"><LuFileText size={15}/> 검사구분명</div>
-                          <div className="val">{activeItem.type}</div>
-                        </div>
-                     </div>
-                   </motion.div>
-                 )}
-               </AnimatePresence>
+                      <div className="grid-table">
+                         <div className="grid-row">
+                           <div className="lbl"><Box size={15}/> 품목코드</div>
+                           <div className="val">{activeItem.code}</div>
+                         </div>
+                         <div className="grid-row">
+                           <div className="lbl"><Layers size={15}/> 프로젝트</div>
+                           <div className="val">{activeItem.project}</div>
+                         </div>
+                         <div className="grid-row">
+                           <div className="lbl"><LuClipboardCheck size={15}/> 입고수량</div>
+                           <div className="val qty">{activeItem.qty.toLocaleString()} <span style={{fontSize: '0.8em', fontWeight: 600, color: '#64748b'}}>EA</span></div>
+                         </div>
+                         <div className="grid-row">
+                           <div className="lbl"><LuFileText size={15}/> 검사구분명</div>
+                           <div className="val">{activeItem.type}</div>
+                         </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
             </DetailSection>
 
             <LogSection>
-               <div className="log-head">SYSTEM LOG</div>
-               <div className="log-body">
+                <div className="log-head">SYSTEM LOG</div>
+                <div className="log-body">
 [INFO] ERP 데이터 대조 완료.<br/>
 [INFO] PO 번호 매칭 성공 (PO-2026-01-088)<br/>
 [WARN] 창고 관리 시스템(WMS) 적재 위치 최적화 계산 중...
-               </div>
+                </div>
             </LogSection>
 
           </RightContentContainer>
@@ -1962,7 +1996,7 @@ export default function SmartFactoryDashboard() {
   const [progress, setProgress] = useState(0);
   const [currentLog, setCurrentLog] = useState(BOOT_LOGS[0]);
 
-  const [streamHost, setStreamHost] = useState("192.168.50.196");
+  const [streamHost, setStreamHost] = useState("192.168.0.53");
   const [streamStatus, setStreamStatus] = useState<"idle" | "checking" | "ok" | "error">("idle");
   const streamUrl = streamHost ? `http://${streamHost}:${PORT}/` : null;
 
@@ -2066,10 +2100,10 @@ export default function SmartFactoryDashboard() {
     return () => clearInterval(interval);
   }, [loading]);
 
-  // DB Listen
+  // DB Listen (PARENT)
   useEffect(() => {
     if (!db) return;
-    const logsRef = ref(db, 'logs');
+    const logsRef = ref(db, 'vuzix_log');
     let initialLoad = true;
     const unsubscribe = onValue(logsRef, (snapshot) => {
       const currentString = JSON.stringify(snapshot.val() || {});
@@ -2083,22 +2117,21 @@ export default function SmartFactoryDashboard() {
     return () => unsubscribe();
   }, []);
 
-  // [수정] IP 입력 시 5초 타임아웃 연결 로직
+  // [수정] IP 입력 및 스트림 연결 로직 (강제 성공 제거, 에러 화면 정상 출력)
   useEffect(() => {
     if (streamHost) {
       setStreamStatus("checking");
       
       const timer = setTimeout(() => {
-         // 5초 뒤에도 여전히 checking이면 error로 간주
          setStreamStatus(prev => prev === "checking" ? "error" : prev); 
       }, 5000); 
 
-      // (데모용) 실제로는 여기서 Ping 등을 체크하겠지만, 
-      // 현재는 5초 뒤 에러 화면을 보기 위해 성공 로직을 제거하거나 주석 처리함.
-      // 만약 '성공' 케이스를 보고 싶으면 아래 줄 주석 해제
-      // setTimeout(() => setStreamStatus("ok"), 2000);
+      // 🛑 이전에 있던 강제 연결 성공 코드 삭제됨
+      // const successTimer = setTimeout(() => { ... }, 1500); <- REMOVED
 
-      return () => clearTimeout(timer);
+      return () => {
+          clearTimeout(timer);
+      };
     }
   }, [streamHost]);
 
@@ -2241,7 +2274,7 @@ export default function SmartFactoryDashboard() {
                          {/* [UPDATED] Interactive Error/Standby UI 
                              If streamStatus is 'ok', show iframe. 
                              Otherwise show styled error/standby screen.
-                         */}
+                          */}
                          <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 1 }}>
                             {streamStatus === "ok" && streamUrl ? (
                                 <iframe 
