@@ -7,10 +7,9 @@ import { Monitor, MousePointer2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import TopNavigation from "@/components/navigation/top-navigation";
-// ChatbotWidget 등 필요한 컴포넌트 import
-// import ChatbotWidget from "@/components/chatbot-widget"; 
 import { useViewContext } from "./view-context";
 import GmtLoadingScreen from "@/components/loading/gmt-loading";
+// import ChatbotWidget from "@/components/chatbot-widget"; 
 
 // --------------------------------------------------------------------------
 // 1. Mobile Blocker Styles (모바일 차단 화면 스타일)
@@ -119,6 +118,7 @@ const DesktopOnlyWrapper = styled.div`
 
 const NavContainer = styled.div`
   position: relative;
+  /* TopNavigation이 로딩화면 위에 보여야 하므로 가장 높은 z-index 부여 */
   z-index: 5000; 
 `;
 
@@ -137,9 +137,7 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
   const { isLoading, setIsLoading } = useViewContext();
 
   useEffect(() => {
-    // URL 경로가 변경되면 로딩 시작
     setIsLoading(true);
-    // setTimeout 제거: GmtLoadingScreen이 100%가 되면 알아서 끕니다.
   }, [pathname, setIsLoading]);
 
   return (
@@ -173,16 +171,23 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
               key="global-loader"
               style={{ 
                 position: "fixed", 
-                inset: 0, 
-                zIndex: 9999, 
-                background: "#ffffff" // 화이트 배경
+                // [수정] top을 0으로 해서 전체 배경을 흰색으로 채움 (어두운 부분 제거)
+                top: 0, 
+                left: 0,
+                right: 0,
+                bottom: 0,
+                // [중요] Nav(5000)보다 한 단계 낮게 설정 -> Nav가 로딩화면 위에 뜸
+                zIndex: 4999, 
+                background: "#ffffff" 
               }}
               initial={{ opacity: 1 }}
-              exit={{ opacity: 0, filter: "blur(10px)" }} // 블러되면서 사라짐
+              exit={{ opacity: 0, filter: "blur(10px)" }}
               transition={{ duration: 0.6, ease: "easeInOut" }}
             >
-              {/* onComplete: 로딩바가 100%가 되면 호출되어 로딩 상태를 끔 */}
-              <GmtLoadingScreen onComplete={() => setIsLoading(false)} />
+              {/* padding-top으로 컨텐츠만 살짝 내려주면 Nav에 가려지지 않음 */}
+              <div style={{ paddingTop: "64px", height: "100%" }}>
+                <GmtLoadingScreen onComplete={() => setIsLoading(false)} />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

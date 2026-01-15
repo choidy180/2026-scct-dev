@@ -151,7 +151,6 @@ const ContentWrapper = styled.div`
   font-family: ${COMMON_FONT};
 `;
 
-// [수정됨] 헤더 영역을 컬럼(세로) 배치로 변경하여 버튼 영역 확보
 const HeaderContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -185,15 +184,13 @@ const ButtonRow = styled.div`
   width: 100%;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 4px; /* 스크롤바 공간 살짝 확보 */
+  padding-bottom: 4px;
   
-  /* 스크롤바 숨김 (깔끔한 UI) */
   -ms-overflow-style: none;
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
 `;
 
-// [수정됨] 직관적이고 산뜻한 버튼 디자인 + 에러 상태 스타일 추가
 const TabButton = styled.button<{ $isActive: boolean; $hasError: boolean }>`
   border: ${props => props.$hasError ? '2px solid #ef4444' : '1px solid #e2e8f0'};
   outline: none;
@@ -213,11 +210,10 @@ const TabButton = styled.button<{ $isActive: boolean; $hasError: boolean }>`
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
-  flex-shrink: 0; /* 버튼이 줄어들지 않도록 설정 */
-  min-width: 60px; /* 최소 너비 확보 */
+  flex-shrink: 0;
+  min-width: 60px;
   justify-content: center;
   
-  /* 그림자 효과로 깊이감 표현 (isActive일 때 다르게) */
   box-shadow: ${props => props.$isActive 
     ? 'inset 0 2px 4px rgba(0,0,0,0.1)' 
     : '0 2px 4px rgba(0,0,0,0.03)'};
@@ -228,7 +224,6 @@ const TabButton = styled.button<{ $isActive: boolean; $hasError: boolean }>`
   gap: 6px;
   font-family: ${COMMON_FONT};
 
-  /* [수정됨] Y축 이동 이벤트 제거하고 색상/그림자로만 인터렉션 */
   &:hover {
     background: ${props => 
       props.$isActive 
@@ -684,6 +679,7 @@ const LiveClock = memo(() => {
 });
 LiveClock.displayName = 'LiveClock';
 
+// [수정됨] 아이콘 크기 확대 적용 (size={48})
 const StatusCard = memo(({ 
   type, title, mainText, subText, onClick
 }: { 
@@ -692,7 +688,8 @@ const StatusCard = memo(({
   <CardBase $status={type} onClick={onClick} $clickable={!!onClick}>
     <CardHeader>{title}</CardHeader>
     <StatusCircle $status={type}>
-      {type === 'good' ? <FiCheck /> : <FiAlertTriangle />}
+      {/* 여기서 아이콘 크기를 키웠습니다 */}
+      {type === 'good' ? <FiCheck size={48} /> : <FiAlertTriangle size={48} />}
     </StatusCircle>
     <StatusText>{mainText}</StatusText>
     <StatusBadge $status={type}>
@@ -835,7 +832,8 @@ export default function ProcessMonitorPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch('http://1.254.24.170:24828/api/DX_API000022');
+        // [수정됨] API URL 변경
+        const res = await fetch('https://1.254.24.170:24830/api/DX_API000022');
         if (!res.ok) throw new Error('API Failed');
         const json: ApiResponse = await res.json();
         processApiResponse(json);
