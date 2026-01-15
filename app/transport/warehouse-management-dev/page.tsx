@@ -108,7 +108,7 @@ const CELL_HEIGHT = '36px';
 const Layout = styled.div`
   display: flex;
   width: 100vw;
-  height: calc(100vh - 64px);
+  height: 100vh;
   padding: 20px;
   gap: 20px;
   background-color: #F5F7FA;
@@ -147,7 +147,7 @@ const MapCanvas = styled.div`
   justify-content: center;
   align-items: flex-start;
   padding-top: 10px;
-  transform: scale(0.95);
+  overflow: hidden; /* No Scroll */
 `;
 
 const MapContent = styled.div`
@@ -207,7 +207,7 @@ const CellHeader = styled.div`
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  color: #141414;
+  color: #4A5568;
   background-color: #EDF2F7; /* Light Gray Header Background */
   border-bottom: 1px solid #E2E8F0;
 `;
@@ -346,11 +346,11 @@ export default function FinalDashboard() {
             })}
           </div>
           <div style={{padding:'20px', background:'#F9FAFB', borderTop:'1px solid #EDF2F7'}}>
-            <div style={{fontSize:'12px', color:'#718096', marginBottom:'5px'}}>전체 가동률</div>
-            <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
-              <div style={{fontSize:'24px', fontWeight:'800', color:'#2D3748'}}>{totalPercent}%</div>
-              <div style={{fontSize:'13px', fontWeight:'600', color:'#48BB78'}}>정상 운영 중</div>
-            </div>
+             <div style={{fontSize:'12px', color:'#718096', marginBottom:'5px'}}>전체 가동률</div>
+             <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
+                <div style={{fontSize:'24px', fontWeight:'800', color:'#2D3748'}}>{totalPercent}%</div>
+                <div style={{fontSize:'13px', fontWeight:'600', color:'#48BB78'}}>정상 운영 중</div>
+             </div>
           </div>
         </LeftPanel>
 
@@ -365,160 +365,160 @@ export default function FinalDashboard() {
               <div>
                 <SectionTitle>JIG ZONE</SectionTitle>
                 <div style={{display:'flex', gap:'20px', alignItems:'flex-end'}}>
-                  <GridContainer>
-                    <JigStrip ids={JIG_1_L} />
-                    <JigStrip ids={JIG_1_L} />
-                  </GridContainer>
-                  <GridContainer>
-                    <JigStrip ids={JIG_1_R} />
-                    <JigStrip ids={JIG_1_R} />
-                  </GridContainer>
-              </div>
-              <div style={{marginTop:'10px', marginLeft:'60px'}}>
-                  <GridContainer>
-                    <JigStrip ids={JIG_BTM} />
-                    <JigStrip ids={JIG_BTM} />
-                  </GridContainer>
+                   <GridContainer>
+                      <JigStrip ids={JIG_1_L} />
+                      <JigStrip ids={JIG_1_L} />
+                   </GridContainer>
+                   <GridContainer>
+                      <JigStrip ids={JIG_1_R} />
+                      <JigStrip ids={JIG_1_R} />
+                   </GridContainer>
+                </div>
+                <div style={{marginTop:'10px', marginLeft:'60px'}}>
+                   <GridContainer>
+                      <JigStrip ids={JIG_BTM} />
+                      <JigStrip ids={JIG_BTM} />
+                   </GridContainer>
                 </div>
               </div>
 
               {/* GA TOP */}
               <div>
-                <SectionTitle>GA</SectionTitle>
-                <GridContainer>
-                  <Row>
-                      {GA_TOP_1.slice(0,3).map((n) => <Cell key={n} id={`GA${n}`} w={W_NARROW} val={GA_TOP_VALS[n]} />)}
-                      {GA_TOP_1.slice(3).map((n) => <Cell key={n} id={`GA${n}`} w={W_WIDE} val={GA_TOP_VALS[n]} />)}
-                  </Row>
-                  <Row>
-                      {GA_TOP_2.slice(0,3).map((n) => <Cell key={n} id={`GA${n}`} w={W_NARROW} val={GA_TOP_VALS[n]} />)}
-                      {GA_TOP_2.slice(3).map((n) => <Cell key={n} id={`GA${n}`} w={W_WIDE} val={GA_TOP_VALS[n]} />)}
-                  </Row>
-                </GridContainer>
+                 <SectionTitle>GA</SectionTitle>
+                 <GridContainer>
+                    <Row>
+                       {GA_TOP_1.slice(0,3).map((n) => <Cell key={n} id={`GA${n}`} w={W_NARROW} val={GA_TOP_VALS[n]} />)}
+                       {GA_TOP_1.slice(3).map((n) => <Cell key={n} id={`GA${n}`} w={W_WIDE} val={GA_TOP_VALS[n]} />)}
+                    </Row>
+                    <Row>
+                       {GA_TOP_2.slice(0,3).map((n) => <Cell key={n} id={`GA${n}`} w={W_NARROW} val={GA_TOP_VALS[n]} />)}
+                       {GA_TOP_2.slice(3).map((n) => <Cell key={n} id={`GA${n}`} w={W_WIDE} val={GA_TOP_VALS[n]} />)}
+                    </Row>
+                 </GridContainer>
               </div>
 
               {/* MAIN RACK (GA/GB) */}
               <div>
-                <SectionTitle>GA / GB</SectionTitle>
-                <GridContainer>
-                  {/* GA Rows */}
-                  {GA_ROWS.map((row, i) => (
-                      <Row key={i}>
-                          {row.l.map(n => <Cell key={n} id={`GA${n}`} w={W_NARROW} val={(row.v as any)[n]} />)}
-                          {row.r.map(n => <Cell key={n} id={`GA${n}`} w={W_WIDE} val={(row.v as any)[n]} />)}
-                      </Row>
-                  ))}
-                  {/* Divider visual via thick border on next row */}
-                  {/* GB Rows */}
-                  <Row>
-                      {GB_34_L.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
-                      {GB_34_R.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
-                  </Row>
-                  <Row>
-                      {GB_17_L.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
-                      {GB_17_R.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
-                  </Row>
-                </GridContainer>
+                 <SectionTitle>GA / GB</SectionTitle>
+                 <GridContainer>
+                    {/* GA Rows */}
+                    {GA_ROWS.map((row, i) => (
+                        <Row key={i}>
+                            {row.l.map(n => <Cell key={n} id={`GA${n}`} w={W_NARROW} val={(row.v as any)[n]} />)}
+                            {row.r.map(n => <Cell key={n} id={`GA${n}`} w={W_WIDE} val={(row.v as any)[n]} />)}
+                        </Row>
+                    ))}
+                    {/* Divider visual via thick border on next row */}
+                    {/* GB Rows */}
+                    <Row>
+                        {GB_34_L.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
+                        {GB_34_R.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
+                    </Row>
+                    <Row>
+                        {GB_17_L.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
+                        {GB_17_R.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
+                    </Row>
+                 </GridContainer>
               </div>
 
               {/* GC */}
               <div>
-                <SectionTitle>GC</SectionTitle>
-                <div style={{display:'flex', gap:'20px'}}>
-                  <GridContainer>
-                      <Row>{GC_L_TOP.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} />)}</Row>
-                      <Row>{GC_L_BTM.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} val={GC_VALS[n]} />)}</Row>
-                  </GridContainer>
-                  <GridContainer>
-                      <Row>{GC_R_TOP.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} val={GC_VALS[n]} />)}</Row>
-                      <Row>{GC_R_BTM.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} val={GC_VALS[n]} />)}</Row>
-                  </GridContainer>
-                </div>
+                 <SectionTitle>GC</SectionTitle>
+                 <div style={{display:'flex', gap:'20px'}}>
+                    <GridContainer>
+                        <Row>{GC_L_TOP.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} />)}</Row>
+                        <Row>{GC_L_BTM.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} val={GC_VALS[n]} />)}</Row>
+                    </GridContainer>
+                    <GridContainer>
+                        <Row>{GC_R_TOP.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} val={GC_VALS[n]} />)}</Row>
+                        <Row>{GC_R_BTM.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} val={GC_VALS[n]} />)}</Row>
+                    </GridContainer>
+                 </div>
               </div>
 
             </ColLeft>
 
             {/* === RIGHT COLUMN === */}
             <ColRight>
-              
+               
                {/* GF */}
-              <div>
-                <SectionTitle>GF</SectionTitle>
-                <div style={{display:'flex', gap:'15px'}}>
-                    <GridContainer>
-                        <Row>
-                          <div style={{display:'flex', flexDirection:'column'}}>
-                              {GF_LEFT_COL.map(n => <Cell key={n} id={`GF${n}`} w={W_NARROW} />)}
-                          </div>
-                          <div style={{display:'flex', flexDirection:'column'}}>
-                              {GF_RIGHT_COL.map(n => <Cell key={n} id={`GF${n}`} w={W_NARROW} />)}
-                          </div>
-                        </Row>
-                    </GridContainer>
-                    <GridContainer>
-                        {GF_GRID.map((row, i) => (
-                            <Row key={i}>
-                                {row.map(n => <Cell key={n} id={`GF${n}`} w={W_NARROW} val={['22','21','20','17'].includes(n)?'7501':undefined} />)}
-                            </Row>
-                        ))}
-                    </GridContainer>
-                </div>
-              </div>
+               <div>
+                  <SectionTitle>GF</SectionTitle>
+                  <div style={{display:'flex', gap:'15px'}}>
+                      <GridContainer>
+                          <Row>
+                              <div style={{display:'flex', flexDirection:'column'}}>
+                                 {GF_LEFT_COL.map(n => <Cell key={n} id={`GF${n}`} w={W_NARROW} />)}
+                              </div>
+                              <div style={{display:'flex', flexDirection:'column'}}>
+                                 {GF_RIGHT_COL.map(n => <Cell key={n} id={`GF${n}`} w={W_NARROW} />)}
+                              </div>
+                          </Row>
+                      </GridContainer>
+                      <GridContainer>
+                          {GF_GRID.map((row, i) => (
+                              <Row key={i}>
+                                  {row.map(n => <Cell key={n} id={`GF${n}`} w={W_NARROW} val={['22','21','20','17'].includes(n)?'7501':undefined} />)}
+                              </Row>
+                          ))}
+                      </GridContainer>
+                  </div>
+               </div>
 
-              {/* CLUSTER: GD (Left) + GE (Right) */}
-              <div>
-                <SectionTitle>GE / GD</SectionTitle>
-                <div style={{display:'flex', gap:'20px'}}>
-                    {/* Left Sub-Col: GE28 + GD Strip */}
-                    <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end'}}>
-                        <GridContainer style={{marginRight: W_NARROW}}>
-                            <Cell id={`GE${GE_L[0]}`} w={W_NARROW} />
-                        </GridContainer>
-                        <GridContainer style={{marginBottom:'20px'}}>
-                            {GE_BODY.map((p,i) => (
-                                <Row key={i}>
-                                    <Cell id={`GE${p.l}`} w={W_NARROW} />
-                                    <Cell id={`GE${p.r}`} w={W_NARROW} />
-                                </Row>
-                            ))}
-                        </GridContainer>
+               {/* CLUSTER: GD (Left) + GE (Right) */}
+               <div>
+                   <SectionTitle>GE / GD</SectionTitle>
+                   <div style={{display:'flex', gap:'20px'}}>
+                       {/* Left Sub-Col: GE28 + GD Strip */}
+                       <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end'}}>
+                           <GridContainer style={{marginRight: W_NARROW, marginBottom:'10px'}}>
+                               <Cell id={`GE${GE_L[0]}`} w={W_NARROW} />
+                           </GridContainer>
+                           <GridContainer style={{marginBottom:'20px'}}>
+                               {GE_BODY.map((p,i) => (
+                                   <Row key={i}>
+                                       <Cell id={`GE${p.l}`} w={W_NARROW} />
+                                       <Cell id={`GE${p.r}`} w={W_NARROW} />
+                                   </Row>
+                               ))}
+                           </GridContainer>
 
-                        {/* GD Strip */}
-                        <GridContainer>
-                            {GD_STRIP.map((p,i) => (
-                                <Row key={i}>
-                                    <Cell id={`GD${p.l}`} w={W_NARROW} val={['45','43','41','39'].includes(p.l) ? (p.l==='39'?'3804':'1002') : undefined} />
-                                    <Cell id={`GD${p.r}`} w={W_NARROW} val={p.r==='42'?'6732':undefined} />
-                                </Row>
-                            ))}
-                        </GridContainer>
-                    </div>
+                           {/* GD Strip */}
+                           <GridContainer>
+                               {GD_STRIP.map((p,i) => (
+                                   <Row key={i}>
+                                       <Cell id={`GD${p.l}`} w={W_NARROW} val={['45','43','41','39'].includes(p.l) ? (p.l==='39'?'3804':'1002') : undefined} />
+                                       <Cell id={`GD${p.r}`} w={W_NARROW} val={p.r==='42'?'6732':undefined} />
+                                   </Row>
+                               ))}
+                           </GridContainer>
+                       </div>
 
-                    {/* Right Sub-Col: GE Grid + GD Grid */}
-                    <div style={{display:'flex', flexDirection:'column'}}>
-                        <div style={{height:'40px'}}></div> {/* Spacer */}
-                        
-                        {/* GE Grid */}
-                        <GridContainer style={{marginBottom:'20px'}}>
-                            {GE_GRID.map((row,i) => (
-                                <Row key={i}>
-                                    {row.map(n => <Cell key={n} id={`GE${n}`} w={W_NARROW} val="7501" />)}
-                                </Row>
-                            ))}
-                        </GridContainer>
+                       {/* Right Sub-Col: GE Grid + GD Grid */}
+                       <div style={{display:'flex', flexDirection:'column'}}>
+                           <div style={{height:'40px'}}></div> {/* Spacer */}
+                           
+                           {/* GE Grid */}
+                           <GridContainer style={{marginBottom:'20px'}}>
+                               {GE_GRID.map((row,i) => (
+                                   <Row key={i}>
+                                       {row.map(n => <Cell key={n} id={`GE${n}`} w={W_NARROW} val="7501" />)}
+                                   </Row>
+                               ))}
+                           </GridContainer>
 
-                        {/* GD Grid */}
-                        <GridContainer>
-                            <Row>{GD_GRID_H.map(id => <Cell key={id} id={id} w={W_NARROW} val="7501" />)}</Row>
-                            {GD_GRID.map((row,i) => (
-                                <Row key={i}>
-                                    {row.map(n => <Cell key={n} id={`GD${n}`} w={W_NARROW} />)}
-                                </Row>
-                            ))}
-                        </GridContainer>
-                    </div>
-                </div>
-              </div>
+                           {/* GD Grid */}
+                           <GridContainer>
+                               <Row>{GD_GRID_H.map(id => <Cell key={id} id={id} w={W_NARROW} val="7501" />)}</Row>
+                               {GD_GRID.map((row,i) => (
+                                   <Row key={i}>
+                                       {row.map(n => <Cell key={n} id={`GD${n}`} w={W_NARROW} />)}
+                                   </Row>
+                               ))}
+                           </GridContainer>
+                       </div>
+                   </div>
+               </div>
 
             </ColRight>
 
@@ -528,8 +528,8 @@ export default function FinalDashboard() {
         {/* RIGHT: INVENTORY */}
         <RightPanel>
           <Header>
-            실시간 재고
-            <span style={{fontSize:'12px', background:'#C6F6D5', color:'#22543D', padding:'2px 8px', borderRadius:'12px'}}>Live</span>
+             실시간 재고
+             <span style={{fontSize:'12px', background:'#C6F6D5', color:'#22543D', padding:'2px 8px', borderRadius:'12px'}}>Live</span>
           </Header>
           <div style={{overflowY:'auto', flex:1, padding:'5px 0'}}>
             {INVENTORY.map((item) => (

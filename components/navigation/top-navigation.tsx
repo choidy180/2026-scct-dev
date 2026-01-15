@@ -30,7 +30,7 @@ const subMenuData: Record<string, MenuDataType> = {
       { label: "택타임 대시보드", href: "/production/takttime-dashboard", detail: "공정별 목표 시간 대비 실제 작업 시간을 비교 분석합니다." },
       { label: "발포설비 이상 탐지", href: "/production/foaming-inspection", detail: "발포 공정 중 발생하는 미세한 이상 징후를 사전에 포착합니다." },
       { label: "유리틈새확인", href: "/production/glass-gap-check", detail: "조립된 유리의 틈새 규격 준수 여부를 정밀 측정합니다." },
-      { label: "발포설비 대차정위치", href: "/production/foaming-cart-position", detail: "대차가 정해진 위치에 정확히 안착했는지 센서로 확인합니다." },
+      // { label: "발포설비 대차정위치", href: "/production/foaming-cart-position", detail: "대차가 정해진 위치에 정확히 안착했는지 센서로 확인합니다." },
       { label: "발포 누설액 체크", href: "/production/leak-detection", detail: "화학 용액의 누설 여부를 카메라로 감지하여 알림을 보냅니다." },
       { label: "가스켓 이상 탐지", href: "/production/gasket-check", detail: "가스켓의 부착 상태와 손상 여부를 검사합니다." },
       { label: "필름부착확인", href: "/production/film-attachment", detail: "보호 필름이 기포 없이 정확하게 부착되었는지 확인합니다." },
