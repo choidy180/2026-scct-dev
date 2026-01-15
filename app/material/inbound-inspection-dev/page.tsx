@@ -2029,7 +2029,7 @@ function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () =>
                     muted 
                     playsInline
                     onEnded={handleVideoEnded}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                   />
                   <motion.div className="scan-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} > 
                   </motion.div> 
