@@ -1,5 +1,6 @@
 'use client';
 
+import GmtLoadingScreen from '@/components/loading/gmt-loading';
 import React from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 
@@ -542,6 +543,7 @@ export default function FinalDashboard() {
         </RightPanel>
 
       </Layout>
+      <GmtLoadingScreen/>
     </>
   );
 }

@@ -90,7 +90,7 @@ const SoundPermissionModal = ({ onConfirm }: { onConfirm: () => void }) => {
                     onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
                 >
                     <Volume2 size={20} />
-                    확인 및 알람 끄기
+                    확인 및 알람 켜기
                 </button>
             </div>
             <style jsx>{`

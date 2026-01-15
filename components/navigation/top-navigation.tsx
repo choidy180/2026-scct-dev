@@ -26,23 +26,23 @@ const subMenuData: Record<string, MenuDataType> = {
   },
   "AI 생산관리": {
     items: [
+      { label: "GR5 가조립 투입", href: "/production/smart-factory-dashboard", detail: "GR5 가조립 투입에 대한 알람" },
+      { label: "유리틈새검사 AI", href: "/production/glass-gap-check", detail: "조립된 유리의 틈새 규격 준수 여부를 정밀 측정합니다." },
       { label: "라인설비 모니터링", href: "/production/line-monitoring", detail: "각 생산 라인의 가동률과 설비 상태를 실시간으로 추적합니다." },
-      { label: "택타임 대시보드", href: "/production/takttime-dashboard", detail: "공정별 목표 시간 대비 실제 작업 시간을 비교 분석합니다." },
       { label: "발포설비 이상 탐지", href: "/production/foaming-inspection", detail: "발포 공정 중 발생하는 미세한 이상 징후를 사전에 포착합니다." },
-      { label: "유리틈새확인", href: "/production/glass-gap-check", detail: "조립된 유리의 틈새 규격 준수 여부를 정밀 측정합니다." },
       // { label: "발포설비 대차정위치", href: "/production/foaming-cart-position", detail: "대차가 정해진 위치에 정확히 안착했는지 센서로 확인합니다." },
       { label: "발포 누설액 체크", href: "/production/leak-detection", detail: "화학 용액의 누설 여부를 카메라로 감지하여 알림을 보냅니다." },
       { label: "가스켓 이상 탐지", href: "/production/gasket-check", detail: "가스켓의 부착 상태와 손상 여부를 검사합니다." },
       { label: "필름부착확인", href: "/production/film-attachment", detail: "보호 필름이 기포 없이 정확하게 부착되었는지 확인합니다." },
+      { label: "택타임 대시보드", href: "/production/takttime-dashboard", detail: "공정별 목표 시간 대비 실제 작업 시간을 비교 분석합니다." },
       { label: "Pysical AI", href: "/production/pysical-ai", detail: "물리적 환경 변수를 학습하여 최적의 설비 세팅값을 제안합니다." },
-      { label: "Pysical AI2", href: "/production/smart-factory-dashboard", detail: "물리적 환경 변수를 학습하여 최적의 설비 세팅값을 제안합니다." }
     ]
   },
   "AI 운송관리": {
     items: [
-      { label: "실시간 운송현황", href: "/transport/realtime-status", detail: "차량의 현재 위치와 배송 예정 시간을 실시간 지도로 보여줍니다." },
       { label: "창고관리", href: "/transport/warehouse-management", detail: "출하 대기 중인 물품의 재고 현황을 관리합니다." },
       { label: "출하관리", href: "/transport/shipment", detail: "출하 지시서를 생성하고 상차 작업을 모니터링합니다." },
+      { label: "실시간 운송현황", href: "/transport/realtime-status", detail: "차량의 현재 위치와 배송 예정 시간을 실시간 지도로 보여줍니다." },
     ]
   },
 };
@@ -78,6 +78,7 @@ const NavInner = styled.div`
 const LogoArea = styled.div`
   display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: #333; cursor: pointer;
   .logo-icon { width: 32px; height: 32px; background: #D31145; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 4px 10px rgba(211, 17, 69, 0.3); }
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
 `;
 
 const MenuArea = styled.div`
@@ -295,7 +296,7 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
         <NavInner>
           <LogoArea onClick={(e: any) => handleMenuClick(e, "AI 운송관리")}>
             <div className="logo-icon"><FiGrid /></div>
-            물류 자원 회전율 및 운송 최적화 관제
+            <h4>물류 자원 회전율 및 운송 최적화 관제</h4>
           </LogoArea>
           
           <MenuArea ref={menuAreaRef}>

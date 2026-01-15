@@ -1,41 +1,56 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import styled, { keyframes, css } from 'styled-components';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import styled, { keyframes, css, createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 
 // --- Firebase Imports ---
 import { initializeApp, FirebaseApp } from "firebase/app";
 import { getDatabase, ref, onValue, Database } from "firebase/database";
 
+// --- Icons (react-icons) ---
 import {
-  LuWifi,
-  LuWifiOff,
   LuMaximize,
   LuMinimize,
-  LuPlay,
+  LuX,
+  LuBox,
+  LuLayers,
+  LuClipboardCheck,
+  LuFileText,
 } from "react-icons/lu";
 
+// --- Icons (lucide-react) ---
 import {
-  ScanEye,
-  FileText,
-  History,
-  BatteryCharging,
-  Wifi,
-  MoreHorizontal,
-  AlertCircle,
-  Thermometer,
-  ShieldAlert,
-  LayoutTemplate,
-  CircleDashed,
   Barcode,
   Loader2,
   Cpu,
   Save,
   CheckCircle2,
-  Zap 
+  Activity,
+  FileBadge,
+  ScanBarcode,
+  ListTodo,
+  ScanEye,
+  LayoutGrid,
+  Package as PackageIcon,
+  X as XIcon,
+  Search,
+  MoreHorizontal,
+  Truck,
+  PieChart as PieIcon,
+  History,
+  RefreshCw,
+  Signal,
+  WifiOff,
+  Calendar,
+  Box,
+  Layers,
+  MapPin,
+  ImageOff,
+  ArrowRight
 } from "lucide-react";
 
+// --- Charts ---
 import {
   BarChart,
   Bar,
@@ -45,7 +60,149 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
-// ─── [CONFIG] Firebase Configuration ─────────────────────
+// ─── [1. INTERFACES] ─────────────────────────────
+
+interface ItemData {
+  id: number;
+  project: string;
+  code: string;
+  name: string;
+  type: string;
+  date: string;
+  vendor: string;
+  qty: number;
+  quality: string;
+  dwellTime: string;
+}
+
+interface SlotData {
+  no: number;
+  active: boolean;
+}
+
+interface ZoneData {
+  id: string;
+  total: number;
+  used: number;
+  free: number;
+  status: string;
+  slots: SlotData[];
+}
+
+interface InventoryItem {
+  code: string;
+  qty: number;
+  loc: string;
+}
+
+// Styled Props Interfaces
+interface StyledShowProps {
+  $show: boolean;
+}
+
+interface StyledFullScreenProps {
+  $isFullScreen: boolean;
+}
+
+interface StyledFadeProps {
+  $isFadingOut: boolean;
+}
+
+interface ItemCardProps {
+  $active: boolean;
+}
+
+interface StepItemProps {
+  $active: boolean;
+  $done: boolean;
+}
+
+// ─── [2. CONSTANTS] ─────────────────────────────────────
+
+const PORT = 8080;
+
+const PROCESS_STEPS = [
+  { id: 1, label: "바코드 디코딩", icon: <Barcode size={14} /> },
+  { id: 2, label: "ERP 조회", icon: <Cpu size={14} /> },
+  { id: 3, label: "입고 검사 매칭", icon: <Activity size={14} /> },
+  { id: 4, label: "품질 이력 분석", icon: <FileBadge size={14} /> },
+  { id: 5, label: "데이터 저장", icon: <Save size={14} /> },
+];
+
+const BOOT_LOGS = [
+  "BIOS Integrity Check... OK",
+  "Initializing Optical Sensors...",
+  "Calibrating Lens Aperture...",
+  "Loading AI Vision Models (v2.4)...",
+  "System Ready."
+];
+
+// ─── [3. HELPER FUNCTIONS] ──────────────────────────────
+
+const generateDummyItems = (): ItemData[] => {
+  const items: ItemData[] = [];
+  
+  items.push({
+    id: 0,
+    project: "A-Next F(FU,FL) Door 내재화",
+    code: "MGJ63884811",
+    name: "Plate,Freezer (Outdoor)",
+    type: "자체무검사",
+    date: "2026-01-13",
+    vendor: "세진공업(주)",
+    qty: 180,
+    quality: "Y",
+    dwellTime: "11분"
+  });
+
+  items.push({
+    id: 1,
+    project: "PILLAR",
+    code: "MGJ63884911",
+    name: "Plate,Freezer (Outdoor)",
+    type: "정밀검사",
+    date: "2026-01-13",
+    vendor: "LG전자",
+    qty: 150,
+    quality: "Y",
+    dwellTime: "15분"
+  });
+
+  for(let i=2; i<5; i++) {
+    items.push({
+      id: i,
+      project: "PILLAR_V2",
+      code: `MEE${Math.floor(60000000 + Math.random() * 90000000)}`,
+      name: "COOLING FAN_V2",
+      type: "육안검사",
+      date: "2026-01-13",
+      vendor: "협력사 A",
+      qty: Math.floor(Math.random() * 1000) + 100,
+      quality: "Y",
+      dwellTime: "20분"
+    });
+  }
+  return items;
+};
+
+const generateHistoryData = () => {
+  const companies = ['에이치물산', '동양철강', '태성산업', '한화물류', '경동택배', '미래해운', '세진공업', '대원강업', '삼보모터스', '대한통운'];
+  return Array.from({ length: 20 }).map((_, i) => {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() - (i * 15 + 5)); 
+    const h = String(date.getHours()).padStart(2, '0');
+    const m = String(date.getMinutes()).padStart(2, '0');
+
+    return {
+      id: i,
+      company: companies[i % companies.length],
+      time: `${h}:${m}`,
+      status: Math.random() > 0.15 ? '정상' : '검수필요'
+    };
+  });
+};
+
+// ─── [4. FIREBASE CONFIG] ───────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyAOBRFxZhVTJmP8_jdPNCFHSLN1FG9QAho",
   authDomain: "scct2026.firebaseapp.com",
@@ -61,7 +218,7 @@ let app: FirebaseApp | undefined;
 let db: Database | undefined;
 
 try {
-  if (firebaseConfig.apiKey.length > 10) { 
+  if (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10) { 
     app = initializeApp(firebaseConfig);
     db = getDatabase(app);
   }
@@ -69,953 +226,2210 @@ try {
   console.warn("Firebase Init Failed:", e);
 }
 
-// ─── [CONFIG] System & Theme ─────────────────────────────
+// ─── [5. STYLES] ──────────────────
 
-type StreamStatus = "idle" | "checking" | "ok" | "error";
-const PORT = 8080;
-
-const PROCESS_STEPS = [
-  { id: 1, label: "데이터 수신 및 대기", icon: <Wifi size={20} /> },
-  { id: 2, label: "바코드 / QR 스캔", icon: <Barcode size={20} /> },
-  { id: 3, label: "AI 시각 정밀 분석", icon: <ScanEye size={20} /> },
-  { id: 4, label: "결함 데이터 처리", icon: <Cpu size={20} /> },
-  { id: 5, label: "서버 동기화 완료", icon: <Save size={20} /> },
-];
-
-interface HistoryStatusProps {
-  status: 'ok' | 'fail';
-}
-
-const THEME = {
-  bg: "#0f172a",
-  primary: "#3B82F6",
-  alert: "#EF4444",
-  warning: "#F59E0B",
-  success: "#10B981",
-  textMain: "#1E293B",
-  textSub: "#64748B",
-  cardBg: "rgba(255, 255, 255, 0.85)",
-  line: "#94A3B8",
-};
-
-const DATA_NODES = [
-  { id: 1, title: "Detected Object", value: "Unattended Box", subValue: "Conf: 98%", color: THEME.warning, icon: <ScanEye size={18} />, tags: ["Zone B-2", "Cardboard"] },
-  { id: 2, title: "Thermal Scan", value: "65°C (High)", subValue: "Heat Source", color: THEME.alert, icon: <Thermometer size={18} />, tags: ["Risk: Fire", "Sensor: IR"] },
-  { id: 3, title: "Protocol", value: "Code Yellow", subValue: "Check Item", color: THEME.primary, icon: <FileText size={18} />, tags: ["View Log", "Share"] },
-  { id: 4, title: "History", value: "New Entry", subValue: "10s ago", color: THEME.textSub, icon: <History size={18} />, tags: ["Line #2", "Cam #4"] },
-  { id: 5, title: "Battery", value: "92%", subValue: "Connected", color: THEME.success, icon: <BatteryCharging size={18} />, tags: ["AC Power"] },
-  { id: 6, title: "Network", value: "5G Stable", subValue: "12ms Latency", color: THEME.success, icon: <Wifi size={18} />, tags: ["Secure", "HD Stream"] },
-];
-
-const LAYOUT_CONFIG = {
-  FHD: {
-    arRadiusX: 280,
-    arRadiusY: 160,
-    hudOffsetX: 400,
-    hudGapY_Left: 130,
-    hudGapY_Right: 130,
-    hudStartY_Left: -180,
-    hudStartY_Right: -180,
-  },
-  QHD: {
-    arRadiusX: 400,
-    arRadiusY: 250,
-    hudOffsetX: 550,
-    hudGapY_Left: 160,
-    hudGapY_Right: 160,
-    hudStartY_Left: -220,
-    hudStartY_Right: -220,
+const GlobalStyle = createGlobalStyle`
+  @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+  body {
+    margin: 0;
+    padding: 0;
+    background: #f8fafc;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    overflow: hidden;
+    color: #1e293b;
   }
-};
+  * {
+    box-sizing: border-box;
+    font-family: 'Pretendard', sans-serif;
+  }
+`;
 
-// ─── [Components] AR Interface Parts ─────────────────────
+const hideScrollbar = css`
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`;
 
-function ARNodeItem({ data, x, y, index }: { data: any, x: number, y: number, index: number }) {
-  return (
-    <CardPositioner
-      layout
-      initial={{ x: 0, y: 0, opacity: 0, scale: 0.5 }}
-      animate={{
-        x, y, opacity: 1, scale: 1,
-        transition: { type: "spring", stiffness: 80, damping: 15, delay: index * 0.1 }
-      }}
-      exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.3 } }}
-    >
-      <CardCentering>
-        <ARCard $accentColor={data.color}>
-          <ARCardHeader>
-            <div className="icon-group">
-              <IconBox $color={data.color}>{data.icon}</IconBox>
-              <span className="title">{data.title}</span>
-            </div>
-            <MoreHorizontal size={16} color="#94A3B8" />
-          </ARCardHeader>
-          <ARCardBody>
-            <div className="value">{data.value}</div>
-            <div className="sub-row">
-              <span className="sub-text" style={{ color: data.color }}>{data.subValue}</span>
-            </div>
-          </ARCardBody>
-          <ARCardFooter>
-            {data.tags.map((tag: string, i: number) => <Tag key={i}>{tag}</Tag>)}
-          </ARCardFooter>
-        </ARCard>
-      </CardCentering>
-    </CardPositioner>
-  );
-}
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
 
-// ─── [Main] Dashboard Component ──────────────────────────
+const rotateLens = keyframes`
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+`;
 
-export default function SmartFactoryDashboard() {
-  const [loading, setLoading] = useState(true);
-  const [progress, setProgress] = useState(0);
-  const [isFadingOut, setIsFadingOut] = useState(false);
-  const [statusText, setStatusText] = useState('시스템 초기화 중...');
+const pulseRing = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  70% { box-shadow: 0 0 0 20px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+`;
 
-  const [streamHost, setStreamHost] = useState("192.168.50.196");
-  const [streamStatus, setStreamStatus] = useState<StreamStatus>("idle");
-  const [retryKey, setRetryKey] = useState(0);
-  const streamUrl = streamHost ? `http://${streamHost}:${PORT}/` : null;
+const blinkCursor = keyframes`
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+`;
 
-  const [isActive, setIsActive] = useState(false);
-  const [isCircularLayout, setIsCircularLayout] = useState(true);
-  const [isQHD, setIsQHD] = useState(false);
+const glareMove = keyframes`
+  0% { left: -50%; }
+  100% { left: 150%; }
+`;
 
-  // [상태 관리]
-  const [processStep, setProcessStep] = useState(0); 
-  const [isPanelActive, setIsPanelActive] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
-  const [showARNodes, setShowARNodes] = useState(false);
-  const [processProgress, setProcessProgress] = useState(0); 
-  const [isProcessing, setIsProcessing] = useState(false);
-  const isProcessingRef = useRef(false);
+// --- Layout Components ---
 
-  const [isFullScreen, setIsFullScreen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const previousDataRef = useRef<string>(""); 
+const DashboardContainer = styled.div<StyledShowProps>`
+  width: 100%;
+  height: calc(100vh - 64px);
+  background-color: #f8fafc;
+  padding: 20px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 20px;
+  overflow: hidden;
+  animation: ${(props) => (props.$show ? css`${fadeIn} 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards` : 'none')};
+  opacity: 0;
+`;
 
-  useEffect(() => {
-    const checkRes = () => setIsQHD(window.innerWidth > 2200);
-    checkRes();
-    window.addEventListener('resize', checkRes);
+const Column = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+`;
+
+const Card = styled.div`
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+`;
+
+const TopCard = styled(Card)`
+  flex-shrink: 0;
+`;
+
+const FullHeightCard = styled(Card)`
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+`;
+
+const CardTitle = styled.h2`
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+`;
+
+// --- Left Panel Specifics (UPDATED) ---
+
+const VehicleImageContainer = styled.div`
+  width: 100%;
+  height: 160px;
+  background: #0f172a;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  border-bottom: none;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .no-image {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+`;
+
+const PlateContainer = styled.div`
+  background: #1e293b;
+  border-radius: 0 0 8px 8px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 20px;
+  overflow: hidden;
+  margin-bottom: 20px;
+
+  .label {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  .plate-badge {
+    height: 100%;
+    background: #3b82f6;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.5px;
+  }
+`;
+
+const InfoRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  align-items: center;
+  font-size: 1rem;
+
+  .label {
+    color: #64748b;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape' && isFullScreen) {
-            setIsFullScreen(false);
-        }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('resize', checkRes);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isFullScreen]);
-
-  const CONFIG = isQHD ? LAYOUT_CONFIG.QHD : LAYOUT_CONFIG.FHD;
-
-  const toggleFullScreen = () => {
-    setIsFullScreen(prev => !prev);
-  };
-
-  const getCardPosition = (index: number) => {
-    if (isCircularLayout) {
-      const angleDeg = (index * (360 / DATA_NODES.length)) - 90;
-      const radian = (angleDeg * Math.PI) / 180;
-      return { x: Math.cos(radian) * CONFIG.arRadiusX, y: Math.sin(radian) * CONFIG.arRadiusY };
-    } else {
-      if (index < 3) return { x: -CONFIG.hudOffsetX, y: CONFIG.hudStartY_Left + (index * CONFIG.hudGapY_Left) };
-      else { const rightIndex = index - 3; return { x: CONFIG.hudOffsetX, y: CONFIG.hudStartY_Right + (rightIndex * CONFIG.hudGapY_Right) }; }
+    &::before {
+      content: '';
+      display: block;
+      width: 4px;
+      height: 4px;
+      background: #94a3b8;
+      border-radius: 50%;
     }
-  };
+  }
+  .value {
+    color: #0f172a;
+    font-weight: 800;
+  }
+  .highlight-box {
+      background: #3b82f6;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-weight: 600;
+  }
+`;
 
-  // 초기 로딩
-  useEffect(() => {
-    if (!loading) return;
-    let interval = setInterval(() => {
-      setProgress((prev) => {
-        let inc = Math.random() * 5;
-        if (prev < 30) { setStatusText('시스템 모듈 로드 중...'); inc = Math.random() * 8; }
-        else if (prev < 60) { setStatusText('보안 프로토콜 연결 중...'); inc = Math.random() * 3; }
-        else if (prev < 85) { setStatusText('AI 비전 모델 동기화 중...'); inc = Math.random() * 4; }
-        else { setStatusText('대시보드 구성 완료...'); inc = Math.random() * 10; }
-        const next = prev + inc;
-        if (next >= 100) {
-          clearInterval(interval);
-          setTimeout(() => setIsFadingOut(true), 500);
-          setTimeout(() => setLoading(false), 1300);
-          return 100;
-        }
-        return next;
-      });
-    }, 150);
-    return () => clearInterval(interval);
-  }, [loading]);
+const DwellTimeBadge = styled.span`
+  font-weight: 800;
+  color: #fff;
+  background: rgba(239, 68, 68, 0.9);
+  padding: 4px 10px;
+  border-radius: 4px;
+`;
 
-  // 스트림 체크
-  useEffect(() => {
-    if (!streamUrl) { setStreamStatus("idle"); return; }
-    let cancelled = false;
-    async function checkStream() {
-      setStreamStatus("checking");
-      try {
-        await fetch(streamUrl!, { method: "HEAD", mode: "no-cors", signal: AbortSignal.timeout(3000) });
-        if (!cancelled) setStreamStatus("ok");
-      } catch {
-        if (!cancelled) setStreamStatus("error");
+const CompactScoreRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+`;
+
+const CompactScoreBox = styled.div<{ $type: 'pass' | 'fail' }>`
+  background: ${props => props.$type === 'pass' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'};
+  border: 1px solid ${props => props.$type === 'pass' ? '#10b981' : '#ef4444'};
+  border-radius: 8px;
+  padding: 6px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  .label {
+    font-size: 1rem;
+    font-weight: 700;
+    color: ${props => props.$type === 'pass' ? '#15803d' : '#b91c1c'};
+  }
+  .value {
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: ${props => props.$type === 'pass' ? '#15803d' : '#b91c1c'};
+  }
+`;
+
+const ChartContainer = styled.div`
+  flex-shrink: 0;
+  width: 100%;
+  height: 120px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+`;
+
+const HistoryListContainer = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+  
+  .h-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #64748b;
+    padding: 0 4px 8px 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .h-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 8px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+  }
+`;
+
+const HistoryItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #f1f5f9;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+
+  .comp {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #334155;
+  }
+  .info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    .status {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        &.ok { background: #dcfce7; color: #166534; }
+        &.bad { background: #fee2e2; color: #991b1b; }
+    }
+    .time {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        font-family: monospace;
+    }
+  }
+`;
+
+// --- Right Panel Specifics ---
+
+const VideoCard = styled(motion.div)<StyledFullScreenProps>`
+  /* background: #1e293b; */
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+  border: 1px solid #e2e8f0;
+  
+  ${({ $isFullScreen }) => $isFullScreen && css`
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: calc(100vh - 64px);
+    z-index: 999;
+    border-radius: 0;
+    margin: 0;
+  `}
+`;
+
+const VideoHeader = styled.div`
+  background: #fff;
+  height: 60px;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+
+  .title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    h3 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #1e293b;
+      margin: 0;
+    }
+  }
+
+  .btn-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+`;
+
+const IpInputWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+
+  input {
+    border: none;
+    background: transparent;
+    font-size: 1rem;
+    width: 140px;
+    color: #334155;
+    outline: none;
+    text-align: right;
+  }
+  input::placeholder {
+    color: #94a3b8;
+  }
+  span.label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #94a3b8;
+  }
+`;
+
+const PinkButton = styled.button`
+  background: #e11d48;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: .9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(225, 29, 72, 0.2);
+  transition: all 0.2s;
+
+  &:hover {
+    background: #be123c;
+  }
+`;
+
+// [UPDATED] Error State to Fill Height
+const StyledErrorState = styled.div`
+  position: absolute; /* Changed to absolute to force fill */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #0f172a;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #475569;
+  overflow: hidden;
+  z-index: 10;
+
+  .grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .content-box {
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 40px;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    max-width: 400px;
+    text-align: center;
+  }
+
+  .icon-wrapper {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -5px;
+      border-radius: 50%;
+      border: 2px solid rgba(239, 68, 68, 0.3);
+      border-top-color: transparent;
+      animation: ${rotateLens} 2s linear infinite;
+    }
+  }
+
+  h2 {
+    color: #ef4444;
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: 1px;
+  }
+  
+  p {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .barcode-layer {
+    position: absolute;
+    /* bottom: 40px; */
+    opacity: 0.3;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255,255,255,0.5);
+    font-family: monospace;
+    font-size: 0.8rem;
+  }
+`;
+
+// --- Modal & Overlay Styles ---
+
+const OverlayContainer = styled(motion.div)`
+  position: absolute;
+  inset: 10px;
+  background: rgba(15, 23, 42, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  z-index: 20;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Pretendard', sans-serif;
+  min-height: 0;
+`;
+
+const HeaderBar = styled.div`
+  height: 48px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(255,255,255,0.02);
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    font-size: 0.95rem;
+  }
+  .close-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .close-btn:hover {
+    background: #ef4444;
+    border-color: #ef4444;
+  }
+`;
+
+const MainGridInternal = styled.div`
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+
+  .left-pane {
+    flex: 1.6;
+    position: relative;
+    border-right: 1px solid rgba(255,255,255,0.15);
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    background: radial-gradient(circle at 10% 10%, rgba(30, 41, 59, 0.8), transparent);
+    overflow: hidden;
+    cursor: pointer; /* Clickable */
+  }
+  .right-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(0,0,0,0.3);
+    min-width: 320px;
+    min-height: 0;
+    overflow: hidden;
+  }
+`;
+
+// RPA View & Camera
+const RPAProcessView = styled(motion.div)`
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+
+  .rpa-header {
+    margin-bottom: 16px;
+    padding-left: 5px;
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: #fff;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+    p {
+      color: #cbd5e1;
+      margin: 4px 0 0 0;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+  }
+  .step-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 5px;
+    overflow-y: auto;
+    ${hideScrollbar}
+  }
+  .pip-container {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 200px;
+    height: 130px;
+    z-index: 50;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.2);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    background: #000;
+    
+    img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+  }
+`;
+
+const StepItem = styled.div<StepItemProps>`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0,0,0,0.4);
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: all 0.3s;
+
+  ${(props) => props.$active && css`
+    background: rgba(59, 130, 246, 0.2);
+    border-color: #60a5fa;
+    transform: translateX(5px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  `}
+
+  ${(props) => props.$done && css`
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.05);
+  `}
+
+  .icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    flex-shrink: 0;
+    transition: all 0.3s;
+
+    ${(props) => props.$active && css`
+      background: #3b82f6;
+      color: white;
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
+    `}
+
+    ${(props) => props.$done && css`
+      background: #10b981;
+      color: white;
+    `}
+  }
+  .txt {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #94a3b8;
+    flex: 1;
+    transition: color 0.3s;
+
+    ${(props) => props.$active && css`
+      color: #fff;
+      text-shadow: 0 0 10px rgba(59,130,246,0.5);
+    `}
+
+    ${(props) => props.$done && css`
+      color: #94a3b8;
+      text-decoration: line-through;
+    `}
+  }
+  .status {
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+`;
+
+const CameraFrame = styled(motion.div)`
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+  background: #000;
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .scan-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+`;
+
+const CompletionPopup = styled(motion.div)`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(20px);
+  padding: 40px 60px;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5), 0 30px 80px rgba(0,0,0,0.9);
+  border: 2px solid #3b82f6;
+  z-index: 9999;
+  pointer-events: none;
+
+  .icon-check {
+    width: 80px;
+    height: 80px;
+    background: #3b82f6;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    box-shadow: 0 0 40px #3b82f6;
+  }
+  .text {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+    white-space: nowrap;
+  }
+`;
+
+const Backdrop = styled(motion.div)`
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  z-index: 9990;
+`;
+
+const SlidePanel = styled(motion.div)`
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 95vw;
+  max-width: 1800px;
+  height: 100vh;
+  z-index: 9991;
+  box-shadow: -20px 0 50px rgba(0,0,0,0.5);
+  background: #f8fafc;
+`;
+
+// --- New Right Panel Styled Components ---
+const RightContentContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  gap: 16px;
+  overflow: hidden;
+`;
+
+const TopInfoSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+`;
+
+const InfoInputBox = styled.div`
+  display: flex;
+  background: #0f172a;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  height: 42px;
+  align-items: center;
+
+  .label-area {
+    width: 90px;
+    background: #1e293b;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border-right: 1px solid rgba(255,255,255,0.1);
+    gap: 6px;
+  }
+  .value-area {
+    flex: 1;
+    padding: 0 12px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 1rem;
+    letter-spacing: 0.5px;
+  }
+`;
+
+const SplitRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+`;
+
+const ListSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    font-weight: 800;
+  }
+  .list-scroll-view {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    ${hideScrollbar}
+  }
+`;
+
+const DetailSection = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  margin-top: 10px;
+  
+  .grid-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .grid-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+
+    .lbl {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .val {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      text-align: right;
+    }
+    .val.qty {
+      color: #10b981;
+      font-size: 1.2rem;
+      font-weight: 800;
+    }
+  }
+`;
+
+const LogSection = styled.div`
+  flex-shrink: 0;
+  margin-top: 10px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+  padding: 12px;
+  
+  .log-head {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #60a5fa;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+  .log-body {
+    font-family: 'Pretendard', monospace;
+    font-size: 0.75rem;
+    color: #cbd5e1;
+    line-height: 1.5;
+    opacity: 0.9;
+    white-space: pre-wrap;
+  }
+`;
+
+const ItemCard = styled.div<ItemCardProps>`
+  min-width: 110px;
+  height: 90px;
+  background: ${(props) => props.$active ? 'rgba(59, 130, 246, 0.2)' : 'rgba(30, 41, 59, 0.5)'};
+  border: 1px solid ${(props) => props.$active ? '#60a5fa' : 'rgba(255,255,255,0.1)'};
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: ${(props) => props.$active ? '0 0 15px rgba(59, 130, 246, 0.2)' : 'none'};
+
+  &:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.3);
+  }
+
+  .c {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: ${(props) => props.$active ? '#60a5fa' : '#cbd5e1'};
+  }
+  .n {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .q {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    margin-top: auto;
+  }
+`;
+
+
+// --- Loading Screen Styles ---
+
+const NewLoadingScreen = styled.div<StyledFadeProps>`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1), transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: ${(props) => (props.$isFadingOut ? 0 : 1)};
+  transform: ${(props) => (props.$isFadingOut ? 'scale(1.05)' : 'scale(1)')};
+  pointer-events: ${(props) => (props.$isFadingOut ? 'none' : 'all')};
+
+  .background-grid {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(rgba(59, 130, 246, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+    z-index: 0;
+  }
+  .loader-content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+  }
+  .brand-text {
+    text-align: center;
+    
+    .small {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: #94a3b8;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .large {
+      margin: 0;
+      font-size: 2.5rem;
+      font-weight: 900;
+      color: #0f172a;
+      letter-spacing: -1px;
+      
+      .version {
+        font-size: 1rem;
+        color: #3b82f6;
+        vertical-align: super;
+        font-weight: 600;
       }
     }
-    checkStream();
-    return () => { cancelled = true; };
-  }, [streamUrl, retryKey]);
+  }
+`;
 
-  // [핵심 로직] 시나리오 실행 함수
-  const triggerProcess = () => {
-    if (isProcessingRef.current) return;
-    
-    console.log("🚀 [System] Logic Sequence Started");
-    isProcessingRef.current = true;
-    setIsProcessing(true);
-    
-    setIsActive(true); 
-    setProcessProgress(0);
-    
-    setIsPanelActive(true);
-    setShowScanner(false);
-    setShowARNodes(false);
-    setProcessStep(1);
+const LensCore = styled.div`
+  width: 120px;
+  height: 120px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-    setTimeout(() => {
-        setProcessStep(2);
-        setShowScanner(true);
-    }, 3000);
+  .outer-ring {
+    position: absolute;
+    inset: 0;
+    border: 2px dashed #cbd5e1;
+    border-radius: 50%;
+    animation: ${rotateLens} 10s linear infinite;
+  }
+  .inner-ring {
+    position: absolute;
+    width: 80%;
+    height: 80%;
+    border: 2px solid #3b82f6;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: ${rotateLens} 2s linear infinite reverse;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+  }
+  .core-lens {
+    width: 60%;
+    height: 60%;
+    background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 30px rgba(37, 99, 235, 0.6);
+    animation: ${pulseRing} 2s infinite;
+  }
+`;
 
-    setTimeout(() => {
-        setShowScanner(false);
-        setShowARNodes(true);
-        setProcessStep(3);
-        setTimeout(() => setProcessStep(4), 4000); 
-        setTimeout(() => setProcessStep(5), 8000); 
-        setTimeout(() => setProcessStep(6), 12000); 
-    }, 8000);
+const TechProgressWrapper = styled.div`
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 
-    setTimeout(() => {
-        setIsActive(false);
-        setIsPanelActive(false);
-        setShowARNodes(false);
-        isProcessingRef.current = false;
-        setIsProcessing(false);
-        setProcessStep(0);
-        console.log("🏁 [System] Sequence Completed");
-    }, 23000);
-  };
+  .bar-bg {
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: #3b82f6;
+    position: relative;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  }
+  .bar-glare {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent);
+    animation: ${glareMove} 1.5s ease-in-out infinite;
+  }
+  .progress-info {
+    display: flex;
+    justify-content: space-between;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #475569;
+    font-weight: 600;
+
+    .log-text {
+      color: #64748b;
+
+      .cursor {
+        color: #3b82f6;
+        animation: ${blinkCursor} 0.8s infinite;
+        margin-right: 4px;
+      }
+    }
+    .percentage {
+      color: #3b82f6;
+      font-weight: 700;
+    }
+  }
+`;
+
+// --- BoardContainer ---
+const BoardContainer = styled.div`
+  width: 100%;
+  height: 100%;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+
+  .board-header {
+    height: 60px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px;
+
+    .title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #1e293b;
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #94a3b8;
+    }
+    .close-btn:hover {
+      color: #ef4444;
+    }
+  }
+  .board-body {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    gap: 20px;
+    overflow: hidden;
+
+    .left-col {
+      width: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+
+      .summary-card {
+        background: #fff;
+        padding: 20px;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+
+        h3 {
+          margin: 0 0 16px 0;
+          font-size: 0.95rem;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .chart-area {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+
+          .pie-mock {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 8px solid #f1f5f9;
+            border-top-color: #3b82f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 800;
+            color: #3b82f6;
+          }
+          .legend {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 0.8rem;
+          }
+          .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+          }
+          .blue {
+            background: #3b82f6;
+          }
+          .green {
+            background: #10b981;
+          }
+        }
+      }
+      .inv-list-wrapper {
+        flex: 1;
+        background: #fff;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+
+        .search-row {
+          padding: 16px;
+          border-bottom: 1px solid #f1f5f9;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+
+          h3 {
+            font-size: 0.95rem;
+            margin: 0;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+          }
+          .s-box {
+            display: flex;
+            align-items: center;
+            background: #f1f5f9;
+            padding: 4px 8px;
+            border-radius: 6px;
+            width: 140px;
+          }
+          input {
+            border: none;
+            background: transparent;
+            width: 100%;
+            outline: none;
+            font-size: 0.8rem;
+          }
+        }
+        .list-scroll {
+          flex: 1;
+          overflow-y: auto;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          
+          &::-webkit-scrollbar {
+            width: 4px;
+          }
+          &::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 4px;
+          }
+
+          .inv-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #f1f5f9;
+
+            .icon {
+              width: 32px;
+              height: 32px;
+              background: #fff;
+              border-radius: 8px;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              color: #64748b;
+            }
+            .info {
+              flex: 1;
+            }
+            .c {
+              font-size: 0.85rem;
+              font-weight: 600;
+            }
+            .l {
+              font-size: 0.75rem;
+              color: #94a3b8;
+            }
+            .q {
+              font-weight: 700;
+              color: #3b82f6;
+              font-family: monospace;
+            }
+          }
+        }
+      }
+    }
+    .map-col {
+      flex: 1;
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+
+      .map-legend {
+        padding: 16px;
+        border-bottom: 1px solid #f1f5f9;
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+
+        .badge {
+          font-size: 0.85rem;
+          padding: 4px 12px;
+          border-radius: 6px;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .empty {
+          background: #f1f5f9;
+          color: #94a3b8;
+          border: 1px solid #e2e8f0;
+        }
+        .active {
+          background: #eff6ff;
+          color: #3b82f6;
+          border: 1px solid #bfdbfe;
+        }
+        .full {
+          background: #fef2f2;
+          color: #ef4444;
+          border: 1px solid #fecaca;
+        }
+        .dot {
+            width: 8px; 
+            height: 8px; 
+            border-radius: 50%;
+        }
+      }
+      .zone-wrapper {
+        flex: 1;
+        padding: 20px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 16px;
+        overflow: hidden;
+
+        .zone-col {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          height: 100%;
+          min-height: 0;
+          
+          .z-head {
+            background: #fff;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            flex-shrink: 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+
+            .top {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 8px;
+            }
+            .id {
+              font-weight: 900;
+              font-size: 1.2rem;
+              color: #1e293b;
+            }
+            .st {
+              font-size: 0.75rem;
+              font-weight: 800;
+              padding: 4px 8px;
+              border-radius: 6px;
+            }
+            .g { background: #dcfce7; color: #166534; }
+            .o { background: #ffedd5; color: #9a3412; }
+            .r { background: #fee2e2; color: #991b1b; }
+            
+            .usage-text {
+                font-size: 0.8rem;
+                color: #64748b;
+                margin-bottom: 6px;
+                display: flex;
+                justify-content: space-between;
+                font-weight: 600;
+                
+                b { color: #0f172a; }
+            }
+
+            .bar {
+              height: 8px;
+              background: #f1f5f9;
+              border-radius: 4px;
+              overflow: hidden;
+            }
+            .fill {
+              height: 100%;
+              background: linear-gradient(90deg, #3b82f6, #2563eb);
+              border-radius: 4px;
+              transition: width 0.5s ease-out;
+            }
+          }
+          .slot-grid-container {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            padding: 8px;
+
+            .slot-grid {
+              flex: 1;
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              grid-template-rows: repeat(10, 1fr); /* [수정] 높이 꽉 차도록 변경 */
+              gap: 8px;
+              /* overflow-y 제거 (꽉 채우기 위함) */
+              
+              .slot {
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+                font-size: 0.9rem;
+                font-weight: 700;
+                color: #cbd5e1;
+                transition: all 0.3s;
+                /* min-height 제거 (grid row에 맞춤) */
+                box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+              }
+              .on {
+                background: #eff6ff;
+                border-color: #60a5fa;
+                color: #2563eb;
+                box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+              }
+              .new-item {
+                animation: ${pulseRing} 1.5s infinite;
+                border-color: #3b82f6;
+                background: #dbeafe;
+              }
+              .icon-box {
+                  margin-bottom: 2px;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+// ─── [6. SUB-COMPONENTS] ──────────────────────────────
+
+const MemoizedInventoryItem = React.memo(({ item }: { item: InventoryItem }) => ( <div className="inv-item"> <div className="icon"><Layers size={14}/></div> <div className="info"><div className="c">{item.code}</div><div className="l">{item.loc}</div></div> <div className="q">{item.qty}</div> </div> )); MemoizedInventoryItem.displayName = 'MemoizedInventoryItem';
+
+// [수정] Slot 컴포넌트 개선 - isTarget prop 추가
+const MemoizedSlot = React.memo(({ s, isTarget }: { s: SlotData, isTarget: boolean }) => ( 
+    <div className={`slot ${s.active?'on':''} ${isTarget ? 'new-item' : ''}`}> 
+        {/* [수정] D101의 5번만 진한색 아이콘, 나머지는 연한색 */}
+        {s.active && <div className="icon-box"><Box size={14} fill={isTarget ? "#3b82f6" : "#93c5fd"} color={isTarget ? "#1d4ed8" : "#60a5fa"}/></div>}
+        {s.no} 
+    </div> 
+)); 
+MemoizedSlot.displayName = 'MemoizedSlot';
+
+const ZoneColumn = React.memo(({ zone }: { zone: ZoneData }) => ( 
+    <div className="zone-col"> 
+        <div className="z-head"> 
+            <div className="top">
+                <span className="id">{zone.id}</span> 
+                <span className={`st ${zone.status==='만차'?'r':zone.status==='혼잡'?'o':'g'}`}>{zone.status}</span>
+            </div> 
+            <div className="usage-text">
+                <span>점유율</span>
+                <b>{Math.round((zone.used/zone.total)*100)}%</b>
+            </div>
+            <div className="bar"><div className="fill" style={{width: `${(zone.used/zone.total)*100}%`}}/></div> 
+        </div> 
+        <div className="slot-grid-container"> 
+            <div className="slot-grid"> 
+                {/* [수정] D101 구역의 5번 슬롯만 타겟팅 */}
+                {zone.slots.map((s) => <MemoizedSlot key={s.no} s={s} isTarget={zone.id === 'D101' && s.no === 5 && s.active} />)} 
+            </div> 
+        </div> 
+    </div> 
+)); 
+ZoneColumn.displayName = 'ZoneColumn';
+
+// WarehouseBoard [수정: D동 현황 로직 변경]
+const WarehouseBoard = ({ onClose }: { onClose: () => void }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // [수정 1, 2, 3] 초기 데이터 설정 (D101:10칸, D102:19칸, D105:19칸)
+  const initialMapData: ZoneData[] = [
+    { id: 'D101', total: 10, used: 2, free: 8, status: '여유', slots: Array.from({length: 10}, (_, i) => ({ no: i+1, active: i < 2 })) },
+    { id: 'D102', total: 19, used: 15, free: 4, status: '혼잡', slots: Array.from({length: 19}, (_, i) => ({ no: i+1, active: i < 15 })) },
+    { id: 'D103', total: 20, used: 20, free: 0, status: '만차', slots: Array.from({length: 20}, (_, i) => ({ no: i+1, active: true })) },
+    { id: 'D104', total: 20, used: 8, free: 12, status: '보통', slots: Array.from({length: 20}, (_, i) => ({ no: i+1, active: i < 8 })) },
+    { id: 'D105', total: 19, used: 0, free: 19, status: '비어있음', slots: Array.from({length: 19}, (_, i) => ({ no: i+1, active: false })) },
+  ];
+
+  const [mapData, setMapData] = useState<ZoneData[]>(initialMapData);
+
+  // [수정 4] 3초 뒤 D101구역 5번 슬롯 적재 시뮬레이션
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          setMapData(prev => prev.map(zone => {
+              // [수정] 오직 D101만 업데이트
+              if (zone.id === 'D101') {
+                  const newSlots = zone.slots.map(slot => 
+                      slot.no === 5 ? { ...slot, active: true } : slot
+                  );
+                  return {
+                      ...zone,
+                      used: zone.used + 1,
+                      free: zone.free - 1,
+                      slots: newSlots
+                  };
+              }
+              return zone;
+          }));
+      }, 3000);
+      return () => clearTimeout(timer);
+  }, []);
+
+  const inventoryData: InventoryItem[] = useMemo(() => [
+    { code: 'ADC30009358', qty: 708, loc: 'D101' }, { code: 'ADC30014326', qty: 294, loc: 'D102' },
+    { code: 'ADC30003801', qty: 204, loc: 'D102' }, { code: 'AGF04075606', qty: 182, loc: 'D103' },
+    { code: 'ADC30009359', qty: 150, loc: 'D104' }, { code: 'AGM76970201', qty: 120, loc: 'D101' },
+    { code: 'AGM76970202', qty: 100, loc: 'D105' }, { code: 'AGM76970203', qty: 50, loc: 'D101' },
+    { code: 'AGM76970204', qty: 30, loc: 'D102' }, { code: 'AGM76970205', qty: 10, loc: 'D103' },
+    { code: 'AGM76970206', qty: 120, loc: 'D104' }, { code: 'AGM76970207', qty: 100, loc: 'D105' },
+  ], []);
+  const filteredInventory = useMemo(() => inventoryData.filter(item => item.code.toLowerCase().includes(searchTerm.toLowerCase()) || item.loc.toLowerCase().includes(searchTerm.toLowerCase()) ), [inventoryData, searchTerm]);
+  
+  return ( 
+    <BoardContainer> 
+        <div className="board-header"> 
+            <div className="title"><LayoutGrid size={24} color="#3b82f6"/> D동 실시간 적재 현황판</div> 
+            <button className="close-btn" onClick={onClose}><XIcon size={28}/></button> 
+        </div> 
+        <div className="board-body"> 
+            <div className="left-col"> 
+                <div className="summary-card"> 
+                    <h3><PieIcon size={16}/> 종합 적재 현황</h3> 
+                    <div className="chart-area"> 
+                        <div className="pie-mock"><span className="val">48%</span></div> 
+                        <div className="legend"> 
+                            <div><span className="dot blue"></span>사용: <b>48</b></div> 
+                            <div><span className="dot green"></span>여유: <b>52</b></div> 
+                        </div> 
+                    </div> 
+                </div> 
+                <div className="inv-list-wrapper"> 
+                    <div className="search-row"> 
+                        <h3><PackageIcon size={16}/> 재고 리스트</h3> 
+                        <div className="s-box"><Search size={14}/><input placeholder="검색..." onChange={e=>setSearchTerm(e.target.value)}/></div> 
+                    </div> 
+                    <div className="list-scroll"> 
+                        {filteredInventory.map((item, i) => ( <MemoizedInventoryItem key={i} item={item} /> ))} 
+                    </div> 
+                </div> 
+            </div> 
+            <div className="map-col"> 
+                <div className="map-legend"> 
+                    <span className="badge empty"><div className="dot" style={{background:'#cbd5e1'}}/> 여유</span>
+                    <span className="badge active"><div className="dot" style={{background:'#3b82f6'}}/> 사용</span>
+                    <span className="badge full"><div className="dot" style={{background:'#ef4444'}}/> 만차</span> 
+                </div> 
+                <div className="zone-wrapper"> 
+                    {mapData.map(zone => <ZoneColumn key={zone.id} zone={zone} />)} 
+                </div> 
+            </div> 
+        </div> 
+    </BoardContainer> 
+  )
+};
+
+const RPAStatusView = React.memo(({ step, showComplete, isWearableConnected, streamUrl, capturedImg }: { step: number, showComplete: boolean, isWearableConnected?: boolean, streamUrl?: string | null, capturedImg?: string | null }) => {
+  return (
+    <RPAProcessView initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.3 }} >
+      <div className="rpa-header"> <h2><Cpu size={24} color="#60a5fa" strokeWidth={2.5}/> AUTO PROCESSING</h2> <p>Vision AI 데이터 분석 및 ERP 자동 입고 처리를 진행합니다.</p> </div>
+      <div className="step-container"> {PROCESS_STEPS.map((s) => ( <StepItem key={s.id} $active={step === s.id} $done={step > s.id} > <div className="icon-box">{s.icon}</div> <div className="txt">{s.label}</div> <div className="status"> {step > s.id ? <CheckCircle2 size={18} color="#10b981" strokeWidth={3}/> : step === s.id ? <Loader2 className="spin" size={18} color="#fff"/> : <MoreHorizontal size={18}/>} </div> </StepItem> ))} </div>
+      <div className="pip-container">
+        {capturedImg ? (
+            <img src={capturedImg} alt="Processed Frame" />
+        ) : (
+            <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%' }}>
+              <CameraFrame>
+                <div className="simulated-barcode-view" style={{background: '#000'}}></div>
+              </CameraFrame>
+            </motion.div>
+        )}
+      </div>
+    </RPAProcessView>
+  );
+});
+RPAStatusView.displayName = 'RPAStatusView';
+
+const LoadingComponent = React.memo(({ loading, isFadingOut, progress, currentLog }: any) => { if (!loading && !isFadingOut) return null; return ( <NewLoadingScreen $isFadingOut={isFadingOut}> <div className="background-grid"></div> <div className="loader-content"> <LensCore> <div className="outer-ring"></div> <div className="inner-ring"></div> <div className="core-lens"><ScanEye size={32} color="white" /></div> </LensCore> <div className="brand-text"> <span className="small">WEARABLE AI SYSTEM</span> <h1 className="large">VISION OS <span className="version">v2.0</span></h1> </div> <TechProgressWrapper> <div className="bar-bg"><motion.div className="bar-fill" style={{ width: `${progress}%` }}><div className="bar-glare"></div></motion.div></div> <div className="progress-info"><span className="log-text"><span className="cursor">&gt;</span> {currentLog}</span><span className="percentage">{Math.floor(progress)}%</span></div> </TechProgressWrapper> </div> </NewLoadingScreen> ); }); LoadingComponent.displayName = 'LoadingComponent';
+
+const MemoizedItemCard = React.memo(({ item, selectedId, onClick }: { item: ItemData, selectedId: number, onClick: (id: number) => void }) => ( 
+  <ItemCard $active={selectedId === item.id} onClick={() => onClick(item.id)} > 
+    <div className="c">{item.code}</div> 
+    <div className="n">{item.name}</div> 
+    <div className="q">{item.qty.toLocaleString()} EA</div> 
+  </ItemCard> 
+)); 
+MemoizedItemCard.displayName = 'MemoizedItemCard';
+
+// ─── [7. AIDashboardModal (MODAL COMPONENT)] ──────────────────────
+
+function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () => void, streamUrl?: string | null, streamStatus: string }) {
+  const [viewMode, setViewMode] = useState<'scan' | 'rpa'>('scan');
+  const [items, setItems] = useState<ItemData[]>([]);
+  const [selectedId, setSelectedId] = useState<number>(0);
+  const [rpaStep, setRpaStep] = useState(0);
+  const [showComplete, setShowComplete] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // [NEW] Video Control State
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [capturedImg, setCapturedImg] = useState<string | null>(null);
+  
+  const isWearableConnected = streamStatus === 'ok' && !!streamUrl;
+  const initialMount = useRef(true);
+
+  useEffect(() => {
+    const data = generateDummyItems();
+    setItems(data);
+    if(data.length > 0) setSelectedId(data[0].id);
+    return () => {
+        if(timerRef.current) clearInterval(timerRef.current);
+    }
+  }, []);
+
+  const startRPAProcess = useCallback(() => {
+    if(timerRef.current) clearInterval(timerRef.current);
+
+    let step = 1; 
+    setRpaStep(step);
+    setShowComplete(false); 
+
+    timerRef.current = setInterval(() => {
+      step++;
+      if (step > 5) {
+        if(timerRef.current) clearInterval(timerRef.current); 
+        setShowComplete(true);
+        setTimeout(() => { setShowComplete(false); }, 10000);
+      } else { 
+          setRpaStep(step); 
+      }
+    }, 1200);
+  }, []);
+
+  const handleVideoEnded = useCallback(() => {
+      if(videoRef.current) {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoRef.current.videoWidth;
+          canvas.height = videoRef.current.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if(ctx) {
+              ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+              setCapturedImg(canvas.toDataURL('image/jpeg'));
+          }
+      }
+      setViewMode('rpa');
+      startRPAProcess();
+  }, [startRPAProcess]);
 
   useEffect(() => {
     if (!db) return;
-    const logsRef = ref(db, 'logs');
+    const logRef = ref(db, 'log');
+    
+    const unsubscribe = onValue(logRef, (snapshot) => {
+        if (initialMount.current) {
+            initialMount.current = false;
+            return;
+        }
+        
+        setViewMode('scan');
+        setCapturedImg(null);
+        if (videoRef.current) {
+            videoRef.current.currentTime = 0;
+            videoRef.current.play();
+        }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleItemClick = useCallback((id: number) => { setSelectedId(id); }, []);
+  
+  const handleScanClick = useCallback(() => {
+      if(viewMode === 'scan') {
+          handleVideoEnded();
+      }
+  }, [viewMode, handleVideoEnded]);
+
+  const activeItem = useMemo(() => items.find(i => i.id === selectedId) || (items.length > 0 ? items[0] : null), [items, selectedId]);
+
+  return ( 
+    <OverlayContainer initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} > 
+      <HeaderBar> 
+        <div className="brand"><ScanBarcode color="#60a5fa" strokeWidth={3}/> VISION AI SCANNER</div> 
+        <button className="close-btn" onClick={onClose}><LuX size={20} strokeWidth={3}/></button> 
+      </HeaderBar> 
+      <MainGridInternal> 
+        <AnimatePresence> 
+          {showComplete && ( 
+            <CompletionPopup initial={{ opacity: 0, scale: 0.5, x: "-50%", y: "-50%" }} animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }} exit={{ opacity: 0, scale: 0.8, x: "-50%", y: "-50%" }} transition={{ type: "spring", bounce: 0.5 }} > 
+              <div className="icon-check"><MapPin size={48} strokeWidth={3} /></div> 
+              <div className="text">D동 101구역 5번에 적치</div> 
+            </CompletionPopup> 
+          )} 
+        </AnimatePresence> 
+        
+        {/* Left Pane (Video / RPA) */}
+        <div className="left-pane" onClick={handleScanClick}> 
+          <LayoutGroup> 
+            {viewMode === 'rpa' && <RPAStatusView step={rpaStep} showComplete={showComplete} isWearableConnected={isWearableConnected} streamUrl={streamUrl} capturedImg={capturedImg} />} 
+            {viewMode === 'scan' && ( 
+              <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 20 }}> 
+                <CameraFrame> 
+                  <video 
+                    ref={videoRef}
+                    src="/videos/dashboard-short.mp4" 
+                    autoPlay 
+                    muted 
+                    playsInline
+                    onEnded={handleVideoEnded}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                  <motion.div className="scan-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} > 
+                  </motion.div> 
+                </CameraFrame> 
+              </motion.div> 
+            )} 
+          </LayoutGroup> 
+        </div> 
+        
+        {/* Right Pane (Detail Info) */}
+        <div className="right-pane"> 
+          <RightContentContainer>
+            <TopInfoSection>
+              <InfoInputBox>
+                <div className="label-area"><Calendar size={13}/> 송장번호</div>
+                <div className="value-area">0135250C00004</div>
+              </InfoInputBox>
+              <SplitRow>
+                <InfoInputBox>
+                  <div className="label-area"><Calendar size={13}/> 입고일자</div>
+                  <div className="value-area">2026-01-08</div>
+                </InfoInputBox>
+                <InfoInputBox>
+                  <div className="label-area"><Truck size={13}/> 거래처명</div>
+                  <div className="value-area">세진공업(주)</div>
+                </InfoInputBox>
+              </SplitRow>
+            </TopInfoSection>
+
+            <ListSection>
+              <div className="header"><ListTodo size={14}/> 입고 예정 리스트 (Live)</div>
+              <div className="list-scroll-view">
+                {items.slice(0, 2).map(item => (
+                  <MemoizedItemCard key={item.id} item={item} selectedId={selectedId} onClick={handleItemClick} />
+                ))}
+              </div>
+            </ListSection>
+
+            <DetailSection>
+              <AnimatePresence mode="wait">
+                {activeItem && (
+                  <motion.div
+                    key={activeItem.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ display: 'flex', flexDirection: 'column', flex: 1 }}
+                  >
+                    <div className="title-area">
+                      <h1>{activeItem.name}</h1>
+                    </div>
+
+                    <div className="grid-table">
+                      <div className="grid-row">
+                        <div className="lbl"><Box size={15}/> 품목코드</div>
+                        <div className="val">{activeItem.code}</div>
+                      </div>
+                      <div className="grid-row">
+                        <div className="lbl"><Layers size={15}/> 프로젝트</div>
+                        <div className="val">{activeItem.project}</div>
+                      </div>
+                      <div className="grid-row">
+                        <div className="lbl"><LuClipboardCheck size={15}/> 입고수량</div>
+                        <div className="val qty">{activeItem.qty} EA</div>
+                      </div>
+                      <div className="grid-row">
+                        <div className="lbl"><LuFileText size={15}/> 검사구분명</div>
+                        <div className="val">{activeItem.type}</div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </DetailSection>
+
+            <LogSection>
+              <div className="log-head">SYSTEM LOG</div>
+              <div className="log-body">
+                [INFO] ERP 데이터 대조 완료.<br/>
+                [INFO] PO 번호 매칭 성공 (PO-2026-01-088)<br/>
+                [WARN] 창고 관리 시스템(WMS) 적재 위치 최적화 계산 중...
+              </div>
+            </LogSection>
+
+          </RightContentContainer>
+        </div> 
+      </MainGridInternal> 
+    </OverlayContainer> 
+  );
+}
+
+// ─── [ROOT COMPONENT] ──────────────────────────────────────
+
+export default function SmartFactoryDashboard() {
+  const [loading, setLoading] = useState(true);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentLog, setCurrentLog] = useState(BOOT_LOGS[0]);
+
+  const [streamHost, setStreamHost] = useState("192.168.0.53");
+  const [streamStatus, setStreamStatus] = useState<"idle" | "checking" | "ok" | "error">("idle");
+  const streamUrl = streamHost ? `http://${streamHost}:${PORT}/` : null;
+
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [showMapBoard, setShowMapBoard] = useState(false);
+  
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isImgError, setIsImgError] = useState(false);
+
+  const [historyItems, setHistoryItems] = useState<{id:number, company:string, time:string, status:string}[]>([]);
+
+  useEffect(() => {
+      setHistoryItems(generateHistoryData());
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // Time update logic removed as requested (fixed time used)
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            if (showMapBoard) setShowMapBoard(false);
+            else if (showDashboard) setShowDashboard(false);
+            else if (isFullScreen) setIsFullScreen(false);
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullScreen, showDashboard, showMapBoard]);
+
+  useEffect(() => {
+    if (!loading) return;
+    let currentProgress = 0;
+    const interval = setInterval(() => {
+      currentProgress += (Math.random() * 2 + 1);
+      if (currentProgress >= 100) {
+        currentProgress = 100;
+        clearInterval(interval);
+        setTimeout(() => setIsFadingOut(true), 800);
+        setTimeout(() => setLoading(false), 2000);
+      }
+      setProgress(currentProgress);
+      const logIndex = Math.floor((currentProgress / 100) * BOOT_LOGS.length);
+      setCurrentLog(BOOT_LOGS[Math.min(logIndex, BOOT_LOGS.length - 1)]);
+    }, 50);
+    return () => clearInterval(interval);
+  }, [loading]);
+
+  useEffect(() => {
+    if (!db) return;
+    const logsRef = ref(db, 'vuzix_log');
     let initialLoad = true;
     const unsubscribe = onValue(logsRef, (snapshot) => {
       const currentString = JSON.stringify(snapshot.val() || {});
       if (initialLoad) {
-        previousDataRef.current = currentString;
         initialLoad = false;
         return;
       }
-      if (currentString !== previousDataRef.current) {
-        console.log("🔥 [CHANGE] Triggering Sequence!");
-        triggerProcess();
-        previousDataRef.current = currentString;
-      }
+      setShowDashboard(true);
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!isPanelActive) {
-      setProcessProgress(0);
-      return;
+    if (streamHost) {
+      setStreamStatus("checking");
+      const timer = setTimeout(() => {
+        setStreamStatus(prev => prev === "checking" ? "error" : prev); 
+      }, 5000); 
+      return () => { clearTimeout(timer); };
     }
-    let startTimestamp: number | null = null;
-    const TOTAL_DURATION = 23000;
-    const animateProgress = (timestamp: number) => {
-      if (!startTimestamp) startTimestamp = timestamp;
-      const elapsed = timestamp - startTimestamp;
-      const progress = Math.min(elapsed / TOTAL_DURATION, 1);
-      setProcessProgress(progress * 100);
-      if (progress < 1 && isProcessingRef.current) {
-         requestAnimationFrame(animateProgress);
-      }
-    };
-    requestAnimationFrame(animateProgress);
-  }, [isPanelActive]);
+  }, [streamHost]);
+
+  const manualTrigger = useCallback(() => { setShowDashboard(true); }, []);
+  const toggleMapBoard = useCallback(() => { setShowMapBoard(true); }, []);
+  const closeDashboard = useCallback(() => { setShowDashboard(false); }, []);
+  const closeMapBoard = useCallback(() => { setShowMapBoard(false); }, []);
+  const toggleFullScreen = useCallback(() => { setIsFullScreen(prev => !prev); }, []);
+  const handleRetry = useCallback(() => { 
+      setStreamStatus("checking"); 
+      setTimeout(() => setStreamStatus("error"), 2000); 
+  }, []);
+
+  const chartData = useMemo(() => [
+      { name: 'A사', 합격: 85, 불량: 15 }, 
+      { name: 'B사', 합격: 90, 불량: 10 }, 
+      { name: 'C사', 합격: 98, 불량: 2 }
+  ], []);
 
   return (
     <LayoutGroup>
-      {(loading || isFadingOut) && (
-        <LoadingWrapper $isFadingOut={isFadingOut}>
-          <LogoText>Smart Factory <span>Dashboard</span></LogoText>
-          <ProgressContainer><ProgressBar width={progress} /></ProgressContainer>
-          <StatusText><span>{statusText}</span><span>{Math.floor(progress)}%</span></StatusText>
-        </LoadingWrapper>
-      )}
+      <GlobalStyle />
+      <LoadingComponent loading={loading} isFadingOut={isFadingOut} progress={progress} currentLog={currentLog} />
 
       {!loading && (
         <DashboardContainer $show={!loading}>
-          <Column>
-            <FullHeightCard>
-              <CardHeader>
-                <div className="left-group"><span className="badge">01</span><h3>입고차량 인식</h3></div>
-              </CardHeader>
-              <ImageArea>
-                <div style={{width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'#94a3b8', background: '#f1f5f9'}}>차량 사진 CCTV</div>
-                <div className="label">📸 차량사진</div>
-              </ImageArea>
-              <div style={{ marginTop: '20px' }}>
-                <h4 style={{ color: '#475569', marginBottom: '15px' }}>차량 정보</h4>
-                <InfoRow><span className="label">차량번호</span><span className="value" style={{fontSize: '1.5rem', color: '#2563eb'}}>12우 1545</span></InfoRow>
-                <hr style={{borderColor: '#e2e8f0', margin: '20px 0'}}/>
-                <InfoRow><span className="label">공급업체</span><span className="value">(주)퓨처로지스</span></InfoRow>
-                <InfoRow><span className="label">도착시간</span><span className="value">12:12</span></InfoRow>
-                <InfoRow><span className="label">출차예정</span><span className="value">13:12</span></InfoRow>
-                <InfoRow><span className="label">운전자</span><span className="value">김철수 기사님</span></InfoRow>
-              </div>
-              <div style={{marginTop: 'auto', background:'#fff1f2', padding:'15px', borderRadius:'8px', border: '1px solid #fecdd3'}}>
-                <p style={{margin:0, color:'#e11d48', fontSize:'0.9rem', fontWeight: 'bold'}}>⚠️ 특이사항</p>
-                <p style={{margin:'5px 0 0 0', fontSize:'0.95rem', color: '#881337'}}>사전 입고 예약 확인됨.<br/>A게이트 진입 허가.</p>
-              </div>
-            </FullHeightCard>
-          </Column>
-
-          <Column>
-            <ExpandableCard
-              layout
-              data-fullscreen={isFullScreen}
-              $isFullScreen={isFullScreen}
-              transition={{ 
-                layout: { duration: 0.6, type: "spring", stiffness: 80, damping: 20 } 
-              }}
-            >
-              <div style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', zIndex: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <div style={{background: streamStatus === 'ok' ? '#10b981' : '#f59e0b', color: 'white', padding: '4px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: '700', marginRight:'10px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'}}>
-                    {streamStatus === 'ok' ? 'Live' : 'Standby'}
-                  </div>
-                  <h3 style={{color: '#1e293b', margin: 0, fontSize: '1.1rem', fontWeight: 700}}>자재검수 화면</h3>
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <TriggerButton 
-                    onClick={triggerProcess} 
-                    disabled={isProcessing}
-                    className={isProcessing ? 'processing' : ''}
-                  >
-                    {isProcessing ? (
-                        <>
-                            <Loader2 className="spinner" size={12} /> 시스템 점검중...
-                        </>
-                    ) : (
-                        <>
-                            <LuPlay size={12} /> DB변경테스트
-                        </>
-                    )}
-                  </TriggerButton>
-
-                  <IpInputWrapper>
-                    <span className="label">CAM IP</span>
-                    <input value={streamHost} onChange={(e) => { setStreamHost(e.target.value.trim()); setStreamStatus("idle"); }} placeholder="192.168.xx.xx" />
-                  </IpInputWrapper>
-                </div>
-              </div>
-
-              <div style={{ flex: 1, position: 'relative', background: '#000', overflow: 'hidden' }}>
-                <StreamContainer ref={containerRef}>
-                  {streamStatus === "ok" && streamUrl ? (
-                    <StyledIframe src={streamUrl} allow="fullscreen" />
-                  ) : (
-                    <div style={{ width: '100%', height: '100%', background: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
-                        {streamStatus === 'checking' ? 'Connecting...' : 'No Signal'}
+            <Column>
+                <TopCard>
+                    <CardTitle>입고 차량 정보</CardTitle>
+                    <VehicleImageContainer>
+                        {!isImgError ? (
+                          <img 
+                            src="/images/truck_num_barcode.png" 
+                            alt="Vehicle" 
+                            onError={() => setIsImgError(true)}
+                          />
+                        ) : (
+                            <div className="no-image">
+                                <ImageOff size={32} />
+                                <span>이미지를 찾을 수 없음</span>
+                            </div>
+                        )}
+                    </VehicleImageContainer>
+                    <PlateContainer>
+                        <span className="label">차량 번호</span>
+                        <div className="plate-badge">89소 7383</div>
+                    </PlateContainer>
+                    <div style={{ display: 'flex', flexDirection: 'column', padding: '0 8px' }}>
+                        <InfoRow>
+                            <span className="label">공급업체</span>
+                            <span className="value highlight-box">세진공업 (주)</span>
+                        </InfoRow>
+                        <InfoRow>
+                            <span className="label">도착시간</span>
+                            <span className="value">10:20</span>
+                        </InfoRow>
+                        <InfoRow>
+                            <span className="label">체류시간</span>
+                            <DwellTimeBadge>11분</DwellTimeBadge>
+                        </InfoRow>
                     </div>
-                  )}
+                </TopCard>
 
-                  <AROverlayLayer>
-                    <GlobalTintLayer $isActive={isActive} />
-                    <BackgroundGrid $isActive={isActive} />
-
-                    {streamStatus !== 'ok' && (
-                        <WaitingScreen>
-                          <PulseCircle>
-                             {streamStatus === 'checking' ? <LuWifi size={32} /> : <LuWifiOff size={32} color="#94a3b8" />}
-                          </PulseCircle>
-                          <WaitingText>
-                            <h4>Waiting for Video Feed</h4>
-                            <p>Check IP connection...</p>
-                          </WaitingText>
-                        </WaitingScreen>
-                    )}
-
-                    <LayoutControl>
-                      <span className="label">VIEW MODE</span>
-                      <ToggleContainer onClick={(e) => { e.stopPropagation(); setIsCircularLayout(!isCircularLayout); }}>
-                        <div className={`bg ${isCircularLayout ? 'left' : 'right'}`} />
-                        <div className={`option ${isCircularLayout ? 'active' : ''}`}><CircleDashed size={14} /> AR</div>
-                        <div className={`option ${!isCircularLayout ? 'active' : ''}`}><LayoutTemplate size={14} /> HUD</div>
-                      </ToggleContainer>
-                    </LayoutControl>
-
-                    <CenterOrigin>
-                      <AnimatePresence>
-                        {showARNodes && DATA_NODES.map((node, index) => {
-                          const pos = getCardPosition(index);
-                          return <ARNodeItem key={node.id} data={node} x={pos.x} y={pos.y} index={index} />;
-                        })}
-                      </AnimatePresence>
-
-                      <SVGOverlay>
-                        <AnimatePresence>
-                          {showARNodes && isCircularLayout && DATA_NODES.map((node, i) => {
-                            const pos = getCardPosition(i);
-                            return (
-                              <motion.line
-                                key={`line-${node.id}`}
-                                x1={0} y1={0} x2={pos.x} y2={pos.y}
-                                stroke={THEME.line} strokeWidth="1.5" strokeDasharray="4 4"
-                                initial={{ pathLength: 0, opacity: 0 }}
-                                animate={{ pathLength: 1, opacity: 0.6 }}
-                                exit={{ pathLength: 0, opacity: 0 }}
-                                transition={{ duration: 0.5 }}
-                              />
-                            );
-                          })}
-                        </AnimatePresence>
-                      </SVGOverlay>
-                    </CenterOrigin>
-
-                    <AnimatePresence>
-                      {showScanner && (
-                        <ScannerOverlay
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 1.2 }}
-                          transition={{ duration: 0.4 }}
-                        >
-                          <div className="scanner-frame">
-                            <motion.div 
-                              className="laser-line"
-                              animate={{ top: ['0%', '100%', '0%'] }}
-                              transition={{ duration: 3, ease: "linear", repeat: Infinity }}
-                            />
-                            <div className="corner top-left" />
-                            <div className="corner top-right" />
-                            <div className="corner bottom-left" />
-                            <div className="corner bottom-right" />
-                            
-                            <div className="scan-info">
-                                <span className="blink">SCANNING TARGET...</span>
-                                <span style={{fontVariantNumeric: 'tabular-nums'}}>ID: 884-XJ-99</span>
-                            </div>
-                          </div>
-                        </ScannerOverlay>
-                      )}
-                    </AnimatePresence>
-
-                    <AnimatePresence mode="wait">
-                      {isPanelActive && (
-                        <ProcessingCard
-                            layout
-                            initial={{ x: 100, opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            exit={{ x: 100, opacity: 0 }}
-                            transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                        >
-                            <div className="header">
-                                <div className="title-wrapper">
-                                    <Zap size={20} color="#fbbf24" fill="#fbbf24" />
-                                    <span className="main-title">AI VISION INSPECTION</span>
-                                </div>
-                                <span className="timer">{Math.round(processProgress)}%</span>
-                            </div>
-                            
-                            <ProgressBarContainer>
-                                {/* [수정 1] 프로그래스바 색상: 형광 네온 그린 (#39FF14) + 밝은 옐로우 (#FFFF00) */}
-                                <ProgressBarFill 
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${processProgress}%` }}
-                                    transition={{ type: "spring", stiffness: 60, damping: 20 }}
-                                />
-                            </ProgressBarContainer>
-
-                            <StepsList>
-                            {PROCESS_STEPS.map((step) => {
-                                let status = 'pending'; 
-                                if (processStep === step.id) status = 'active'; 
-                                else if (processStep > step.id || processStep === 6) status = 'done'; 
-                                
-                                return (
-                                <StepItem key={step.id} $status={status}>
-                                    <div className="icon-box">
-                                    {status === 'active' ? (
-                                        <Loader2 className="spinner" size={16} />
-                                    ) : status === 'done' ? (
-                                        <CheckCircle2 size={16} />
-                                    ) : (
-                                        step.icon
-                                    )}
+                <FullHeightCard>
+                    <CardTitle>통계 및 이력</CardTitle>
+                    <CompactScoreRow>
+                        <CompactScoreBox $type="pass">
+                            <span className="label">합격률</span>
+                            <span className="value">98.5%</span>
+                        </CompactScoreBox>
+                        <CompactScoreBox $type="fail">
+                            <span className="label">불량률</span>
+                            <span className="value">1.5%</span>
+                        </CompactScoreBox>
+                    </CompactScoreRow>
+                    <ChartContainer>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartData} barCategoryGap="25%">
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="name" stroke="#94a3b8" tick={{fontSize: 12, fontWeight: 700}} axisLine={false} tickLine={false} dy={10} />
+                                <Tooltip cursor={{fill: '#f1f5f9'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
+                                <Bar dataKey="합격" stackId="a" fill="#10b981" radius={[0,0,4,4]} />
+                                <Bar dataKey="불량" stackId="a" fill="#ef4444" radius={[4,4,0,0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </ChartContainer>
+                    <HistoryListContainer>
+                        <div className="h-title"><History size={16} />최근 이력</div>
+                        <div className="h-scroll-area">
+                            {historyItems.map((h, i) => (
+                                <HistoryItem key={i}>
+                                    <span className="comp">{h.company}</span>
+                                    <div className="info">
+                                        <span className={`status ${h.status === '정상' ? 'ok' : 'bad'}`}>{h.status}</span>
+                                        <span className="time">{h.time}</span>
                                     </div>
-                                    <span className="label">{step.label}</span>
-                                    {status === 'active' && <span className="status-badge">처리 중</span>}
-                                </StepItem>
-                                )
-                            })}
-                            </StepsList>
+                                </HistoryItem>
+                            ))}
+                        </div>
+                    </HistoryListContainer>
+                </FullHeightCard>
+            </Column>
 
-                            {processStep === 6 && (
-                            <CompletionOverlay
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                            >
-                                <div className="success-circle">
-                                <CheckCircle2 size={64} color="#10b981" />
+            <Column>
+                <VideoCard 
+                    layout
+                    data-fullscreen={isFullScreen}
+                    $isFullScreen={isFullScreen}
+                    transition={{ layout: { duration: 0.6, type: "spring", stiffness: 80, damping: 20 } }}
+                >
+                    <VideoHeader>
+                        <div className="title-group">
+                            <h3>자재검수 화면</h3>
+                            <IpInputWrapper>
+                                <span className="label">CAM IP</span>
+                                <input 
+                                    value={streamHost} 
+                                    onChange={(e) => { 
+                                        setStreamHost(e.target.value.trim()); 
+                                        setStreamStatus("idle"); 
+                                    }} 
+                                    placeholder="192.168.xx.xx" 
+                                />
+                            </IpInputWrapper>
+                        </div>
+                        <div className="btn-group">
+                            <PinkButton onClick={manualTrigger}>TEST &gt;</PinkButton>
+                            <PinkButton onClick={toggleMapBoard}>D동 현황 &gt;</PinkButton>
+                        </div>
+                    </VideoHeader>
+
+                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
+                      <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 1 }}>
+                        {streamStatus === "ok" && streamUrl ? (
+                          <iframe 
+                            src={streamUrl} 
+                            style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} 
+                            title="Stream"
+                            onError={() => setStreamStatus("error")} 
+                          />
+                        ) : (
+                          <StyledErrorState>
+                            <div className="grid-bg"></div>
+                            <div className="content-box">
+                                <div className="icon-wrapper">
+                                  {streamStatus === 'checking' ? (
+                                    <RefreshCw className="spin" size={32} color="#ef4444" />
+                                  ) : (
+                                    <Signal size={32} color="#ef4444" />
+                                  )}
                                 </div>
-                                <span className="success-text">모든 검사 완료</span>
-                            </CompletionOverlay>
+                                {streamStatus === 'checking' ? (
+                                  <>
+                                      <h2>CONNECTING...</h2>
+                                      <p>Establishing secure connection to {streamHost}...</p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <h2>SIGNAL LOST</h2>
+                                    <p>Connection to Camera ({streamHost}) is unstable or unreachable.</p>
+                                    <div style={{marginTop: 10, display: 'flex', gap: 10, justifyContent: 'center'}}>
+                                      <PinkButton onClick={handleRetry} style={{background: '#334155'}}>
+                                        <RefreshCw size={14} style={{marginRight: 6}}/> RETRY
+                                      </PinkButton>
+                                    </div>
+                                  </>
+                                )}
+                            </div>
+                            <div className="barcode-layer">
+                              <ScanBarcode size={120} color="white" style={{opacity: 0.8}} />
+                              <span>WAITING FOR SCANNER SIGNAL...</span>
+                            </div>
+                          </StyledErrorState>
+                        )}
+                      </motion.div>
+
+                        <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 50 }}>
+                            <button 
+                                onClick={toggleFullScreen}
+                                style={{
+                                    background: 'rgba(255,255,255,0.2)',
+                                    border: '1px solid rgba(255,255,255,0.3)',
+                                    borderRadius: '8px',
+                                    width: '40px',
+                                    height: '40px',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}
+                            >
+                                {isFullScreen ? <LuMinimize size={20}/> : <LuMaximize size={20}/>}
+                            </button>
+                        </div>
+
+                            <AnimatePresence>
+                            {showDashboard && (
+                                <AIDashboardModal onClose={closeDashboard} streamUrl={streamUrl} streamStatus={streamStatus} />
                             )}
-                        </ProcessingCard>
-                      )}
-                    </AnimatePresence>
-
-                    <AnimatePresence>
-                      {showARNodes && (
-                        <EmergencyAlert
-                          initial={{ opacity: 0, x: -50 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -50, transition: { duration: 0.3 } }}
-                          transition={{ delay: 0.3, type: "spring", stiffness: 120 }}
-                        >
-                          <AlertHeader>
-                            <ShieldAlert size={20} color={THEME.alert} />
-                            <div><span className="alert-title">CRITICAL WARNING</span><span className="alert-time">Live</span></div>
-                          </AlertHeader>
-                          <AlertBody>
-                            <div className="issue-row"><span className="issue-label">Issue:</span><span className="issue-value">Thermal Anomaly</span></div>
-                            <p className="description">Object temperature rising (65°C). Check IR Sensor.</p>
-                          </AlertBody>
-                          <ActionGuideBox>
-                            <span className="guide-label">ACTION:</span>
-                            <div className="guide-step"><AlertCircle size={14} /><span>Cooling system activated.</span></div>
-                          </ActionGuideBox>
-                        </EmergencyAlert>
-                      )}
-                    </AnimatePresence>
-                  </AROverlayLayer>
-
-                  <div style={{position:'absolute', right:'20px', top:'20px', background:'rgba(255,255,255,0.85)', padding:'20px', borderRadius:'12px', fontSize:'0.9rem', color: '#334155', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', backdropFilter: 'blur(8px)', zIndex: 90, border: '1px solid rgba(255,255,255,0.6)', pointerEvents: 'none'}}>
-                      <div style={{fontWeight: 'bold', marginBottom: '10px', fontSize:'1rem'}}>📦 AI 검사 항목</div>
-                      <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'5px'}}>✅ 박스 규격: <span style={{color:'#059669', fontWeight:'bold'}}>완료</span></div>
-                      <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'5px'}}>✅ 수량 확인: <span style={{color:'#059669', fontWeight:'bold'}}>완료</span></div>
-                      <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'5px'}}>🔲 파손 여부: <span style={{color:'#2563eb', fontWeight:'bold'}}>검사중 (AI)</span></div>
-                      <div style={{display:'flex', alignItems:'center', gap:'10px'}}>🔲 라벨 일치: <span style={{color:'#94a3b8'}}>대기</span></div>
-                  </div>
-
-                  {/* 전체화면 버튼 */}
-                  <FullScreenBtn onClick={toggleFullScreen}>
-                    {isFullScreen ? <LuMinimize size={20} /> : <LuMaximize size={20} />}
-                  </FullScreenBtn>
-
-                </StreamContainer>
-              </div>
-            </ExpandableCard>
-
-            <Card style={{ height: '320px', flexShrink: 0 }}>
-              <CardHeader>
-                <div className="left-group"><span className="badge" style={{backgroundColor: '#6366f1'}}>02</span><h3>자재검수 통계 및 이력</h3></div>
-                <div style={{marginLeft: 'auto', fontSize:'0.8rem', color:'#64748b', display: 'flex', alignItems: 'center', gap: '5px'}}>
-                    <span style={{width: 8, height: 8, background: '#ef4444', borderRadius: '50%', boxShadow: '0 0 0 2px #fecaca'}}></span> 실시간 집계중
-                </div>
-              </CardHeader>
-              <StatsContainer>
-                <div className="chart-area">
-                  <ScoreBoard>
-                    <div><span className="title">합격률</span><span className="score pass">98.5%</span></div>
-                    <div><span className="title">불량률</span><span className="score fail">1.5%</span></div>
-                    <div style={{flex:1, textAlign:'left', paddingLeft:'20px', background: 'none', border: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
-                        <span className="title" style={{textAlign: 'left'}}>검수번호</span><span className="score" style={{color:'#334155', fontSize: '1rem'}}>AJQ121..</span>
+                        </AnimatePresence>
                     </div>
-                  </ScoreBoard>
-                  <div style={{ width: '100%', flex: 1 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={[{ name: '1번업체', 합격: 85, 불량: 15 }, { name: '2번업체', 합격: 90, 불량: 10 }, { name: '3번업체', 합격: 95, 불량: 5 }, { name: '4번업체', 합격: 98, 불량: 2 }]}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                        <XAxis dataKey="name" stroke="#64748b" tick={{fontSize: 12}} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{backgroundColor: '#ffffff', borderColor: '#e2e8f0', color: '#1e293b', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)'}} itemStyle={{color: '#1e293b'}} cursor={{fill: 'rgba(0,0,0,0.03)'}}/>
-                        <Bar dataKey="합격" fill="#10b981" barSize={30} radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="불량" fill="#f43f5e" barSize={30} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="history-area">
-                  <h4>최근 검수 이력</h4>
-                  <HistoryItem status="ok"><div><div style={{fontWeight: 600}}>퓨처로지스</div><div className="time">10:30</div></div><div className="status"></div></HistoryItem>
-                  <HistoryItem status="ok"><div><div style={{fontWeight: 600}}>글로벌테크</div><div className="time">10:45</div></div><div className="status"></div></HistoryItem>
-                  <HistoryItem status="fail"><div><div style={{fontWeight: 600}}>에이치물산</div><div className="time">11:00</div></div><div className="status"></div></HistoryItem>
-                  <HistoryItem status="ok"><div><div style={{fontWeight: 600}}>대성산업</div><div className="time">11:15</div></div><div className="status"></div></HistoryItem>
-                </div>
-              </StatsContainer>
-            </Card>
-          </Column>
+                </VideoCard>
+            </Column>
         </DashboardContainer>
       )}
+
+      <AnimatePresence>
+        {showMapBoard && (
+            <>
+                <Backdrop
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={closeMapBoard}
+                />
+                <SlidePanel
+                    initial={{ x: "100%" }}
+                    animate={{ x: 0 }}
+                    exit={{ x: "100%" }}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                >
+                    <WarehouseBoard onClose={closeMapBoard} />
+                </SlidePanel>
+            </>
+        )}
+      </AnimatePresence>
     </LayoutGroup>
   );
 }
-
-// ─── [Styles & Animations] ─────────────────────────────
-
-const fadeIn = keyframes` from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); }`;
-const shimmer = keyframes` 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); }`;
-const ripple = keyframes` 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.3); } 70% { box-shadow: 0 0 0 30px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } `;
-const breathing = keyframes` 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } `;
-const spin = keyframes` to { transform: rotate(360deg); } `;
-const progressStripes = keyframes`
-  0% { background-position: 0 0; }
-  100% { background-position: 20px 0; }
-`;
-
-const LoadingWrapper = styled.div<{ $isFadingOut: boolean }>` position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.8s ease-in-out; opacity: ${props => (props.$isFadingOut ? 0 : 1)}; pointer-events: ${props => (props.$isFadingOut ? 'none' : 'all')}; `;
-const LogoText = styled.div` font-size: 2rem; font-weight: 800; color: #0f172a; margin-bottom: 40px; letter-spacing: -0.5px; span { color: #3b82f6; } `;
-const ProgressContainer = styled.div` width: 400px; height: 8px; background-color: #e2e8f0; border-radius: 10px; overflow: hidden; position: relative; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); `;
-const ProgressBar = styled.div<{ width: number }>` height: 100%; width: ${props => props.width}%; background: linear-gradient(90deg, #3b82f6, #60a5fa); border-radius: 10px; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; &::after { content: ''; position: absolute; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.4) 50%, rgba(255, 255, 255, 0) 100%); animation: ${shimmer} 1.5s infinite; } `;
-const StatusText = styled.div` margin-top: 15px; font-size: 0.9rem; color: #64748b; font-weight: 500; min-height: 1.2em; display: flex; justify-content: space-between; width: 400px; `;
-const DashboardContainer = styled.div<{ $show: boolean }>` width: 100%; height: calc(100vh - 64px); background-color: #f1f5f9; color: #0f172a; padding: 20px; box-sizing: border-box; display: grid; grid-template-columns: 350px 1fr; gap: 20px; font-family: 'Pretendard', sans-serif; overflow: hidden; animation: ${props => (props.$show ? css`${fadeIn} 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards` : 'none')}; opacity: 0; `;
-const Column = styled.div` display: flex; flex-direction: column; gap: 20px; height: 100%; min-height: 0; `;
-const Card = styled.div` background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); display: flex; flex-direction: column; position: relative; `;
-const FullHeightCard = styled(Card)` height: 100%; `;
-
-// [수정 2] 전체화면 시 Nav Bar(64px) 제외하고 꽉 차게 수정
-const ExpandableCard = styled(motion.div)<{ $isFullScreen: boolean }>`
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-  flex: 1;
-  padding: 0;
-  will-change: transform, width, height;
-
-  ${({ $isFullScreen }) => $isFullScreen && css`
-    position: fixed;
-    top: 0px; /* Nav bar 높이만큼 띄움 */
-    left: 0;
-    width: 100vw;
-    height: calc(100vh - 64px); /* 전체 높이에서 Nav bar 높이 뺌 */
-    z-index: 999; /* Nav bar보다 아래 혹은 위에 오도록 적절히 조절 */
-    border-radius: 0;
-    border: none;
-    margin: 0;
-  `}
-`;
-
-const CardHeader = styled.div` display: flex; align-items: center; margin-bottom: 15px; flex-shrink: 0; justify-content: space-between; .left-group { display: flex; align-items: center; } .badge { background-color: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; margin-right: 10px; } h3 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #1e293b; } `;
-const ImageArea = styled.div` width: 100%; height: 200px; background-color: #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; position: relative; border: 1px solid #cbd5e1; img { width: 100%; height: 100%; object-fit: cover; } .label { position: absolute; top: 10px; left: 10px; background: rgba(255, 255, 255, 0.9); color: #0f172a; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; } `;
-const InfoRow = styled.div` display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center; span.label { color: #64748b; font-size: 0.9rem; font-weight: 500; } span.value { color: #0f172a; font-weight: 600; font-size: 1rem; } `;
-const StreamContainer = styled.div` flex: 1; width: 100%; height: 100%; background: #000; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; `;
-const StyledIframe = styled.iframe` width: 100%; height: 100%; border: none; display: block; object-fit: cover; position: absolute; inset: 0; z-index: 1; `;
-const IpInputWrapper = styled.div` display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 12px; border-radius: 20px; border: 1px solid #e2e8f0; input { border: none; background: transparent; font-size: 0.85rem; width: 100px; color: #334155; outline: none; text-align: right; &::placeholder { color: #94a3b8; } } span.label { font-size: 0.75rem; font-weight: 700; color: #94a3b8; } `;
-const StatsContainer = styled.div` display: flex; gap: 20px; height: 100%; min-height: 0; .chart-area { flex: 2; min-width: 0; display: flex; flex-direction: column; } .history-area { flex: 1; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 8px; padding: 15px; overflow-y: auto; h4 { margin-top: 0; margin-bottom: 10px; font-size: 0.9rem; color: #64748b; } } `;
-const ScoreBoard = styled.div` display: flex; gap: 15px; margin-bottom: 10px; div { background: #f1f5f9; padding: 8px 15px; border-radius: 8px; text-align: center; border: 1px solid #e2e8f0; .title { font-size: 0.75rem; color: #64748b; display: block; margin-bottom: 4px; } .score { font-size: 1.1rem; font-weight: bold; } .score.pass { color: #059669; } .score.fail { color: #e11d48; } } `;
-const HistoryItem = styled.div<HistoryStatusProps>` display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.85rem; color: #334155; &:last-child { border-bottom: none; } .time { color: #94a3b8; margin-top: 2px; font-size: 0.8rem; } .status { width: 8px; height: 8px; border-radius: 50%; background: ${props => props.status === 'ok' ? '#10b981' : '#f43f5e'}; box-shadow: 0 0 0 2px ${props => props.status === 'ok' ? '#d1fae5' : '#fee2e2'}; } `;
-const AROverlayLayer = styled.div` position: absolute; inset: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; display: flex; align-items: center; justify-content: center; overflow: hidden; `;
-const GlobalTintLayer = styled.div<{ $isActive: boolean }>` position: absolute; inset: 0; background-color: ${({ $isActive }) => $isActive ? 'rgba(0,0,0,0.3)' : 'transparent'}; z-index: 1; transition: background-color 0.6s ease; `;
-const BackgroundGrid = styled.div<{ $isActive: boolean }>` position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px); background-size: 40px 40px; opacity: ${({ $isActive }) => $isActive ? 0.4 : 0}; z-index: 2; transition: opacity 0.6s ease; `;
-const LayoutControl = styled.div` position: absolute; top: 30px; left: 30px; z-index: 100; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: auto; .label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.8); letter-spacing: 1px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); } `;
-const ToggleContainer = styled.div` background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2); border-radius: 99px; display: flex; padding: 4px; position: relative; cursor: pointer; backdrop-filter: blur(4px); .bg { position: absolute; top: 4px; bottom: 4px; width: calc(50% - 4px); background: ${THEME.primary}; border-radius: 99px; transition: left 0.3s ease; &.left { left: 4px; } &.right { left: 50%; } } .option { position: relative; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.5); transition: color 0.3s; &.active { color: white; } } `;
-const CenterOrigin = styled.div` position: relative; width: 0; height: 0; display: flex; align-items: center; justify-content: center; z-index: 20; `;
-const SVGOverlay = styled.svg` position: absolute; top: 0; left: 0; width: 0; height: 0; overflow: visible; z-index: 10; `;
-
-const ProcessingCard = styled(motion.div)`
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  width: 380px;
-  background: rgba(10, 10, 25, 0.90);
-  backdrop-filter: blur(25px);
-  border: 1px solid rgba(59, 130, 246, 0.5);
-  border-radius: 20px;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  box-shadow: 0 0 40px rgba(59, 130, 246, 0.3);
-  color: white;
-  overflow: hidden;
-  z-index: 200;
-
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 5px;
-    
-    .title-wrapper {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-    .main-title { 
-        font-size: 1.1rem; 
-        font-weight: 800;
-        color: #ffffff;
-        letter-spacing: 0.5px;
-        white-space: nowrap;
-        text-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-    }
-
-    .timer { font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
-  }
-`;
-
-const ProgressBarContainer = styled.div`
-  width: 100%;
-  height: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  overflow: hidden;
-  position: relative;
-`;
-
-// [수정 1] 프로그래스바 색상 극대화: 네온 그린(#39FF14) ~ 형광 노랑(#FFFF00)
-const ProgressBarFill = styled(motion.div)`
-  height: 100%;
-  border-radius: 6px;
-  position: relative;
-  overflow: hidden; /* 내부 패턴이 튀어나가지 않게 함 */
-
-  /* 1. 베이스: 밝은 네온색 배경 (box-shadow 삭제됨) */
-  background: linear-gradient(90deg, #39FF14, #7FFF00, #FFFF00);
-
-  /* 2. 오버레이: 빗살무늬 패턴 (가상 요소 사용으로 흑백 현상 방지) */
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    
-    /* 흰색 반투명 빗살무늬 */
-    background-image: linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.4) 25%,
-      transparent 25%,
-      transparent 50%,
-      rgba(255, 255, 255, 0.4) 50%,
-      rgba(255, 255, 255, 0.4) 75%,
-      transparent 75%,
-      transparent
-    );
-    background-size: 20px 20px; /* 패턴 크기 */
-    
-    /* 패턴 움직임 애니메이션 */
-    animation: ${progressStripes} 1s linear infinite;
-  }
-`;
-const StepsList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 8px;
-`;
-
-const StepItem = styled.div<{ $status: string }>`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  transition: all 0.3s;
-  
-  background: ${({ $status }) => $status === 'active' ? 'rgba(59, 130, 246, 0.15)' : 'transparent'};
-  border: 1px solid ${({ $status }) => $status === 'active' ? 'rgba(59, 130, 246, 0.4)' : 'transparent'};
-  opacity: ${({ $status }) => $status === 'pending' ? 0.3 : 1};
-  transform: ${({ $status }) => $status === 'active' ? 'scale(1.02)' : 'scale(1)'};
-
-  .icon-box {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: ${({ $status }) => $status === 'active' ? '#3b82f6' : $status === 'done' ? '#10b981' : 'rgba(255,255,255,0.05)'};
-    color: ${({ $status }) => $status === 'active' || $status === 'done' ? 'white' : '#94a3b8'};
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: ${({ $status }) => $status === 'active' ? '0 0 15px rgba(59, 130, 246, 0.5)' : 'none'};
-    
-    .spinner { animation: ${spin} 1s linear infinite; }
-  }
-
-  .label { 
-    font-size: 14px; 
-    font-weight: ${({ $status }) => $status === 'active' ? '700' : '500'};
-    color: ${({ $status }) => $status === 'active' ? 'white' : $status === 'done' ? '#d1fae5' : '#94a3b8'};
-    text-shadow: ${({ $status }) => $status === 'active' ? '0 0 10px rgba(59,130,246,0.5)' : 'none'};
-  }
-
-  .status-badge {
-    margin-left: auto;
-    font-size: 11px;
-    font-weight: 800;
-    color: #ffffff; 
-    text-shadow: 0 0 5px rgba(59, 130, 246, 0.8);
-    text-transform: uppercase;
-    animation: ${breathing} 1.5s infinite;
-  }
-`;
-
-const CompletionOverlay = styled(motion.div)`
-  position: absolute;
-  inset: 0;
-  background: rgba(10, 10, 25, 0.95);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  z-index: 10;
-  
-  .success-circle {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    background: rgba(16, 185, 129, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0 40px rgba(16, 185, 129, 0.6);
-    animation: ${breathing} 2s infinite;
-  }
-
-  .success-text {
-    font-size: 18px;
-    font-weight: 900;
-    color: #34d399;
-    letter-spacing: 2px;
-    text-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
-    text-transform: uppercase;
-  }
-`;
-
-const ScannerOverlay = styled(motion.div)`
-  position: absolute;
-  inset: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 150;
-  pointer-events: none;
-
-  .scanner-frame {
-    width: 600px;
-    height: 400px;
-    position: relative;
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    background: rgba(239, 68, 68, 0.05);
-    box-shadow: 0 0 60px rgba(239, 68, 68, 0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .laser-line {
-    position: absolute;
-    left: 0;
-    width: 100%;
-    height: 2px;
-    background: #ef4444;
-    box-shadow: 0 0 20px #ef4444;
-  }
-
-  .corner {
-    position: absolute;
-    width: 40px;
-    height: 40px;
-    border: 4px solid #ef4444;
-    box-shadow: 0 0 15px #ef4444;
-  }
-  .top-left { top: -2px; left: -2px; border-right: none; border-bottom: none; }
-  .top-right { top: -2px; right: -2px; border-left: none; border-bottom: none; }
-  .bottom-left { bottom: -2px; left: -2px; border-right: none; border-top: none; }
-  .bottom-right { bottom: -2px; right: -2px; border-left: none; border-top: none; }
-
-  .scan-info {
-    position: absolute;
-    bottom: 15px;
-    width: 100%;
-    text-align: center;
-    color: #ef4444;
-    font-family: monospace;
-    font-size: 16px;
-    font-weight: 800;
-    display: flex;
-    justify-content: space-between;
-    padding: 0 30px;
-    text-shadow: 0 0 10px rgba(239,68,68,0.5);
-  }
-
-  .blink {
-    animation: ${breathing} 0.5s infinite alternate;
-  }
-`;
-
-const EmergencyAlert = styled(motion.div)` position: absolute; bottom: 30px; left: 30px; width: 280px; background: rgba(255, 255, 255, 0.95); border-radius: 14px; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border-left: 5px solid ${THEME.alert}; z-index: 100; display: flex; flex-direction: column; gap: 10px; backdrop-filter: blur(12px); pointer-events: auto; `;
-const AlertHeader = styled.div` display: flex; align-items: center; gap: 10px; .alert-title { font-size: 13px; font-weight: 800; color: ${THEME.alert}; letter-spacing: 0.5px; } .alert-time { font-size: 11px; color: ${THEME.textSub}; margin-left: auto; font-weight: 500; } `;
-const AlertBody = styled.div` display: flex; flex-direction: column; gap: 5px; .issue-row { display: flex; gap: 6px; font-size: 13px; } .issue-label { font-weight: 600; color: ${THEME.textSub}; } .issue-value { font-weight: 800; color: ${THEME.textMain}; } .description { font-size: 12px; color: ${THEME.textSub}; line-height: 1.4; margin-top: 2px; } `;
-const ActionGuideBox = styled.div` background: rgba(254, 242, 242, 0.8); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; border: 1px dashed rgba(220, 38, 38, 0.2); .guide-label { font-size: 10px; font-weight: 700; color: ${THEME.alert}; margin-bottom: 2px; } .guide-step { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #991B1B; svg { min-width: 14px; } } `;
-const CardPositioner = styled(motion.div)` position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: 20; `;
-const CardCentering = styled.div` position: absolute; top: 0; left: 0; width: 220px; transform: translate(-50%, -50%); `;
-const ARCard = styled.div<{ $accentColor: string }>` background: ${THEME.cardBg}; backdrop-filter: blur(16px); border-radius: 14px; padding: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); border: 1px solid rgba(255, 255, 255, 0.5); border-left: 4px solid ${({ $accentColor }) => $accentColor}; pointer-events: auto; `;
-const ARCardHeader = styled.div` display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; .icon-group { display: flex; align-items: center; gap: 8px; } .title { font-size: 12px; font-weight: 700; color: ${THEME.textSub}; text-transform: uppercase; letter-spacing: 0.5px; } `;
-const IconBox = styled.div<{ $color: string }>` width: 28px; height: 28px; border-radius: 6px; background-color: ${({ $color }) => `${$color}15`}; color: ${({ $color }) => $color}; display: flex; align-items: center; justify-content: center; `;
-const ARCardBody = styled.div` .value { font-size: 18px; font-weight: 800; color: ${THEME.textMain}; line-height: 1.2; letter-spacing: -0.3px; } .sub-row { margin-top: 3px; } .sub-text { font-size: 12px; font-weight: 600; } `;
-const ARCardFooter = styled.div` display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; padding-top: 8px; border-top: 1px solid ${THEME.line}30; `;
-const Tag = styled.span` background: rgba(241, 245, 249, 0.8); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; color: ${THEME.textSub}; `;
-const WaitingScreen = styled.div` position: absolute; inset: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); color: #475569; z-index: 5; pointer-events: auto; `;
-const PulseCircle = styled.div` width: 80px; height: 80px; background-color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); margin-bottom: 24px; position: relative; color: #3b82f6; animation: ${ripple} 2s infinite; svg { z-index: 2; } `;
-const WaitingText = styled.div` display: flex; flex-direction: column; align-items: center; animation: ${breathing} 3s ease-in-out infinite; h4 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #334155; margin-bottom: 6px; } p { margin: 0; font-size: 0.9rem; color: #64748b; } `;
-const FullScreenBtn = styled.button` position: absolute; bottom: 20px; right: 20px; width: 36px; height: 36px; background: rgba(255, 255, 255, 0.25); border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 8px; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(4px); z-index: 1000; pointer-events: auto; transition: all 0.2s; &:hover { background: rgba(255, 255, 255, 0.4); transform: scale(1.1); } `;
-
-const TriggerButton = styled.button`
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 6px 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    
-    &:hover:not(:disabled) {
-        background: #2563eb;
-        transform: translateY(-1px);
-    }
-
-    &:disabled {
-        background: #94a3b8;
-        cursor: not-allowed;
-        opacity: 0.8;
-    }
-
-    &.processing {
-        background: #475569;
-        color: #e2e8f0;
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .spinner {
-        animation: ${spin} 1s linear infinite;
-    }
-`;

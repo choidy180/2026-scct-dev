@@ -4,22 +4,13 @@ import React, { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import styled, { keyframes } from "styled-components";
 import { Monitor, MousePointer2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+
 import TopNavigation from "@/components/navigation/top-navigation";
-import ChatbotWidget from "@/components/chatbot-widget";
-import { useViewContext } from "./view-context"; // 경로 확인 필요
-
-// --------------------------------------------------------------------------
-// ✅ 0. 로딩 시간 설정 (각 메뉴별 딜레이)
-// --------------------------------------------------------------------------
-
-const DEFAULT_LOADING_TIME = 500; // 기본 0.5초
-
-// 메뉴명은 TopNavigation의 메뉴명이나 URL path 기준과 매칭됨
-const LOADING_CONFIG: Record<string, number> = {
-  "AI 생산관리": 1000, // 데이터 로드 시뮬레이션: 1초
-  "AI 운송관리": 400,  // 가벼움: 0.4초
-  "AI 자재관리": 700,  // 중간: 0.7초
-};
+// ChatbotWidget 등 필요한 컴포넌트 import
+// import ChatbotWidget from "@/components/chatbot-widget"; 
+import { useViewContext } from "./view-context";
+import GmtLoadingScreen from "@/components/loading/gmt-loading";
 
 // --------------------------------------------------------------------------
 // 1. Mobile Blocker Styles (모바일 차단 화면 스타일)
@@ -134,7 +125,7 @@ const NavContainer = styled.div`
 const MainContent = styled.main`
   position: relative;
   z-index: 1;
-  min-height: calc(100vh - 64px); /* 네비게이션 높이 제외 */
+  min-height: calc(100vh - 64px);
 `;
 
 // --------------------------------------------------------------------------
@@ -142,36 +133,13 @@ const MainContent = styled.main`
 // --------------------------------------------------------------------------
 
 export default function ClientLayoutWrapper({ children }: { children: React.ReactNode }) {
-  // ✅ 1. URL 감지 (Next.js Navigation)
   const pathname = usePathname();
-  
-  // ✅ 2. Context 사용 (Provider 내부여야 함)
   const { isLoading, setIsLoading } = useViewContext();
 
-  // URL 경로를 메뉴 이름으로 변환하는 헬퍼 함수
-  const getMenuNameFromPath = (path: string) => {
-    if (path.startsWith("/production")) return "AI 생산관리";
-    if (path.startsWith("/transport")) return "AI 운송관리";
-    if (path.startsWith("/material")) return "AI 자재관리";
-    return "";
-  };
-
-  // ✅ 3. URL이 변경될 때마다 로딩 효과 실행 (리프레시 없는 SPA 효과)
   useEffect(() => {
-    const currentMenu = getMenuNameFromPath(pathname);
-    
-    // 로딩 시작
+    // URL 경로가 변경되면 로딩 시작
     setIsLoading(true);
-
-    // 메뉴별 설정된 시간만큼 대기
-    const delayTime = LOADING_CONFIG[currentMenu] ?? DEFAULT_LOADING_TIME;
-
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, delayTime);
-
-    // 컴포넌트 언마운트 시 타이머 정리
-    return () => clearTimeout(timer);
+    // setTimeout 제거: GmtLoadingScreen이 100%가 되면 알아서 끕니다.
   }, [pathname, setIsLoading]);
 
   return (
@@ -197,9 +165,29 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
 
       {/* 2. PC 접속 시 메인 화면 */}
       <DesktopOnlyWrapper>
+        
+        {/* ✅ 로딩 스크린 오버레이 */}
+        <AnimatePresence mode="wait">
+          {isLoading && (
+            <motion.div
+              key="global-loader"
+              style={{ 
+                position: "fixed", 
+                inset: 0, 
+                zIndex: 9999, 
+                background: "#ffffff" // 화이트 배경
+              }}
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0, filter: "blur(10px)" }} // 블러되면서 사라짐
+              transition={{ duration: 0.6, ease: "easeInOut" }}
+            >
+              {/* onComplete: 로딩바가 100%가 되면 호출되어 로딩 상태를 끔 */}
+              <GmtLoadingScreen onComplete={() => setIsLoading(false)} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <NavContainer>
-          {/* TopNavigation은 내부적으로 URL을 감지하여 탭을 표시합니다.
-              isLoading만 전달하여 로딩 중 클릭을 방지합니다. */}
           <TopNavigation isLoading={isLoading} />
         </NavContainer>
         
