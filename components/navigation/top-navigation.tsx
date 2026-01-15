@@ -302,7 +302,7 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
         <NavInner>
           <LogoArea onClick={(e: any) => handleMenuClick(e, "자재관리")}>
             <div className="logo-icon"><FiGrid /></div>
-            <h4>물류 자원 회전율 및 운송 최적화 관제</h4>
+            <h4>고모텍 AI 관제센터</h4>
           </LogoArea>
           
           <MenuArea ref={menuAreaRef}>

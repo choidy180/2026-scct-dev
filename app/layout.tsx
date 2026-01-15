@@ -7,7 +7,7 @@ import "./globals.css";
 import ClientLayoutWrapper from "./layout-client";
 
 export const metadata: Metadata = {
-  title: "스마트 팩토리 대시보드",
+  title: "고모텍 AI 관제센터",
   description: "물류 및 생산 관리 시스템",
 };
 
