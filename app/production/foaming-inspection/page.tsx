@@ -12,7 +12,6 @@ import {
   FiRefreshCw,
   FiX,
   FiAlertOctagon,
-  FiCpu,       
   FiLayers,    
   FiGrid       
 } from 'react-icons/fi';
@@ -21,12 +20,10 @@ import {
 // 1. Types & Constants
 // --------------------------------------------------------------------------
 
-type ProcessType = 'GR1' | 'GR2' | 'GR3' | 'GR4' | 'GR5';
-const PROCESS_LIST: ProcessType[] = ['GR1', 'GR2', 'GR3', 'GR4', 'GR5'];
 const COMMON_FONT = "'Pretendard', sans-serif";
 
 interface GaugeData {
-  id: number;
+  id: string;
   label: string;
   unit: string;
   icon: React.ReactNode;
@@ -36,7 +33,7 @@ interface GaugeData {
 }
 
 interface AlertItemData {
-  id: number;
+  id: string;
   type: 'error' | 'warning';
   title: string;
   desc: string;
@@ -44,89 +41,67 @@ interface AlertItemData {
   value?: string;
 }
 
+// API Response Types
+interface ApiDataItem {
+  "time_diff": number;
+  "Serial No.": string;
+  "Model No.": string;
+  "지그번호": string;
+  "대차번호": string;
+  "R액 압력(kg/㎥)": string;
+  "R액 탱크온도(℃)": string;
+  "P액 헤드온도(℃)": string;
+  "발포시간(초)": string;
+  "가조립무게(g)": string;
+  [key: string]: any; 
+}
+
+interface ApiLimitItem {
+  name: string;
+  min: string;
+  max: string;
+}
+
+interface ApiResponse {
+  success?: boolean;
+  data: ApiDataItem[];
+  DX_LIMIT_LIST: ApiLimitItem[];
+}
+
+const METRIC_CONFIG = [
+  { key: 'R액 압력(kg/㎥)', label: 'R액 압력', unit: 'kg/m³', icon: <FiActivity /> },
+  { key: 'R액 탱크온도(℃)', label: 'R액 탱크온도', unit: '°C', icon: <FiThermometer /> },
+  { key: 'P액 헤드온도(℃)', label: 'P액 헤드온도', unit: '°C', icon: <FiThermometer /> },
+  { key: '발포시간(초)', label: '발포시간', unit: '초', icon: <FiClock /> },
+  { key: '가조립무게(g)', label: '가조립무게', unit: 'g', icon: <FiBox /> },
+];
+
 // --------------------------------------------------------------------------
-// 2. Data Helpers (Pure Functions)
+// 2. Dummy Data (Fallback)
 // --------------------------------------------------------------------------
-
-const getRandomVal = (min: number, max: number, decimals: number = 0) => {
-  const val = Math.random() * (max - min) + min;
-  return parseFloat(val.toFixed(decimals));
-};
-
-const generateProcessData = (proc: ProcessType) => {
-  const isBadLuck = proc === 'GR3' || proc === 'GR5'; 
-  
-  const baseMetrics: Omit<GaugeData, 'value'>[] = [
-    { id: 1, label: 'R액 압력', unit: 'kg/m²', icon: <FiActivity />, min: 110, max: 150 },
-    { id: 2, label: 'R액 탱크온도', unit: '°C', icon: <FiThermometer />, min: 13, max: 23 },
-    { id: 3, label: 'P액 헤드온도', unit: '°C', icon: <FiThermometer />, min: 24, max: 28 },
-    { id: 4, label: '발포시간', unit: '초', icon: <FiClock />, min: 0.76, max: 1.66 },
-    { id: 5, label: '가조립무게', unit: 'g', icon: <FiBox />, min: 2375, max: 12530 },
-    { id: 6, label: '믹싱모터', unit: 'rpm', icon: <FiActivity />, min: 1800, max: 2200 },
-  ];
-
-  const metrics: GaugeData[] = baseMetrics.map(m => {
-    const range = m.max - m.min;
-    const errorMargin = isBadLuck ? range * 0.4 : range * 0.05; 
-    let val = getRandomVal(m.min, m.max, m.unit === 'g' || m.unit === 'rpm' ? 0 : 2);
-    
-    if (Math.random() > 0.8) {
-      val = getRandomVal(m.min - errorMargin, m.max + errorMargin, m.unit === 'g' ? 0 : 2);
-    }
-    return { ...m, value: val };
-  });
-
-  const newAlerts: AlertItemData[] = [];
-  const nowStr = new Date().toLocaleTimeString('en-US', { hour12: false });
-
-  metrics.forEach(m => {
-    if (m.value < m.min || m.value > m.max) {
-      newAlerts.push({
-        id: m.id,
-        type: 'error',
-        title: 'Spec Out 발생',
-        desc: `${m.label}이(가) 관리 범위(${m.min}~${m.max}${m.unit})를 벗어났습니다.`,
-        value: `현재값: ${m.value} ${m.unit}`,
-        time: nowStr
-      });
-    }
-  });
-
-  if (isBadLuck && Math.random() > 0.5) {
-    newAlerts.push({
-      id: 99,
-      type: 'warning',
-      title: '통신 지연 감지',
-      desc: '센서 데이터 수신이 0.5초 지연되었습니다.',
-      time: nowStr
-    });
-  }
-
-  return { metrics, alerts: newAlerts };
+const MOCK_API_RESPONSE: ApiResponse = {
+  success: true,
+  data: [
+    { "time_diff": -31759, "Serial No.": "WO2601140002200000", "Model No.": "ADC30021006", "지그번호": "DJ24R2G90005", "대차번호": "1", "R액 압력(kg/㎥)": "127.2", "R액 탱크온도(℃)": "19.5", "P액 헤드온도(℃)": "27.3", "발포시간(초)": "0.76", "가조립무게(g)": "7095" },
+    { "time_diff": -31779, "Serial No.": "WO2601140001800000", "Model No.": "ADC30008834", "지그번호": "DJ20MRH90013", "대차번호": "2", "R액 압력(kg/㎥)": "125.6", "R액 탱크온도(℃)": "19.4", "P액 헤드온도(℃)": "27.3", "발포시간(초)": "1.62", "가조립무게(g)": "2535" },
+    { "time_diff": -31800, "Serial No.": "WO2601140001800000", "Model No.": "ADC30008834", "지그번호": "DJ20MRH90008", "대차번호": "3", "R액 압력(kg/㎥)": "127.0", "R액 탱크온도(℃)": "19.3", "P액 헤드온도(℃)": "27.4", "발포시간(초)": "1.63", "가조립무게(g)": "1125" },
+    { "time_diff": -31820, "Serial No.": "WO2601140001800000", "Model No.": "ADC30008834", "지그번호": "DJ20MRH90006", "대차번호": "4", "R액 압력(kg/㎥)": "126.4", "R액 탱크온도(℃)": "19.2", "P액 헤드온도(℃)": "27.3", "발포시간(초)": "1.63", "가조립무게(g)": "12165" },
+    { "time_diff": -31839, "Serial No.": "WO2601140001800000", "Model No.": "ADC30008834", "지그번호": "DJ24R2G90004", "대차번호": "5", "R액 압력(kg/㎥)": "127.6", "R액 탱크온도(℃)": "19.2", "P액 헤드온도(℃)": "27.5", "발포시간(초)": "0.77", "가조립무게(g)": "3765" },
+    { "time_diff": -31859, "Serial No.": "WO2601140001800000", "Model No.": "ADC30008834", "지그번호": "DJ20MRH90005", "대차번호": "6", "R액 압력(kg/㎥)": "128.0", "R액 탱크온도(℃)": "19.1", "P액 헤드온도(℃)": "27.5", "발포시간(초)": "1.63", "가조립무게(g)": "4945" },
+    { "time_diff": -31878, "Serial No.": "WO2601140002100000", "Model No.": "ADC30008832", "지그번호": "DJ20M3H90004", "대차번호": "7", "R액 압력(kg/㎥)": "128.0", "R액 탱크온도(℃)": "19.1", "P액 헤드온도(℃)": "27.4", "발포시간(초)": "0.76", "가조립무게(g)": "4945" },
+  ],
+  "DX_LIMIT_LIST": [
+    { "name": "R액 압력(kg/㎥)", "min": "150", "max": "110" },
+    { "name": "R액 탱크온도(℃)", "min": "23", "max": "13" },
+    { "name": "P액 헤드온도(℃)", "min": "28", "max": "24" },
+    { "name": "발포시간(초)", "min": "0.76", "max": "1.63" },
+    { "name": "가조립무게(g)", "min": "1125", "max": "7095" }
+  ]
 };
 
 // --------------------------------------------------------------------------
 // 3. Styled Components & Keyframes
 // --------------------------------------------------------------------------
-
-const pulseGreen = keyframes`
-  0% { box-shadow: 0 0 0 0 rgba(0, 200, 150, 0.7); }
-  70% { box-shadow: 0 0 0 15px rgba(0, 200, 150, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(0, 200, 150, 0); }
-`;
-
-const pulseRed = keyframes`
-  0% { box-shadow: 0 0 0 0 rgba(238, 70, 72, 0.7); transform: scale(1); }
-  50% { transform: scale(1.02); }
-  70% { box-shadow: 0 0 0 20px rgba(238, 70, 72, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(238, 70, 72, 0); transform: scale(1); }
-`;
-
-const dangerPulse = keyframes`
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
-  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-`;
 
 const shimmer = keyframes`
   0% { background-position: -200% 0; }
@@ -143,94 +118,10 @@ const slideInRight = keyframes`
   to { transform: translateX(0); opacity: 1; }
 `;
 
-const fillProgress = keyframes`
-  0% { width: 0%; }
-  100% { width: 100%; }
-`;
-
-const textGlow = keyframes`
-  0%, 100% { text-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
-  50% { text-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 30px rgba(16, 185, 129, 0.6); }
-`;
-
-const LoaderOverlay = styled.div<{ $isFinished: boolean }>`
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background-color: #ffffff;
-  z-index: 99999;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  opacity: ${props => props.$isFinished ? 0 : 1};
-  visibility: ${props => props.$isFinished ? 'hidden' : 'visible'};
-  transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
-  font-family: ${COMMON_FONT};
-`;
-
-const LoaderContent = styled.div`
-  width: 400px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
-`;
-
-const LogoArea = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  .icon-wrap {
-    font-size: 48px;
-    color: #3b82f6;
-    margin-bottom: 8px;
-    filter: drop-shadow(0 4px 6px rgba(59, 130, 246, 0.3));
-  }
-  h1 {
-    font-size: 24px;
-    font-weight: 800;
-    color: #1e293b;
-    margin: 0;
-    letter-spacing: -0.5px;
-    font-family: ${COMMON_FONT};
-  }
-  p {
-    font-size: 14px;
-    color: #64748b;
-    font-weight: 500;
-    animation: ${textGlow} 2s infinite ease-in-out;
-    font-family: ${COMMON_FONT};
-  }
-`;
-
-const ProgressContainer = styled.div`
-  width: 100%;
-  height: 6px;
-  background-color: #f1f5f9;
-  border-radius: 99px;
-  overflow: hidden;
-  position: relative;
-`;
-
-const ProgressBar = styled.div`
-  height: 100%;
-  background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
-  border-radius: 99px;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-  width: 0%;
-  animation: ${fillProgress} 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-`;
-
-const LoadingStatus = styled.div`
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #94a3b8;
-  font-weight: 600;
-  font-family: ${COMMON_FONT};
+const dangerPulse = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 `;
 
 const PageContainer = styled.div`
@@ -260,63 +151,90 @@ const ContentWrapper = styled.div`
   font-family: ${COMMON_FONT};
 `;
 
-const PageHeaderRow = styled.div`
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  height: 56px;
+// [수정됨] 헤더 영역을 컬럼(세로) 배치로 변경하여 버튼 영역 확보
+const HeaderContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
   flex-shrink: 0;
   margin-bottom: 16px;
+  gap: 12px; 
+`;
+
+const HeaderTopRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   width: 100%;
+  height: 48px;
 `;
 
-const HeaderLeft = styled.div`
+const HeaderTitleArea = styled.div`
   display: flex;
   align-items: center;
-  justify-content: flex-start;
 `;
 
-const HeaderCenter = styled.div`
+const HeaderClockArea = styled.div`
   display: flex;
   align-items: center;
-  justify-content: center;
 `;
 
-const HeaderRight = styled.div`
+const ButtonRow = styled.div`
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-`;
-
-const TabNavigation = styled.div`
-  display: flex;
+  width: 100%;
   gap: 8px;
-  align-items: center;
-  margin: 0;
+  overflow-x: auto;
+  padding-bottom: 4px; /* 스크롤바 공간 살짝 확보 */
+  
+  /* 스크롤바 숨김 (깔끔한 UI) */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
 `;
 
-const TabButton = styled.button<{ $isActive: boolean }>`
-  border: none;
+// [수정됨] 직관적이고 산뜻한 버튼 디자인 + 에러 상태 스타일 추가
+const TabButton = styled.button<{ $isActive: boolean; $hasError: boolean }>`
+  border: ${props => props.$hasError ? '2px solid #ef4444' : '1px solid #e2e8f0'};
   outline: none;
-  background: ${props => props.$isActive ? '#1e293b' : '#fff'};
-  color: ${props => props.$isActive ? '#fff' : '#64748b'};
-  padding: 8px 20px;
-  border-radius: 10px;
-  font-size: 15px;
+  background: ${props => 
+    props.$isActive 
+      ? (props.$hasError ? '#ef4444' : '#1e293b') 
+      : (props.$hasError ? '#fef2f2' : '#fff')
+  };
+  color: ${props => 
+    props.$isActive 
+      ? '#fff' 
+      : (props.$hasError ? '#ef4444' : '#64748b')
+  };
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0; /* 버튼이 줄어들지 않도록 설정 */
+  min-width: 60px; /* 최소 너비 확보 */
+  justify-content: center;
+  
+  /* 그림자 효과로 깊이감 표현 (isActive일 때 다르게) */
   box-shadow: ${props => props.$isActive 
-    ? '0 4px 12px rgba(30, 41, 59, 0.3)' 
-    : '0 2px 4px rgba(0,0,0,0.05)'};
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    ? 'inset 0 2px 4px rgba(0,0,0,0.1)' 
+    : '0 2px 4px rgba(0,0,0,0.03)'};
+  
+  transition: all 0.15s ease-in-out;
   display: flex;
   align-items: center;
   gap: 6px;
   font-family: ${COMMON_FONT};
 
+  /* [수정됨] Y축 이동 이벤트 제거하고 색상/그림자로만 인터렉션 */
   &:hover {
-    transform: translateY(-2px);
-    background: ${props => props.$isActive ? '#0f172a' : '#f8fafc'};
+    background: ${props => 
+      props.$isActive 
+        ? (props.$hasError ? '#dc2626' : '#0f172a') 
+        : (props.$hasError ? '#fee2e2' : '#f1f5f9')
+    };
   }
 `;
 
@@ -338,11 +256,6 @@ const PageTitle = styled.h1`
     padding: 4px 10px;
     border-radius: 8px;
     vertical-align: middle;
-  }
-
-  @media (min-width: 2000px) {
-    font-size: 42px;
-    .proc-badge { font-size: 16px; padding: 6px 12px; }
   }
 `;
 
@@ -367,11 +280,6 @@ const CurrentTime = styled.div`
     background-color: #10b981;
     border-radius: 50%;
     animation: ${blink} 1.5s infinite ease-in-out;
-  }
-
-  @media (min-width: 2000px) {
-    font-size: 18px;
-    padding: 10px 24px;
   }
 `;
 
@@ -427,7 +335,6 @@ const SectionTitle = styled.h2`
   color: #0f172a;
   margin: 0;
   font-family: 'Pretendard';
-  @media (min-width: 2000px) { font-size: 30px; }
 `;
 
 const DateLabel = styled.span`
@@ -441,9 +348,6 @@ const DateLabel = styled.span`
   border-radius: 6px;
   font-family: ${COMMON_FONT};
   svg { font-size: 14px; color: #94a3b8; }
-  @media (min-width: 2000px) {
-    font-size: 16px; padding: 8px 16px; svg { font-size: 18px; }
-  }
 `;
 
 const MetricsList = styled.div`
@@ -477,17 +381,6 @@ const CardBase = styled.div<{ $status: 'good' | 'error', $clickable?: boolean }>
     transform: ${props => props.$clickable ? 'translateY(-4px)' : 'none'};
     box-shadow: ${props => props.$clickable ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : '0 4px 6px -1px rgba(0, 0, 0, 0.05)'};
   }
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 30%;
-    background: ${props => props.$status === 'good' 
-      ? 'linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, rgba(255,255,255,0) 100%)' 
-      : 'linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, rgba(255,255,255,0) 100%)'};
-    z-index: 0;
-  }
 `;
 
 const CardHeader = styled.div`
@@ -499,7 +392,6 @@ const CardHeader = styled.div`
   color: #334155;
   z-index: 1;
   font-family: ${COMMON_FONT};
-  @media (min-width: 2000px) { font-size: 32px; }
 `;
 
 const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
@@ -515,9 +407,6 @@ const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
   color: white;
   box-shadow: 0 10px 20px ${props => props.$status === 'good' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'};
   z-index: 1;
-  animation: ${props => props.$status === 'good' ? pulseGreen : pulseRed} 2s infinite;
-  
-  svg { width: 50%; height: 50%; }
 `;
 
 const StatusText = styled.div`
@@ -526,7 +415,6 @@ const StatusText = styled.div`
   color: #0f172a;
   z-index: 1;
   font-family: ${COMMON_FONT};
-  @media (min-width: 2000px) { font-size: 56px; }
 `;
 
 const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
@@ -540,7 +428,6 @@ const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
   z-index: 1;
   font-family: ${COMMON_FONT};
   ${props => props.$status === 'good' ? css`background-color: #D2F6EA; color: #01A871;` : css`background-color: #FFDDDD; color: #dc2626;`}
-  @media (min-width: 2000px) { font-size: 18px; padding: 8px 24px; }
 `;
 
 const LegendContainer = styled.div`
@@ -552,7 +439,6 @@ const LegendContainer = styled.div`
   justify-content: center;
   gap: 12px;
   z-index: 1;
-  @media (min-width: 2000px) { padding: 12px 16px; gap: 24px; }
 `;
 
 const LegendItem = styled.div`
@@ -570,7 +456,6 @@ const LegendItem = styled.div`
     border-radius: 50%;
     background-color: ${props => props.color};
   }
-  @media (min-width: 2000px) { font-size: 16px; &::before { width: 14px; height: 14px; } }
 `;
 
 const RowContainer = styled.div<{ $isError?: boolean }>`
@@ -590,7 +475,6 @@ const MetricInfo = styled.div`
   align-items: center;
   gap: 14px;
   flex-shrink: 0;
-  @media (min-width: 2000px) { width: 300px; gap: 20px; }
 `;
 
 const IconBox = styled.div`
@@ -603,7 +487,6 @@ const IconBox = styled.div`
   color: #64748b;
   font-size: 18px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  @media (min-width: 2000px) { width: 60px; height: 60px; font-size: 28px; }
 `;
 
 const MetricLabelGroup = styled.div`
@@ -619,7 +502,6 @@ const MetricName = styled.span`
   align-items: center;
   gap: 4px;
   font-family: ${COMMON_FONT};
-  @media (min-width: 2000px) { font-size: 28px; }
 `;
 
 const MetricUnit = styled.span`
@@ -627,7 +509,6 @@ const MetricUnit = styled.span`
   color: #757d88;
   font-weight: 400;
   font-family: ${COMMON_FONT};
-  @media (min-width: 2000px) { font-size: 18px; }
 `;
 
 const GaugeColumn = styled.div`
@@ -636,14 +517,12 @@ const GaugeColumn = styled.div`
   display: flex;
   flex-direction: column;
   justify-content: center;
-  @media (min-width: 2000px) { padding: 0 80px; }
 `;
 
 const TrackArea = styled.div`
   position: relative;
   width: 100%; height: 10px;
   margin-top: 10px;
-  @media (min-width: 2000px) { height: 18px; }
 `;
 
 const GaugeTrack = styled.div<{ $isError?: boolean }>`
@@ -673,7 +552,6 @@ const GaugeLabels = styled.div`
   font-weight: 500;
   width: 100%;
   font-family: ${COMMON_FONT};
-  @media (min-width: 2000px) { font-size: 20px; margin-top: 12px; }
 `;
 
 const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
@@ -704,10 +582,6 @@ const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     box-sizing: border-box;
   }
-  @media (min-width: 2000px) {
-    .value-text { font-size: 26px; bottom: 14px; }
-    .handle { width: 28px; height: 18px; border-width: 3px; }
-  }
 `;
 
 const DangerPopup = styled.div`
@@ -719,18 +593,17 @@ const DangerPopup = styled.div`
   display: flex; align-items: center; gap: 16px;
   animation: ${dangerPulse} 2s infinite;
 
-  @media (min-width: 2000px) { left: 320px; padding: 16px 24px; top: -30px; }
   &::after {
     content: ''; position: absolute;
     bottom: -6px; left: 20px;
     width: 12px; height: 12px;
     background: #ef4444; transform: rotate(45deg);
   }
-  .icon-area { font-size: 24px; display: flex; align-items: center; @media (min-width: 2000px) { font-size: 36px; } }
+  .icon-area { font-size: 24px; display: flex; align-items: center; }
   .text-area { display: flex; flex-direction: column; gap: 2px; }
-  .warning-title { font-size: 13px; font-weight: 800; color: #fee2e2; text-transform: uppercase; font-family: ${COMMON_FONT}; @media (min-width: 2000px) { font-size: 16px; } }
-  .warning-msg { font-size: 14px; font-weight: 700; white-space: nowrap; font-family: ${COMMON_FONT}; @media (min-width: 2000px) { font-size: 18px; } }
-  .action-btn { background: white; color: #ef4444; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-family: ${COMMON_FONT}; &:hover { background: #fff1f2; } @media (min-width: 2000px) { font-size: 16px; padding: 8px 16px; } }
+  .warning-title { font-size: 13px; font-weight: 800; color: #fee2e2; text-transform: uppercase; font-family: ${COMMON_FONT}; }
+  .warning-msg { font-size: 14px; font-weight: 700; white-space: nowrap; font-family: ${COMMON_FONT}; }
+  .action-btn { background: white; color: #ef4444; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-family: ${COMMON_FONT}; &:hover { background: #fff1f2; } }
 `;
 
 const ValueBox = styled.div<{ $isError?: boolean }>`
@@ -742,7 +615,6 @@ const ValueBox = styled.div<{ $isError?: boolean }>`
   box-shadow: 0 4px 6px -1px ${props => props.$isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)'};
   flex-shrink: 0;
   font-family: ${COMMON_FONT};
-  @media (min-width: 2000px) { width: 140px; height: 60px; font-size: 24px; }
 `;
 
 const NotificationContainer = styled.div`
@@ -752,7 +624,6 @@ const NotificationContainer = styled.div`
   display: flex; flex-direction: column; gap: 12px;
   pointer-events: none; 
   font-family: ${COMMON_FONT};
-  @media (min-width: 2000px) { width: 500px; top: 30px; right: 30px; }
 `;
 
 const SummaryBanner = styled.div`
@@ -768,7 +639,6 @@ const SummaryBanner = styled.div`
   .header-left { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
   .close-all-btn { cursor: pointer; color: white; opacity: 0.9; transition: all 0.2s; &:hover { opacity: 1; transform: scale(1.2); } }
   .sub-text { font-size: 13px; opacity: 0.9; padding-left: 28px; }
-  @media (min-width: 2000px) { padding: 20px 24px; .header-left { font-size: 20px; } .sub-text { font-size: 15px; } }
 `;
 
 const AlertCardStyle = styled.div<{ $type: 'error' | 'warning' }>`
@@ -794,34 +664,26 @@ const AlertCardStyle = styled.div<{ $type: 'error' | 'warning' }>`
   .close-item-btn { cursor: pointer; color: #cbd5e1; transition: all 0.2s; &:hover { color: #64748b; transform: scale(1.1); } }
   .desc { font-size: 13px; color: #475569; line-height: 1.5; white-space: pre-wrap; font-family: ${COMMON_FONT}; }
   .value-highlight { display: block; margin-top: 4px; font-weight: 700; color: #0f172a; font-family: ${COMMON_FONT}; }
-  @media (min-width: 2000px) { padding: 20px; .badge { font-size: 13px; } .title { font-size: 16px; } .desc { font-size: 15px; } .time { font-size: 15px; } }
 `;
 
 // --------------------------------------------------------------------------
-// 4. Sub-Components (Memoized for Performance)
+// 4. Sub-Components
 // --------------------------------------------------------------------------
 
-// 4.1. Live Clock Component (Isolates renders)
 const LiveClock = memo(() => {
   const [time, setTime] = useState<string>('');
-
   useEffect(() => {
-    // Client-side only to avoid hydration mismatch
     setTime(new Date().toLocaleTimeString('en-GB', { hour12: false }));
     const interval = setInterval(() => {
       setTime(new Date().toLocaleTimeString('en-GB', { hour12: false }));
     }, 1000);
     return () => clearInterval(interval);
   }, []);
-
   if (!time) return <CurrentTime>Loading...</CurrentTime>;
-
   return <CurrentTime>{time}</CurrentTime>;
 });
-
 LiveClock.displayName = 'LiveClock';
 
-// 4.2. Status Card
 const StatusCard = memo(({ 
   type, title, mainText, subText, onClick
 }: { 
@@ -844,14 +706,24 @@ const StatusCard = memo(({
     </LegendContainer>
   </CardBase>
 ));
-
 StatusCard.displayName = 'StatusCard';
 
-// 4.3. Metric Row
 const MetricRow = memo(({ data }: { data: GaugeData }) => {
-  const range = data.max - data.min;
-  let percent = ((data.value - data.min) / range) * 100;
-  const isSpecOut = data.value < data.min || data.value > data.max;
+  let min = data.min;
+  let max = data.max;
+  
+  if (min > max) { [min, max] = [max, min]; }
+  
+  const range = max - min;
+  let percent = 0;
+  
+  if (range > 0) {
+    percent = ((data.value - min) / range) * 100;
+  } else {
+    percent = 50;
+  }
+
+  const isSpecOut = data.value < min || data.value > max;
 
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
@@ -863,7 +735,7 @@ const MetricRow = memo(({ data }: { data: GaugeData }) => {
           <div className="icon-area"><FiAlertOctagon /></div>
           <div className="text-area">
             <span className="warning-title">CRITICAL WARNING</span>
-            <span className="warning-msg">현재값 {data.value} (최대 {data.max}) — 즉시 점검 요망</span>
+            <span className="warning-msg">현재값 {data.value} (정상 {min}~{max})</span>
           </div>
           <div className="action-btn">조치완료</div>
         </DangerPopup>
@@ -885,8 +757,8 @@ const MetricRow = memo(({ data }: { data: GaugeData }) => {
           <GaugeTrack $isError={isSpecOut} />
         </TrackArea>
         <GaugeLabels>
-          <span>{data.min}</span>
-          <span>{data.max}</span>
+          <span>{min}</span>
+          <span>{max}</span>
         </GaugeLabels>
       </GaugeColumn>
 
@@ -894,16 +766,14 @@ const MetricRow = memo(({ data }: { data: GaugeData }) => {
     </RowContainer>
   );
 });
-
 MetricRow.displayName = 'MetricRow';
 
-// 4.4. Notification System
 interface NotificationSystemProps {
   isOpen: boolean;
   onCloseAll: () => void;
-  onCloseItem: (id: number) => void;
+  onCloseItem: (id: string) => void;
   alerts: AlertItemData[];
-  hiddenAlertIds: number[];
+  hiddenAlertIds: string[];
 }
 
 const NotificationSystem = memo(({ isOpen, onCloseAll, onCloseItem, alerts, hiddenAlertIds }: NotificationSystemProps) => {
@@ -912,7 +782,7 @@ const NotificationSystem = memo(({ isOpen, onCloseAll, onCloseItem, alerts, hidd
     [alerts, hiddenAlertIds]
   );
 
-  if (!isOpen || alerts.length === 0) return null;
+  if (!isOpen || visibleAlerts.length === 0) return null;
 
   return (
     <NotificationContainer>
@@ -923,7 +793,7 @@ const NotificationSystem = memo(({ isOpen, onCloseAll, onCloseItem, alerts, hidd
           </div>
           <FiX className="close-all-btn" size={24} onClick={onCloseAll} />
         </div>
-        <div className="sub-text">총 {alerts.length}건의 알림이 있습니다</div>
+        <div className="sub-text">총 {visibleAlerts.length}건의 알림이 있습니다</div>
       </SummaryBanner>
       {visibleAlerts.map(alert => (
         <AlertCardStyle key={alert.id} $type={alert.type}>
@@ -946,7 +816,6 @@ const NotificationSystem = memo(({ isOpen, onCloseAll, onCloseItem, alerts, hidd
     </NotificationContainer>
   );
 });
-
 NotificationSystem.displayName = 'NotificationSystem';
 
 // --------------------------------------------------------------------------
@@ -954,53 +823,124 @@ NotificationSystem.displayName = 'NotificationSystem';
 // --------------------------------------------------------------------------
 
 export default function ProcessMonitorPage() {
-  const [activeProcess, setActiveProcess] = useState<ProcessType>('GR2');
-  const [isLoading, setIsLoading] = useState(true);
-  
+  const [cartList, setCartList] = useState<ApiDataItem[]>([]);
+  const [selectedCartNo, setSelectedCartNo] = useState<string>('');
   const [metricsData, setMetricsData] = useState<GaugeData[]>([]);
   const [alerts, setAlerts] = useState<AlertItemData[]>([]);
-  const [hiddenAlertIds, setHiddenAlertIds] = useState<number[]>([]);
+  const [hiddenAlertIds, setHiddenAlertIds] = useState<string[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [apiLimits, setApiLimits] = useState<Record<string, {min: number, max: number}>>({});
 
-  // 데이터 생성 로직 (useCallback으로 메모이제이션)
-  const generateData = useCallback((proc: ProcessType) => {
-    return generateProcessData(proc);
-  }, []);
-
-  const handleProcessChange = useCallback((proc: ProcessType, withLoading = true) => {
-    setActiveProcess(proc);
-    setHiddenAlertIds([]); 
-    
-    if (withLoading) {
-      setIsLoading(true);
-      setTimeout(() => {
-        const { metrics, alerts } = generateData(proc);
-        setMetricsData(metrics);
-        setAlerts(alerts);
-        setIsLoading(false);
-      }, 1500);
-    } else {
-      const { metrics, alerts } = generateData(proc);
-      setMetricsData(metrics);
-      setAlerts(alerts);
-    }
-  }, [generateData]);
-
-  // 초기 로드
+  // 1. Fetch Data
   useEffect(() => {
-    const timer = setTimeout(() => {
-      handleProcessChange('GR2', false); 
-      setIsLoading(false);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [handleProcessChange]);
-
-  const handleOpenModal = useCallback(() => {
-    setHiddenAlertIds([]);
-    setShowModal(true);
+    const fetchData = async () => {
+      try {
+        const res = await fetch('http://1.254.24.170:24828/api/DX_API000022');
+        if (!res.ok) throw new Error('API Failed');
+        const json: ApiResponse = await res.json();
+        processApiResponse(json);
+      } catch (err) {
+        console.warn('API Fetch failed, using Dummy Data', err);
+        processApiResponse(MOCK_API_RESPONSE);
+      }
+    };
+    fetchData();
   }, []);
 
-  const handleCloseItem = useCallback((id: number) => {
+  // 2. Process API Response
+  const processApiResponse = (json: ApiResponse) => {
+    const limitMap: Record<string, {min: number, max: number}> = {};
+    if (json.DX_LIMIT_LIST) {
+      json.DX_LIMIT_LIST.forEach(item => {
+        let min = parseFloat(item.min);
+        let max = parseFloat(item.max);
+        if (isNaN(min)) min = 0;
+        if (isNaN(max)) max = 100;
+        limitMap[item.name] = { min, max };
+      });
+    }
+    setApiLimits(limitMap);
+
+    if (json.data && json.data.length > 0) {
+      setCartList(json.data);
+      if (!selectedCartNo) {
+        setSelectedCartNo(json.data[0]['대차번호']);
+        updateMetricsForCart(json.data[0], limitMap);
+      }
+    }
+  };
+
+  // 3. Update Metrics
+  const updateMetricsForCart = useCallback((cartData: ApiDataItem, limits: Record<string, {min: number, max: number}>) => {
+    const newMetrics: GaugeData[] = [];
+    const newAlerts: AlertItemData[] = [];
+    const nowStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+    METRIC_CONFIG.forEach((config, index) => {
+      const valStr = cartData[config.key];
+      const val = parseFloat(valStr);
+      
+      let min = 0, max = 100;
+      if (limits[config.key]) {
+        min = limits[config.key].min;
+        max = limits[config.key].max;
+      }
+      if (min > max) { [min, max] = [max, min]; }
+
+      if (!isNaN(val)) {
+        newMetrics.push({
+          id: `m-${index}`,
+          label: config.label,
+          unit: config.unit,
+          icon: config.icon,
+          min,
+          max,
+          value: val
+        });
+
+        if (val < min || val > max) {
+          newAlerts.push({
+            id: `alert-${index}`,
+            type: 'error',
+            title: 'Spec Out 발생',
+            desc: `${config.label}이(가) 관리 범위(${min}~${max}${config.unit})를 벗어났습니다.`,
+            value: `현재값: ${val} ${config.unit}`,
+            time: nowStr
+          });
+        }
+      }
+    });
+
+    setMetricsData(newMetrics);
+    setAlerts(newAlerts);
+  }, []);
+
+  const handleCartChange = (cartNo: string) => {
+    setSelectedCartNo(cartNo);
+    const cartData = cartList.find(c => c['대차번호'] === cartNo);
+    if (cartData) {
+      updateMetricsForCart(cartData, apiLimits);
+      setHiddenAlertIds([]); 
+    }
+  };
+
+  // [New Helper] Helper to check if a specific cart has ANY error
+  const checkCartError = useCallback((item: ApiDataItem) => {
+    return METRIC_CONFIG.some(config => {
+      const val = parseFloat(item[config.key]);
+      if (isNaN(val)) return false;
+      
+      let limit = apiLimits[config.key];
+      if (!limit) return false;
+      
+      let { min, max } = limit;
+      if (min > max) { [min, max] = [max, min]; }
+      
+      return val < min || val > max;
+    });
+  }, [apiLimits]);
+
+  const handleCloseItem = useCallback((id: string) => {
     setHiddenAlertIds(prev => [...prev, id]);
   }, []);
 
@@ -1008,26 +948,18 @@ export default function ProcessMonitorPage() {
     setShowModal(false);
   }, []);
 
-  // 파생 상태 계산 (useMemo)
+  const handleOpenModal = useCallback(() => {
+    setHiddenAlertIds([]);
+    setShowModal(true);
+  }, []);
+
   const hasCriticalError = useMemo(() => alerts.some(a => a.type === 'error'), [alerts]);
   
   return (
     <>
       <PageContainer>
-        <LoaderOverlay $isFinished={!isLoading}>
-          <LoaderContent>
-            <LogoArea>
-              <div className="icon-wrap"><FiCpu /></div>
-              <h1>설비이상 징후 탐지 AI ({activeProcess})</h1>
-              <p>Connection Establishing...</p>
-            </LogoArea>
-            <ProgressContainer><ProgressBar /></ProgressContainer>
-            <LoadingStatus><span>SYSTEM CHECK</span><span>100%</span></LoadingStatus>
-          </LoaderContent>
-        </LoaderOverlay>
-
         <NotificationSystem 
-          isOpen={showModal || (alerts.length > 0 && !isLoading)} 
+          isOpen={showModal || alerts.length > 0} 
           onCloseAll={handleCloseAll}
           onCloseItem={handleCloseItem}
           alerts={alerts}
@@ -1035,34 +967,43 @@ export default function ProcessMonitorPage() {
         />
 
         <ContentWrapper>
-          <PageHeaderRow>
-            <HeaderLeft>
-              <PageTitle>
-                설비이상 징후 탐지 AI
-                <span style={{ marginLeft: '12px', fontSize: '18px', color: '#94a3b8' }}>|</span>
-                <span className="proc-badge">{activeProcess} 공정</span>
-              </PageTitle>
-            </HeaderLeft>
+          <HeaderContainer>
+            {/* 상단: 타이틀 + 시계 */}
+            <HeaderTopRow>
+              <HeaderTitleArea>
+                <PageTitle>
+                  설비이상 징후 탐지 AI
+                  <span style={{ marginLeft: '12px', fontSize: '18px', color: '#94a3b8' }}>|</span>
+                  <span className="proc-badge">GR2 발포 공정</span>
+                </PageTitle>
+              </HeaderTitleArea>
+              <HeaderClockArea>
+                <LiveClock />
+              </HeaderClockArea>
+            </HeaderTopRow>
 
-            <HeaderCenter>
-              <TabNavigation>
-                {PROCESS_LIST.map(proc => (
+            {/* 하단: 버튼 리스트 (Full Width, Horizontal Scroll) */}
+            <ButtonRow>
+              {cartList.map((item) => {
+                const cNo = item['대차번호'];
+                // 대차에 에러가 있는지 미리 검사
+                const hasError = checkCartError(item);
+                
+                return (
                   <TabButton 
-                    key={proc} 
-                    $isActive={activeProcess === proc}
-                    onClick={() => handleProcessChange(proc)}
+                    key={cNo} 
+                    $isActive={selectedCartNo === cNo}
+                    $hasError={hasError}
+                    onClick={() => handleCartChange(cNo)}
                   >
-                    {activeProcess === proc ? <FiLayers /> : <FiGrid />}
-                    {proc}
+                    {selectedCartNo === cNo ? <FiLayers /> : <FiGrid />}
+                    {hasError ? <FiAlertTriangle size={12}/> : null}
+                    대차 {cNo}
                   </TabButton>
-                ))}
-              </TabNavigation>
-            </HeaderCenter>
-
-            <HeaderRight>
-              <LiveClock />
-            </HeaderRight>
-          </PageHeaderRow>
+                );
+              })}
+            </ButtonRow>
+          </HeaderContainer>
 
           <DashboardGrid>
             <LeftColumn>
@@ -1070,7 +1011,7 @@ export default function ProcessMonitorPage() {
                 type={hasCriticalError ? "error" : "good"}
                 title="설비 상태"
                 mainText={hasCriticalError ? "점검필요" : "양호"}
-                subText={hasCriticalError ? "이상 징후가 발견되었습니다" : "안정적으로 운영중"}
+                subText={hasCriticalError ? "Spec Out 발견됨" : "안정적으로 운영중"}
               />
               <StatusCard 
                 type={alerts.length > 0 ? "error" : "good"}
@@ -1083,7 +1024,7 @@ export default function ProcessMonitorPage() {
 
             <RightColumn>
               <SectionHeader>
-                <SectionTitle>{activeProcess} 핵심 공정 지표</SectionTitle>
+                <SectionTitle>대차 #{selectedCartNo} 공정 데이터</SectionTitle>
                 <DateLabel><FiRefreshCw /> 실시간 수신중</DateLabel>
               </SectionHeader>
               
