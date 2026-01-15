@@ -6,7 +6,7 @@ import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 
 // --- Firebase Imports ---
 import { initializeApp, FirebaseApp } from "firebase/app";
-import { getDatabase, ref, onValue, Database } from "firebase/database";
+import { getDatabase, ref, onValue, Database, query, limitToLast, onChildAdded } from "firebase/database";
 
 // --- Icons (react-icons) ---
 import {
@@ -44,7 +44,9 @@ import {
   Box,
   Layers,
   ServerCrash,
-  PieChart as PieIcon
+  PieChart as PieIcon,
+  AlertTriangle, // 에러 아이콘
+  XCircle // 실패 아이콘
 } from "lucide-react";
 
 // --- Charts ---
@@ -173,12 +175,12 @@ const PROCESS_STEPS = [
   { id: 5, label: "데이터 저장", icon: <Save size={14} /> },
 ];
 
-const BOOT_LOGS = [
-  "BIOS Integrity Check... OK",
-  "Initializing Optical Sensors...",
-  "Calibrating Lens Aperture...",
-  "Loading AI Vision Models (v2.4)...",
-  "System Ready."
+const FAILURE_REASONS = [
+  "ERP 서버 응답 시간 초과 (Timeout)",
+  "바코드 데이터 형식 불일치",
+  "발주 수량 초과 (Over Count)",
+  "필수 품질 검사 데이터 누락",
+  "네트워크 연결 불안정 (Packet Loss)"
 ];
 
 // ─── [3. HELPER FUNCTIONS] ──────────────────────────────
@@ -201,25 +203,6 @@ const generateDummyItems = (): ItemData[] => {
     });
   }
   return items;
-};
-
-const generateHistoryData = () => {
-  const companies = ['에이치물산', '동양철강', '태성산업', '한화물류', '경동택배', '미래해운', '세진공업', '대원강업', '삼보모터스', '대한통운'];
-  return Array.from({ length: 20 }).map((_, i) => {
-    const date = new Date();
-    date.setMinutes(date.getMinutes() - (i * 15 + 5)); 
-    const h = String(date.getHours()).padStart(2, '0');
-    const m = String(date.getMinutes()).padStart(2, '0');
-
-    return {
-      id: i.toString(),
-      company: companies[i % companies.length],
-      purInNo: `PO-${20260115 + i}`,
-      time: `${h}:${m}`,
-      status: Math.random() > 0.15 ? '정상' : '검수필요',
-      fullDate: date.toISOString()
-    } as HistoryItemData;
-  });
 };
 
 // ─── [4. FIREBASE CONFIG] ───────────────────────────────
@@ -284,17 +267,10 @@ const rotateLens = keyframes`
   100% { transform: rotate(360deg); }
 `;
 
-// [FIXED] pulseRing Definition
 const pulseRing = keyframes`
   0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
   70% { box-shadow: 0 0 0 20px rgba(59, 130, 246, 0); }
   100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-`;
-
-const pulseRingGreen = keyframes`
-  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-  70% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 `;
 
 const blinkCursor = keyframes`
@@ -425,7 +401,7 @@ const InfoRow = styled.div`
     display: flex;
     align-items: center;
     gap: 6px;
-    
+     
     &::before {
       content: '';
       display: block;
@@ -494,7 +470,7 @@ const HistoryListContainer = styled.div`
   min-height: 0;
   border-top: 1px solid #f1f5f9;
   padding-top: 12px;
-  
+   
   .h-title {
     font-size: 1rem;
     font-weight: 700;
@@ -562,7 +538,7 @@ const HistoryItem = styled.div`
     display: flex;
     align-items: center;
     gap: 10px;
-    
+     
     .status {
         font-size: 0.8rem;
         padding: 4px 8px;
@@ -581,17 +557,6 @@ const HistoryItem = styled.div`
   }
 `;
 
-const ChartContainer = styled.div`
-  flex-shrink: 0;
-  width: 100%;
-  height: 120px;
-  margin-bottom: 12px;
-  display: flex;
-  flex-direction: column;
-`;
-
-// --- Right Panel Specifics ---
-
 const VideoCard = styled(motion.div)<StyledFullScreenProps>`
   /* background: #1e293b; */
   border-radius: 16px;
@@ -601,7 +566,7 @@ const VideoCard = styled(motion.div)<StyledFullScreenProps>`
   flex: 1;
   position: relative;
   border: 1px solid #e2e8f0;
-  
+   
   ${({ $isFullScreen }) => $isFullScreen && css`
     position: fixed;
     top: 0;
@@ -760,7 +725,7 @@ const StyledErrorState = styled.div`
     margin: 0;
     letter-spacing: 1px;
   }
-  
+   
   p {
     color: #94a3b8;
     font-size: 0.9rem;
@@ -794,7 +759,7 @@ const MiniEmptyState = styled.div`
   margin: 0 20px 20px 20px;
   min-height: 200px;
   border: 1px dashed #cbd5e1;
-  
+   
   .icon-circle {
     width: 60px;
     height: 60px;
@@ -806,14 +771,14 @@ const MiniEmptyState = styled.div`
     color: #94a3b8;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   }
-  
+   
   h3 {
     font-size: 1rem;
     font-weight: 700;
     color: #64748b;
     margin: 0;
   }
-  
+   
   p {
     color: #94a3b8;
     font-size: 0.85rem;
@@ -1076,7 +1041,7 @@ const CameraFrame = styled(motion.div)`
       box-shadow: 0 5px 15px rgba(239, 68, 68, 0.4);
     }
   }
-  
+   
   .simulated-barcode-view {
     width: 100%;
     height: 100%;
@@ -1124,6 +1089,55 @@ const CompletionPopup = styled(motion.div)`
     letter-spacing: 2px;
     text-shadow: 0 2px 10px rgba(0,0,0,0.8);
     white-space: nowrap;
+  }
+`;
+
+const FailurePopup = styled(motion.div)`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: rgba(30, 10, 10, 0.95);
+  backdrop-filter: blur(20px);
+  padding: 30px 50px;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.5), 0 30px 80px rgba(0,0,0,0.9);
+  border: 2px solid #ef4444;
+  z-index: 9999;
+  pointer-events: none;
+  text-align: center;
+
+  .icon-fail {
+    width: 64px;
+    height: 64px;
+    background: #ef4444;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    box-shadow: 0 0 30px #ef4444;
+  }
+  .title {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 1px;
+  }
+  .reason {
+    font-size: 1rem;
+    color: #cbd5e1;
+    max-width: 300px;
+    line-height: 1.4;
+  }
+  .countdown {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: #ef4444;
+    font-weight: 700;
   }
 `;
 
@@ -1231,7 +1245,7 @@ const DetailSection = styled.div`
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
-  
+   
   .title-area {
     margin-bottom: 20px;
     margin-top: 10px;
@@ -1288,7 +1302,7 @@ const LogSection = styled.div`
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 10px;
   padding: 12px;
-  
+   
   .log-head {
     font-size: 0.75rem;
     font-weight: 800;
@@ -1658,7 +1672,7 @@ const GreenBoardContainer = styled.div`
           display: flex;
           flex-direction: column;
           gap: 8px;
-          
+           
           &::-webkit-scrollbar { width: 4px; }
           &::-webkit-scrollbar-thumb {
             background: #cbd5e1;
@@ -1771,7 +1785,7 @@ const GreenBoardContainer = styled.div`
           gap: 12px;
           height: 100%;
           min-height: 0;
-          
+           
           .z-head {
             background: #fff;
             padding: 12px;
@@ -1800,7 +1814,7 @@ const GreenBoardContainer = styled.div`
             .g { background: #dcfce7; color: #166534; }
             .o { background: #ffedd5; color: #9a3412; }
             .r { background: #fee2e2; color: #991b1b; }
-            
+             
             .usage-text {
                 font-size: 0.8rem;
                 color: #64748b;
@@ -1842,7 +1856,7 @@ const GreenBoardContainer = styled.div`
               grid-template-columns: 1fr 1fr;
               grid-template-rows: repeat(10, 1fr);
               gap: 8px;
-              
+               
               .slot {
                 background: #fff;
                 border: 1px solid #e2e8f0;
@@ -2033,66 +2047,182 @@ function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () =>
   const [viewMode, setViewMode] = useState<'scan' | 'rpa'>('scan');
   const [items, setItems] = useState<ItemData[]>([]);
   const [selectedId, setSelectedId] = useState<number>(0);
+  
+  // Logic States
   const [rpaStep, setRpaStep] = useState(0);
   const [showComplete, setShowComplete] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Failure Logic State
+  const [showFailure, setShowFailure] = useState(false);
+  const [failureReason, setFailureReason] = useState("");
+  const [closeCountdown, setCloseCountdown] = useState(5);
+
+  // Queue System
+  const [stepQueue, setStepQueue] = useState<number[]>([]);
+  const isProcessingRef = useRef(false);
+  const lastStepTimeRef = useRef<number>(0); 
   
   const isWearableConnected = streamStatus === 'ok' && !!streamUrl;
   const initialMount = useRef(true);
 
+  // Initial Data Load
   useEffect(() => {
     const data = generateDummyItems();
     setItems(data);
     if(data.length > 0) setSelectedId(data[0].id);
-    return () => {
-        if(timerRef.current) clearInterval(timerRef.current);
-    }
   }, []);
 
-  const startRPAProcess = useCallback(() => {
-    if(timerRef.current) clearInterval(timerRef.current);
-
-    let step = 1; 
-    setRpaStep(step);
-    setShowComplete(false); 
-
-    timerRef.current = setInterval(() => {
-      step++;
-      if (step > 5) {
-        if(timerRef.current) clearInterval(timerRef.current); 
-        setShowComplete(true);
-        setTimeout(() => { setShowComplete(false); }, 2000);
-      } else { 
-          setRpaStep(step); 
-      }
-    }, 1200);
-  }, []);
-
+  // ─────────────────────────────────────────────────────────────
+  // [핵심 변경] Firebase Listener: onValue 사용 (추가/변경 모두 감지)
+  // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!db) return;
     const logRef = ref(db, 'logs');
+    // 항상 마지막 1개의 데이터만 구독
+    const q = query(logRef, limitToLast(1));
     
-    const unsubscribe = onValue(logRef, (snapshot) => {
+    const unsubscribe = onValue(q, (snapshot) => {
+        const dataWrapper = snapshot.val();
+
         if (initialMount.current) {
             initialMount.current = false;
             return;
         }
 
-        setViewMode('rpa');
-        startRPAProcess();
+        if (dataWrapper) {
+            // limitToLast(1)은 { "PushID": { ...data } } 형태의 객체를 반환합니다.
+            // 따라서 첫 번째 키의 값을 꺼내야 실제 데이터입니다.
+            const key = Object.keys(dataWrapper)[0];
+            const data = dataWrapper[key];
+
+            console.log(`🔥 [Firebase Change Detected] Key: ${key}`, data);
+
+            if (data && data.Status) {
+                const newStatus = parseInt(data.Status, 10);
+                
+                if (!isNaN(newStatus)) {
+                    // 큐에 상태 추가 (단, 중복 방지 로직 포함)
+                    setStepQueue(prev => {
+                        // 큐가 비어있지 않고, 마지막으로 추가된 상태와 같다면 무시 (중복 이벤트 방지)
+                        if (prev.length > 0 && prev[prev.length - 1] === newStatus) {
+                            return prev;
+                        }
+                        
+                        console.log(`✅ [Queueing Status]: ${newStatus}`);
+                        return [...prev, newStatus];
+                    });
+                }
+            }
+        }
     });
 
     return () => unsubscribe();
-  }, [startRPAProcess]);
+  }, []);
 
-  const handleItemClick = useCallback((id: number) => { setSelectedId(id); }, []);
-  
+  // Handle Manual Click
   const handleScanClick = useCallback(() => {
       if(viewMode === 'scan') {
           setViewMode('rpa');
-          startRPAProcess();
       }
-  }, [viewMode, startRPAProcess]);
+  }, [viewMode]);
+
+  // Queue Processor (순차 처리 및 2초 딜레이, 예외 처리)
+  useEffect(() => {
+    const processQueue = async () => {
+        if (stepQueue.length === 0 || isProcessingRef.current || showFailure || showComplete) return;
+
+        isProcessingRef.current = true;
+        const nextStatus = stepQueue[0];
+
+        // [Logic 1] Status가 1이면 무조건 시작 (Scan 모드 -> RPA 모드 전환)
+        if (nextStatus === 1 && viewMode === 'scan') {
+             console.log("🚀 [Start Trigger] Status 1 detected. Starting Process.");
+             setViewMode('rpa');
+        }
+
+        // [Logic 2] 에러 코드(-1) 감지 -> 실패 모달
+        if (nextStatus === -1) {
+            triggerFailure("ERP 서버로부터 오류 코드가 수신되었습니다.");
+            return;
+        }
+
+        // [Logic 3] 순서 꼬임 방지 (현재 단계보다 낮은 단계가 들어오면 실패, 단 1로 재시작은 제외)
+        // 예: 현재 2단계인데 갑자기 1단계가 오면 -> 재시작으로 간주하여 허용할 수도 있지만,
+        // 요청하신 "1>2>1 처럼 꼬이면 실패" 조건에 따라 1도 포함하여 실패 처리하거나, 
+        // 1은 새로운 사이클 시작으로 볼 수도 있습니다. 
+        // 여기서는 "1>2>1" 같은 진행 중 역행을 엄격하게 에러로 처리하겠습니다.
+        if (rpaStep > 0 && nextStatus < rpaStep) {
+             // 만약 5(저장완료) 이후에 1이 오는건 새 프로세스 시작이므로 허용해야 함.
+             // 하지만 진행 중(1~4)에 갑자기 숫자가 낮아지면 에러.
+             if (rpaStep < 5) {
+                 triggerFailure(`비정상적인 프로세스 순서 감지 (Step ${rpaStep} -> ${nextStatus})`);
+                 return;
+             }
+        }
+
+        // [Logic 4] 강제 2초 딜레이 (Throttling)
+        const now = Date.now();
+        const timeSinceLastUpdate = now - lastStepTimeRef.current;
+        const minDelay = 2000; // 2초
+        
+        let waitTime = 0;
+        // 첫 시작(1번)은 즉시 실행, 그 이후 단계부터 딜레이 적용
+        if (nextStatus > 1 && timeSinceLastUpdate < minDelay) {
+            waitTime = minDelay - timeSinceLastUpdate;
+        }
+
+        if (waitTime > 0) {
+            console.log(`⏳ Throttling: Waiting ${waitTime}ms...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+
+        // [UI Update]
+        if (nextStatus === 5) {
+            setRpaStep(5);
+            lastStepTimeRef.current = Date.now();
+            setTimeout(() => {
+                setShowComplete(true);
+                setStepQueue([]); 
+            }, 3000); // 5단계 완료 후 3초 뒤 성공 팝업
+        } else {
+            setRpaStep(nextStatus);
+            lastStepTimeRef.current = Date.now();
+        }
+
+        // 처리 완료된 항목 큐에서 제거
+        setStepQueue(prev => prev.slice(1));
+        isProcessingRef.current = false;
+    };
+
+    processQueue();
+  }, [stepQueue, viewMode, rpaStep, showFailure, showComplete]);
+
+  // 실패 처리 헬퍼 함수
+  const triggerFailure = (specificReason?: string) => {
+      const reason = specificReason || FAILURE_REASONS[Math.floor(Math.random() * FAILURE_REASONS.length)];
+      setFailureReason(reason);
+      setShowFailure(true);
+      setStepQueue([]); 
+      isProcessingRef.current = false;
+  };
+
+  // 종료 카운트다운
+  useEffect(() => {
+      let timer: NodeJS.Timeout;
+      if (showFailure && closeCountdown > 0) {
+          timer = setInterval(() => {
+              setCloseCountdown(prev => prev - 1);
+          }, 1000);
+      } else if (showFailure && closeCountdown === 0) {
+          onClose(); 
+      }
+      return () => clearInterval(timer);
+  }, [showFailure, closeCountdown, onClose]);
+
+  // Item Click Handler
+  const handleItemClick = useCallback((id: number) => {
+    setSelectedId(id);
+  }, []);
 
   const activeItem = useMemo(() => items.find(i => i.id === selectedId) || (items.length > 0 ? items[0] : null), [items, selectedId]);
 
@@ -2110,6 +2240,14 @@ function AIDashboardModal({ onClose, streamUrl, streamStatus }: { onClose: () =>
               <div className="text">RPA PROCESSING COMPLETE</div> 
             </CompletionPopup> 
           )} 
+          {showFailure && (
+            <FailurePopup initial={{ opacity: 0, scale: 0.5, x: "-50%", y: "-50%" }} animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }} exit={{ opacity: 0, scale: 0.8, x: "-50%", y: "-50%" }} transition={{ type: "spring", bounce: 0.5 }}>
+                <div className="icon-fail"><XCircle size={48} strokeWidth={4} /></div>
+                <div className="title">ERP 자동입고 처리 실패</div>
+                <div className="reason">실패사유 : {failureReason}</div>
+                <div className="countdown">시스템 종료까지 {closeCountdown}초...</div>
+            </FailurePopup>
+          )}
         </AnimatePresence> 
         
         <div className="left-pane" onClick={handleScanClick}> 
@@ -2237,7 +2375,6 @@ export default function SmartFactoryDashboard() {
   const [stats, setStats] = useState({ pass: 0, fail: 0, passRate: 0, failRate: 0 });
   const [historyList, setHistoryList] = useState<HistoryItemData[]>([]);
   
-  // [강제 설정] 현재 API 연동 전이라 데이터를 못 찾았다는 UI를 보여주기 위해 false로 고정
   const isDataReady = false; 
 
   const [arrivalTime] = useState(() => {
@@ -2510,73 +2647,73 @@ export default function SmartFactoryDashboard() {
                     </VideoHeader>
 
                     <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
-                          <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 1 }}>
-                            {streamStatus === "ok" && streamUrl ? (
-                                <iframe 
-                                    src={streamUrl} 
-                                    style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} 
-                                    title="Stream"
-                                    onError={() => setStreamStatus("error")} 
-                                />
-                            ) : (
-                                <StyledErrorState>
-                                    <div className="grid-bg"></div>
-                                    <div className="content-box">
-                                        <div className="icon-wrapper">
-                                            {streamStatus === 'checking' ? (
-                                                <RefreshCw className="spin" size={32} color="#ef4444" />
-                                            ) : (
-                                                <Signal size={32} color="#ef4444" />
-                                            )}
-                                        </div>
+                      <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 1 }}>
+                        {streamStatus === "ok" && streamUrl ? (
+                            <iframe 
+                                src={streamUrl} 
+                                style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} 
+                                title="Stream"
+                                onError={() => setStreamStatus("error")} 
+                            />
+                        ) : (
+                            <StyledErrorState>
+                                <div className="grid-bg"></div>
+                                <div className="content-box">
+                                    <div className="icon-wrapper">
                                         {streamStatus === 'checking' ? (
-                                            <>
-                                                <h2>CONNECTING...</h2>
-                                                <p>Establishing secure connection to {streamHost}...</p>
-                                            </>
+                                            <RefreshCw className="spin" size={32} color="#ef4444" />
                                         ) : (
-                                            <>
-                                                <h2>SIGNAL LOST</h2>
-                                                <p>Connection to Camera ({streamHost}) is unstable or unreachable.</p>
-                                                <div style={{marginTop: 10, display: 'flex', gap: 10, justifyContent: 'center'}}>
-                                                    <PinkButton onClick={handleRetry} style={{background: '#334155'}}>
-                                                        <RefreshCw size={14} style={{marginRight: 6}}/> RETRY
-                                                    </PinkButton>
-                                                </div>
-                                            </>
+                                            <Signal size={32} color="#ef4444" />
                                         )}
                                     </div>
-                                    <div className="barcode-layer">
-                                         <ScanBarcode size={120} color="white" style={{opacity: 0.8}} />
-                                         <span>WAITING FOR SCANNER SIGNAL...</span>
-                                    </div>
-                                </StyledErrorState>
-                            )}
-                        </motion.div>
+                                    {streamStatus === 'checking' ? (
+                                        <>
+                                            <h2>CONNECTING...</h2>
+                                            <p>Establishing secure connection to {streamHost}...</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <h2>SIGNAL LOST</h2>
+                                            <p>Connection to Camera ({streamHost}) is unstable or unreachable.</p>
+                                            <div style={{marginTop: 10, display: 'flex', gap: 10, justifyContent: 'center'}}>
+                                                <PinkButton onClick={handleRetry} style={{background: '#334155'}}>
+                                                    <RefreshCw size={14} style={{marginRight: 6}}/> RETRY
+                                                </PinkButton>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="barcode-layer">
+                                  <ScanBarcode size={120} color="white" style={{opacity: 0.8}} />
+                                  <span>WAITING FOR SCANNER SIGNAL...</span>
+                                </div>
+                            </StyledErrorState>
+                        )}
+                      </motion.div>
 
-                        <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 50 }}>
-                            <button 
-                                onClick={toggleFullScreen}
-                                style={{
-                                    background: 'rgba(255,255,255,0.2)',
-                                    border: '1px solid rgba(255,255,255,0.3)',
-                                    borderRadius: '8px',
-                                    width: '40px',
-                                    height: '40px',
-                                    color: 'white',
-                                    cursor: 'pointer',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                }}
-                            >
-                                {isFullScreen ? <LuMinimize size={20}/> : <LuMaximize size={20}/>}
-                            </button>
-                        </div>
+                      <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 50 }}>
+                          <button 
+                              onClick={toggleFullScreen}
+                              style={{
+                                  background: 'rgba(255,255,255,0.2)',
+                                  border: '1px solid rgba(255,255,255,0.3)',
+                                  borderRadius: '8px',
+                                  width: '40px',
+                                  height: '40px',
+                                  color: 'white',
+                                  cursor: 'pointer',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                              }}
+                          >
+                              {isFullScreen ? <LuMinimize size={20}/> : <LuMaximize size={20}/>}
+                          </button>
+                      </div>
 
-                        <AnimatePresence>
-                            {showDashboard && (
-                                <AIDashboardModal onClose={closeDashboard} streamUrl={streamUrl} streamStatus={streamStatus} />
-                            )}
-                        </AnimatePresence>
+                      <AnimatePresence>
+                          {showDashboard && (
+                              <AIDashboardModal onClose={closeDashboard} streamUrl={streamUrl} streamStatus={streamStatus} />
+                          )}
+                      </AnimatePresence>
                     </div>
                 </VideoCard>
             </Column>
