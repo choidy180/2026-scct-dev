@@ -1163,6 +1163,8 @@ const DetailSection = styled.div`
       font-weight: 800;
     }
   }
+
+  .title-area h1{ color: #fff}
 `;
 
 const LogSection = styled.div`
