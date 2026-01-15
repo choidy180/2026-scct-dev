@@ -27,7 +27,8 @@ import {
   CheckCircle,
   Database,
   BarChart3,
-  ScanLine
+  ScanLine,
+  Droplets,
 } from "lucide-react";
 import * as THREE from "three";
 import { GLTF } from "three-stdlib";
@@ -63,9 +64,8 @@ const JIG_MODEL_PATH = "/models/final_final.glb";
 const FLOOR_MODEL_PATH = "/models/floor.glb";
 const FACTORY_BG_IMAGE = "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2670&auto=format&fit=crop";
 
-// [수정] 공장 대차(AGV/카트) 관련 이미지 URL
-const CART_IMAGE_URL = "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
-
+// [기본 이미지 - API 데이터 없을 시 사용]
+const DEFAULT_CART_IMAGE = "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
 
 const THEME = {
   primary: "#10b981",
@@ -91,6 +91,22 @@ interface UnitData {
   load: number;
   status: 'normal' | 'error';
   uuid?: string;
+}
+
+interface ApiDataItem {
+  대차번호: string;
+  INTCART: number;
+  시리얼번호: string;
+  모델번호: string;
+  TIMEVALUE: string;
+  R액_압력: string;
+  P액_압력: string;
+  가조립온도: string;
+  발포시간: string;
+  FILENAME1: string;
+  AI_TIME_STR: string;
+  AI_LABEL: number;
+  FILEPATH1: string;
 }
 
 interface CustomTooltipProps {
@@ -125,11 +141,6 @@ const float = keyframes`
   0% { transform: translateY(0px) translateX(-50%); }
   50% { transform: translateY(-5px) translateX(-50%); }
   100% { transform: translateY(0px) translateX(-50%); }
-`;
-
-const spin = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 `;
 
 const modalPop = keyframes`
@@ -178,14 +189,11 @@ const MainContent = styled.main`
   position: relative; z-index: 10;
 `;
 
-const ViewerContainer = styled.div<{ $visible: boolean }>`
+const ViewerContainer = styled.div`
   width: 100%; height: 100%;
   padding-top: 4rem;
   position: relative;
-  opacity: ${(props) => (props.$visible ? 1 : 0)};
-  transition: opacity 1.2s ease-in-out;
   isolation: isolate;
-  will-change: opacity;
 `;
 
 const GlassPanel = styled.div`
@@ -193,8 +201,8 @@ const GlassPanel = styled.div`
   background: ${THEME.whiteCard};
   backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 24px;
-  padding: 24px;
+  border-radius: 20px;
+  padding: 16px;
   display: flex; flex-direction: column;
   z-index: 20;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
@@ -206,39 +214,39 @@ const GlassPanel = styled.div`
 `;
 
 const TopRightPanel = styled(GlassPanel)`
-  top: 6rem; right: 2rem;
-  width: 420px; height: 300px;
+  top: 5rem; right: 1.5rem; /* 위치 약간 올림 */
+  width: 320px; height: 280px; /* 높이도 내용에 맞춰 줄임 */
   animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 `;
 
 const DefectStatusPanel = styled(GlassPanel)`
-  top: calc(6rem + 300px + 20px); right: 2rem;
-  width: 420px; min-height: 180px;
+  top: calc(5rem + 280px + 15px); right: 1.5rem; /* 간격 20px -> 15px */
+  width: 320px; min-height: 160px;
   animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
   border-left: 4px solid ${THEME.danger};
 `;
 
 const BottomLeftPanel = styled(GlassPanel)`
-  bottom: 2rem; left: 2rem;
+  bottom: 1.5rem; left: 1.5rem;
   width: 320px; 
-  height: 280px;
+  height: 260px; /* 높이 축소 */
   animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
   opacity: 0; animation-fill-mode: forwards;
 `;
 
-// [수정] VisionAnalysisPanel 너비 축소 (320px -> 240px, 약 25% 축소)
 const VisionAnalysisPanel = styled(GlassPanel)`
-  bottom: 2rem;
-  left: calc(2rem + 320px + 20px);
-  width: 240px; /* 너비 축소 */
+  bottom: 1.5rem;
+  left: calc(1.5rem + 320px + 15px); /* 간격 축소 */
+  width: 240px;
   animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards;
   opacity: 0; animation-fill-mode: forwards;
-  padding: 0;
+  padding: 0; /* 내부에서 개별 패딩 적용 */
   overflow: hidden;
 `;
 
 const HoverInfoPanel = styled(GlassPanel)`
-  top: 6rem; left: 2rem; width: 280px;
+  top: 5rem; left: 1.5rem; width: 260px; /* 너비 약간 축소 */
+  padding: 14px; /* 호버 패널은 더 컴팩트하게 */
   animation: ${slideDown} 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   border-left: 4px solid transparent;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
@@ -247,12 +255,12 @@ const HoverInfoPanel = styled(GlassPanel)`
 
 const AIAdvisorPanel = styled.div`
   position: fixed;
-  bottom: calc(2rem + 280px + 20px);
-  left: 2rem;
+  bottom: calc(1.5rem + 260px + 15px); /* 위치 조정 */
+  left: 1.5rem;
   width: 320px;
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(24px);
-  border-radius: 28px;
+  border-radius: 20px;
   box-shadow: 0 20px 50px rgba(99, 102, 241, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.8);
   padding: 0;
@@ -266,13 +274,13 @@ const AIAdvisorPanel = styled.div`
 
 const AIHeader = styled.div`
   background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%);
-  padding: 16px 20px;
-  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; /* 패딩 축소 */
+  display: flex; align-items: center; gap: 10px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.03);
 `;
 
 const AIBody = styled.div`
-  padding: 20px; position: relative;
+  padding: 16px; position: relative; /* 패딩 축소 */
 `;
 
 const AIMessage = styled.div`
@@ -290,27 +298,28 @@ const BlinkingCursor = styled.span`
 `;
 
 const InfoRow = styled.div`
-  display: flex; justify-content: space-between; align-items: center; padding: 12px 0;
+  display: flex; justify-content: space-between; align-items: center; 
+  padding: 8px 0; /* 12px -> 8px 로 축소 */
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   &:last-child { border-bottom: none; }
-  .label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: ${THEME.textSub}; font-weight: 500; }
-  .value { font-family: 'Pretendard', sans-serif; font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 700; color: ${THEME.textMain}; }
-  .status { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: ${THEME.textSub}; font-weight: 500; }
+  .value { font-family: 'Pretendard', sans-serif; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: ${THEME.textMain}; }
+  .status { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
 `;
 
 const ChartHeader = styled.div`
-  display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;
+  display: flex; justify-content: space-between; align-items: flex-start; 
+  margin-bottom: 10px;
 `;
 
 const ChartTitle = styled.div`
-  font-size: 16px; font-weight: 800; color: ${THEME.textMain};
-  display: flex; align-items: center; gap: 8px; transition: color 0.3s;
+  font-size: 15px; /* 폰트 사이즈 미세 축소 */
+  font-weight: 800; color: ${THEME.textMain};
+  display: flex; align-items: center; gap: 6px; transition: color 0.3s;
 `;
-
 const ChartSubtitle = styled.div`
-  font-size: 12px; color: ${THEME.textSub}; font-weight: 500; margin-top: 4px;
+  font-size: 11px; color: ${THEME.textSub}; font-weight: 500; margin-top: 2px;
 `;
-
 const BigNumber = styled.div`
   font-size: 32px; font-weight: 800; color: ${THEME.textMain};
   letter-spacing: -1px; font-family: 'Pretendard', sans-serif; font-variant-numeric: tabular-nums;
@@ -327,7 +336,8 @@ const ChartWrapper = styled.div`
 
 const DefectItem = styled.div`
   display: flex; justify-content: space-between; align-items: center;
-  padding: 10px; margin-bottom: 8px;
+  padding: 8px; /* 패딩 축소 */
+  margin-bottom: 6px;
   background: rgba(239, 68, 68, 0.05);
   border: 1px solid rgba(239, 68, 68, 0.2);
   border-radius: 8px;
@@ -382,13 +392,6 @@ const LoaderOverlay = styled.div`
   background: #000000; z-index: 9999; flex-direction: column;
 `;
 
-const SpinnerRing = styled.div<{ $size: number, $color: string, $speed: number, $reverse?: boolean }>`
-  position: absolute; width: ${(p) => p.$size}px; height: ${(p) => p.$size}px;
-  border-radius: 50%; border: 3px solid transparent;
-  border-top-color: ${(p) => p.$color}; border-left-color: ${(p) => p.$color + '60'};
-  animation: ${spin} ${(p) => p.$speed}s linear infinite ${(p) => (p.$reverse ? 'reverse' : '')};
-`;
-
 const LoadingBarContainer = styled.div`
   width: 300px; text-align: center;
 `;
@@ -411,51 +414,6 @@ const Fill = styled.div<{ $p: number }>`
 
 // -----------------------------------------------------------------------------
 // [Helpers]
-
-function CyberLoader({ onFinished }: { onFinished: () => void }) {
-  const [progress, setProgress] = useState(0);
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    let startTime: number | null = null;
-    const duration = 2500;
-    let frameId: number;
-    const animate = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const elapsed = timestamp - startTime;
-      const currentProgress = Math.min((elapsed / duration) * 100, 100);
-      setProgress(currentProgress);
-      if (currentProgress > 30 && step === 0) setStep(1);
-      if (currentProgress > 60 && step === 1) setStep(2);
-      if (currentProgress < 100) {
-        frameId = requestAnimationFrame(animate);
-      } else {
-        setTimeout(onFinished, 500);
-      }
-    };
-    frameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frameId);
-  }, [onFinished, step]);
-
-  return (
-    <LoaderOverlay>
-      <div style={{ position: 'relative', width: 120, height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 40 }}>
-        <SpinnerRing $size={130} $color="#10b981" $speed={2} />
-        <SpinnerRing $size={100} $color="#3b82f6" $speed={1.5} $reverse />
-        <div style={{ fontSize: '28px', fontWeight: 800, color: '#fff', fontFamily: 'Pretendard, sans-serif', fontVariantNumeric: 'tabular-nums' }}>
-          {progress.toFixed(0)}%
-        </div>
-      </div>
-      <div style={{ textAlign: 'center', fontFamily: 'Pretendard', color: '#fff' }}>
-        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>시스템 가동 시퀀스</div>
-        <div style={{ fontSize: 14, color: '#94a3b8' }}>
-          {step === 0 && "초기화 진행 중..."}
-          {step === 1 && "데이터 리소스 로드 중..."}
-          {step === 2 && "설정 마무리 중..."}
-        </div>
-      </div>
-    </LoaderOverlay>
-  );
-}
 
 function TransitionLoader({ onFinished }: { onFinished: () => void }) {
   const [val, setVal] = useState(0);
@@ -737,14 +695,24 @@ const AIAdvisor = React.memo(({ errors }: { errors: UnitData[] }) => {
 });
 AIAdvisor.displayName = "AIAdvisor";
 
-const Panels = React.memo(({ hoveredInfo, errorUnits }: { hoveredInfo: UnitData | null, errorUnits: UnitData[] }) => {
-  // 현재 표시할 유닛 결정 (호버 > 에러 > 기본값)
+const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: UnitData | null, errorUnits: UnitData[], apiData: ApiDataItem[] }) => {
+  // ... (로직 부분은 동일) ...
   const activeUnit = hoveredInfo || (errorUnits.length > 0 ? errorUnits[0] : null) || { name: 'GR01', status: 'normal' };
   const isError = activeUnit.status === 'error';
   const statusColor = isError ? THEME.danger : THEME.success;
   const statusBg = isError ? THEME.dangerBg : THEME.successBg;
 
-  // 더미 데이터 (실시간 반영처럼 보이게)
+  const activeNumber = parseInt(activeUnit.name.replace("GR", ""), 10);
+  const matchedData = apiData.find(item => parseInt(item.대차번호) === activeNumber);
+
+  const displayImage = matchedData?.FILEPATH1 || "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
+  const displayValue1 = matchedData?.AI_LABEL ? matchedData.AI_LABEL.toFixed(4) : "0.0000";
+  const displayValue2 = matchedData?.AI_LABEL ? matchedData.AI_LABEL.toFixed(4) : "0.0000";
+
+  const hoverMatchedData = hoveredInfo 
+    ? apiData.find(item => parseInt(item.대차번호) === parseInt(hoveredInfo.name.replace("GR", ""), 10))
+    : null;
+
   const boxes = isError 
     ? [{ top: 40, left: 20, width: 10, height: 10, color: '#EF4444' }]
     : [{ top: 55, left: 65, width: 12, height: 12, color: '#10B981' }];
@@ -759,26 +727,40 @@ const Panels = React.memo(({ hoveredInfo, errorUnits }: { hoveredInfo: UnitData 
           <ChartHeader>
             <div>
               <ChartTitle style={{ color: hoveredInfo.status === 'error' ? THEME.danger : THEME.textMain }}>
-                <Cpu size={20} color={hoveredInfo.status === 'error' ? THEME.danger : THEME.primary} /> {hoveredInfo.name}
+                <Cpu size={18} color={hoveredInfo.status === 'error' ? THEME.danger : THEME.primary} /> {hoveredInfo.name}
               </ChartTitle>
-              <ChartSubtitle>Unit Status Monitor</ChartSubtitle>
+              <ChartSubtitle>Real-time Sensor Data</ChartSubtitle>
             </div>
           </ChartHeader>
+
           <InfoRow>
-            <div className="label"><Activity size={14} /> 작동 상태</div>
+            <div className="label"><Activity size={13} /> 작동 상태</div>
             {hoveredInfo.status === 'error' ? (
-              <div className="status" style={{ color: '#fff', background: THEME.danger }}>CRITICAL</div>
+              <div className="status" style={{ color: '#fff', background: THEME.danger }}>CHECK</div>
             ) : (
-              <div className="status" style={{ color: THEME.primary, background: 'rgba(16, 185, 129, 0.1)' }}>정상 가동 중</div>
+              <div className="status" style={{ color: THEME.primary, background: 'rgba(16, 185, 129, 0.1)' }}>NORMAL</div>
             )}
           </InfoRow>
+
           <InfoRow>
-            <div className="label"><Thermometer size={14} /> 코어 온도</div>
-            <div className="value" style={{ color: hoveredInfo.status === 'error' ? THEME.danger : THEME.textMain }}>{hoveredInfo.temp}°C</div>
+            <div className="label"><Droplets size={13} /> R액 압력</div>
+            <div className="value" style={{ color: THEME.textMain }}>
+              {hoverMatchedData?.R액_압력 || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>bar</span>
+            </div>
           </InfoRow>
+
           <InfoRow>
-            <div className="label"><Gauge size={14} /> 시스템 부하</div>
-            <div className="value">{hoveredInfo.load}%</div>
+            <div className="label"><Gauge size={13} /> P액 압력</div>
+            <div className="value" style={{ color: THEME.textMain }}>
+               {hoverMatchedData?.P액_압력 || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>bar</span>
+            </div>
+          </InfoRow>
+
+           <InfoRow>
+            <div className="label"><Thermometer size={13} /> 가조립 온도</div>
+            <div className="value" style={{ color: hoveredInfo.status === 'error' ? THEME.danger : THEME.textMain }}>
+               {hoverMatchedData?.가조립온도 || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>°C</span>
+            </div>
           </InfoRow>
         </HoverInfoPanel>
       )}
@@ -787,11 +769,11 @@ const Panels = React.memo(({ hoveredInfo, errorUnits }: { hoveredInfo: UnitData 
         <ChartHeader>
           <div>
             <ChartTitle style={{ color: THEME.danger }}>
-              <AlertTriangle size={18} fill={THEME.danger} stroke="#fff" /> 불량 오브젝트 현황
+              <AlertTriangle size={16} fill={THEME.danger} stroke="#fff" /> 불량 오브젝트
             </ChartTitle>
             <ChartSubtitle>Overheating Units Alert</ChartSubtitle>
           </div>
-          <div style={{ background: THEME.danger, color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>
+          <div style={{ background: THEME.danger, color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold' }}>
             {errorUnits.length} 건
           </div>
         </ChartHeader>
@@ -801,95 +783,95 @@ const Panels = React.memo(({ hoveredInfo, errorUnits }: { hoveredInfo: UnitData 
               <DefectItem key={unit.uuid || idx}>
                 <DefectName><span>{unit.name}</span></DefectName>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: THEME.danger, fontFamily: 'Pretendard', fontVariantNumeric: 'tabular-nums' }}>{unit.temp}°C</span>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: THEME.danger, fontFamily: 'Pretendard', fontVariantNumeric: 'tabular-nums' }}>{unit.temp}°C</span>
                   <DefectTag>CRITICAL</DefectTag>
                 </div>
               </DefectItem>
             ))
           ) : (
-            <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '13px' }}>현재 감지된 이상 없음</div>
+            <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '12px' }}>현재 감지된 이상 없음</div>
           )}
         </div>
       </DefectStatusPanel>
 
       <TopRightPanel>
         <ChartHeader>
-          <div><ChartTitle><Activity size={18} color={THEME.primary} /> 실시간 검사 현황</ChartTitle><ChartSubtitle>Real-time Monitor</ChartSubtitle></div>
-          <div style={{ padding: '4px 10px', background: 'rgba(16, 185, 129, 0.1)', color: THEME.primary, borderRadius: '12px', fontSize: 11, fontWeight: 700 }}>LIVE</div>
+          <div><ChartTitle><Activity size={16} color={THEME.primary} /> 실시간 검사 현황</ChartTitle><ChartSubtitle>Real-time Monitor</ChartSubtitle></div>
+          <div style={{ padding: '2px 8px', background: 'rgba(16, 185, 129, 0.1)', color: THEME.primary, borderRadius: '12px', fontSize: 10, fontWeight: 700 }}>LIVE</div>
         </ChartHeader>
-        <div style={{ marginBottom: 20 }}><BigNumber>14,480</BigNumber><TrendBadge $isUp={true}><TrendingUp size={14} /> 전일 대비 2.4% 증가</TrendBadge></div>
+        <div style={{ marginBottom: 16 }}><BigNumber style={{fontSize: 28}}>14,480</BigNumber><TrendBadge $isUp={true}><TrendingUp size={12} /> 전일 대비 2.4% 증가</TrendBadge></div>
         <ChartWrapper>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={GR2_DATA} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+            <ComposedChart data={GR2_DATA} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={4} />
-              <YAxis yAxisId="L" tick={{ fontSize: 11, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} />
-              <YAxis yAxisId="R" orientation="right" tick={{ fontSize: 11, fill: THEME.danger, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={4} />
+              <YAxis yAxisId="L" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} />
+              <YAxis yAxisId="R" orientation="right" tick={{ fontSize: 10, fill: THEME.danger, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.02)' }} />
-              <Bar yAxisId="L" dataKey="inspection" barSize={12} radius={[6, 6, 6, 6]}>{GR2_DATA.map((entry, index) => (<Cell key={`cell-${index}`} fill={index === GR2_DATA.length - 1 ? THEME.primary : "#cbd5e1"} />))}</Bar>
-              <Line yAxisId="R" type="monotone" dataKey="error" stroke={THEME.danger} strokeWidth={3} dot={false} activeDot={{ r: 5, stroke: '#fff' }} />
+              <Bar yAxisId="L" dataKey="inspection" barSize={10} radius={[4, 4, 4, 4]}>{GR2_DATA.map((entry, index) => (<Cell key={`cell-${index}`} fill={index === GR2_DATA.length - 1 ? THEME.primary : "#cbd5e1"} />))}</Bar>
+              <Line yAxisId="R" type="monotone" dataKey="error" stroke={THEME.danger} strokeWidth={2} dot={false} activeDot={{ r: 4, stroke: '#fff' }} />
             </ComposedChart>
           </ResponsiveContainer>
         </ChartWrapper>
       </TopRightPanel>
 
       <BottomLeftPanel>
-        <ChartHeader><div><ChartTitle><Zap size={18} fill={THEME.textMain} stroke="none" /> 주간 불량률 추이</ChartTitle><ChartSubtitle>Weekly Defect Analysis</ChartSubtitle></div></ChartHeader>
-        <div style={{ marginBottom: 10, display: 'flex', alignItems: 'baseline', gap: 8 }}><BigNumber>1.2%</BigNumber><TrendBadge $isUp={true} style={{ color: THEME.primary }}>안정권 유지 중</TrendBadge></div>
+        <ChartHeader><div><ChartTitle><Zap size={16} fill={THEME.textMain} stroke="none" /> 주간 불량률 추이</ChartTitle><ChartSubtitle>Weekly Defect Analysis</ChartSubtitle></div></ChartHeader>
+        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'baseline', gap: 8 }}><BigNumber style={{fontSize: 28}}>1.2%</BigNumber><TrendBadge $isUp={true} style={{ color: THEME.primary }}>안정권 유지 중</TrendBadge></div>
         <ChartWrapper>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={GR2_DATA} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+            <AreaChart data={GR2_DATA} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
               <defs><linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={THEME.primary} stopOpacity={0.3} /><stop offset="100%" stopColor={THEME.primary} stopOpacity={0} /></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={4} />
-              <YAxis tick={{ fontSize: 11, fill: THEME.textSub, fontFamily: 'Pretendard' }} unit="%" tickLine={false} axisLine={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={4} />
+              <YAxis tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} unit="%" tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1' }} />
-              <Area type="monotone" dataKey="rate" stroke={THEME.primary} strokeWidth={3} fill="url(#areaGradient)" />
+              <Area type="monotone" dataKey="rate" stroke={THEME.primary} strokeWidth={2} fill="url(#areaGradient)" />
             </AreaChart>
           </ResponsiveContainer>
         </ChartWrapper>
       </BottomLeftPanel>
 
-      {/* [NEW] VisionAnalysisPanel - 항상 보임, 크기 축소 및 이미지 교체 완료 */}
       <VisionAnalysisPanel>
-         {/* 1. 상단: ID + 상태 */}
+         {/* [수정] 상단 패딩 축소 (16px 20px -> 12px 16px) */}
          <div style={{ 
-            padding: '16px 20px', // 패딩 축소
+            padding: '12px 16px', 
             borderBottom: `1px solid ${THEME.border}`, 
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             backgroundColor: '#F9FAFB'
         }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '18px', fontWeight: 800, color: THEME.textMain, letterSpacing: '-0.5px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px', fontWeight: 800, color: THEME.textMain, letterSpacing: '-0.5px' }}>
                     {activeUnit.name || 'GR-??'}
                 </span>
                 
                 <div style={{ 
-                    padding: '4px 10px', borderRadius: '20px', 
+                    padding: '2px 8px', borderRadius: '16px', 
                     backgroundColor: statusBg, color: statusColor,
-                    fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px'
+                    fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px'
                 }}>
-                    {isError ? <AlertTriangle size={12} strokeWidth={3} /> : <CheckCircle size={12} strokeWidth={3} />}
+                    {isError ? <AlertTriangle size={10} strokeWidth={3} /> : <CheckCircle size={10} strokeWidth={3} />}
                     {isError ? '불량' : '정상'}
                 </div>
             </div>
             
-            {/* 우측 상단 스캔라인 아이콘 (데코레이션) - 크기 축소 */}
-            <ScanLine size={20} color={THEME.textSub} />
+            <ScanLine size={16} color={THEME.textSub} />
         </div>
 
-        {/* 2. 중간: 이미지 영역 - 높이 축소 및 이미지 교체 */}
-        <div style={{ padding: '16px 20px 0 20px' }}>
+        {/* [수정] 이미지 영역 패딩 축소 */}
+        <div style={{ padding: '12px 16px 0 16px' }}>
             <div style={{ 
-                position: 'relative', width: '100%', height: '135px', // 높이 축소 (180 -> 135)
+                position: 'relative', width: '100%', height: '120px', /* 높이도 살짝 줄임 */
                 borderRadius: '12px', overflow: 'hidden', backgroundColor: '#000',
                 border: `1px solid ${THEME.border}`, boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)'
             }}>
-                {/* [수정] 교체된 공장 대차 이미지 */}
                 <img 
-                    src={CART_IMAGE_URL}
+                    src={displayImage}
                     alt="Factory Cart Analysis" 
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
+                    }}
                 />
                 {boxes.map((box, idx) => (
                 <div key={idx} style={{
@@ -904,40 +886,37 @@ const Panels = React.memo(({ hoveredInfo, errorUnits }: { hoveredInfo: UnitData 
             </div>
         </div>
 
-        {/* 3. 하단: 통계 값 (세로 배치) - 패딩 및 폰트 축소 */}
-        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            
-            {/* 상반기 평균값 */}
+        {/* [수정] 하단 통계 패딩 및 간격 축소 */}
+        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ 
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 12px', borderRadius: '12px', backgroundColor: '#F3F4F6',
+                padding: '8px 10px', borderRadius: '10px', backgroundColor: '#F3F4F6',
                 border: `1px solid ${THEME.border}`
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                        <Database size={14} color={THEME.accent} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ padding: '4px', borderRadius: '6px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                        <Database size={12} color={THEME.accent} />
                     </div>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: THEME.textSub }}>상반기 평균값</span>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: THEME.textSub }}>상반기 평균값</span>
                 </div>
-                <span style={{ fontSize: '16px', fontWeight: 800, color: THEME.textMain, fontVariantNumeric: 'tabular-nums' }}>
-                   0.5421
+                <span style={{ fontSize: '14px', fontWeight: 800, color: THEME.textMain, fontVariantNumeric: 'tabular-nums' }}>
+                   {displayValue1}
                 </span>
             </div>
 
-            {/* 하반기 평균값 */}
             <div style={{ 
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 12px', borderRadius: '12px', backgroundColor: '#F3F4F6',
+                padding: '8px 10px', borderRadius: '10px', backgroundColor: '#F3F4F6',
                 border: `1px solid ${THEME.border}`
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                        <BarChart3 size={14} color={THEME.success} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ padding: '4px', borderRadius: '6px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                        <BarChart3 size={12} color={THEME.success} />
                     </div>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: THEME.textSub }}>하반기 평균값</span>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: THEME.textSub }}>하반기 평균값</span>
                 </div>
-                <span style={{ fontSize: '16px', fontWeight: 800, color: THEME.textMain, fontVariantNumeric: 'tabular-nums' }}>
-                   0.5102
+                <span style={{ fontSize: '14px', fontWeight: 800, color: THEME.textMain, fontVariantNumeric: 'tabular-nums' }}>
+                   {displayValue2}
                 </span>
             </div>
         </div>
@@ -950,7 +929,8 @@ Panels.displayName = "Panels";
 // -----------------------------------------------------------------------------
 // [Main Page]
 export default function GlbViewerPage() {
-  const [initialLoaded, setInitialLoaded] = useState(false);
+  // [수정 3] 로딩 이벤트 제거 - 초기값을 true로 설정
+  const [initialLoaded, setInitialLoaded] = useState(true);
   const [activeTab, setActiveTab] = useState("GR2");
   const [targetTab, setTargetTab] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -958,6 +938,27 @@ export default function GlbViewerPage() {
 
   const [hoveredInfo, setHoveredInfo] = useState<UnitData | null>(null);
   const [errorUnits, setErrorUnits] = useState<UnitData[]>([]);
+
+  // [수정 2] API 데이터를 저장할 State 추가
+  const [apiData, setApiData] = useState<ApiDataItem[]>([]);
+
+  // [수정 2] 컴포넌트 마운트 시 API 호출
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch("http://1.254.24.170:24828/api/DX_API000024");
+        const json = await response.json();
+        if (json.success) {
+          setApiData(json.data);
+        } else {
+          console.warn("API returned success: false");
+        }
+      } catch (error) {
+        console.error("Failed to fetch DX_API000024:", error);
+      }
+    };
+    fetchData();
+  }, []);
 
   const tabs = ["GR1", "GR2", "GR3", "GR4", "GR5"];
 
@@ -982,7 +983,7 @@ export default function GlbViewerPage() {
   return (
     <PageContainer>
       <MainContent>
-        {!initialLoaded && <CyberLoader onFinished={() => setInitialLoaded(true)} />}
+        {/* [수정 3] CyberLoader 제거됨 */}
         {isNavigating && <TransitionLoader onFinished={handleTransitionComplete} />}
         <PreparingModal target={modalTarget} onClose={() => setModalTarget(null)} />
 
@@ -994,13 +995,14 @@ export default function GlbViewerPage() {
           ))}
         </NavContainer>
 
-        <ViewerContainer $visible={initialLoaded}>
+        <ViewerContainer>
           
-          {initialLoaded && <AIAdvisor errors={errorUnits} />}
+          <AIAdvisor errors={errorUnits} />
 
           <Panels 
             hoveredInfo={hoveredInfo} 
             errorUnits={errorUnits} 
+            apiData={apiData}
           />
 
           <Canvas

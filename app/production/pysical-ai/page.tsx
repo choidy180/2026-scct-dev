@@ -58,7 +58,6 @@ const ITEMS = [
   '안전거리 유지', '정지/대기 중', '자재 낙하 감지', '교차로 진입'
 ];
 const WORKERS = ['작업자-A', '작업자-B', '작업자-C', '관리자-01', '작업자-D'];
-const STATUS_WEIGHTS = ['정상', '정상', '정상', '정상', '주의', '위험'];
 
 const generateLog = (): LogData => {
   const now = new Date();
@@ -86,36 +85,22 @@ export default function PhysicalAIDashboard() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  const [isLoading, setIsLoading] = useState(true);
-  const [progress, setProgress] = useState(0);
+  // isLoading 및 progress 관련 상태 제거됨
 
+  // [수정] 컴포넌트 마운트 시 즉시 영상 재생
   useEffect(() => {
-    const duration = 1500; const interval = 15;
-    const steps = duration / interval; const increment = 100 / steps;
-    const timer = setInterval(() => {
-      setProgress(prev => {
-        const next = prev + increment;
-        if (next >= 100) {
-          clearInterval(timer);
-          setTimeout(() => setIsLoading(false), 300);
-          return 100;
-        }
-        return next;
-      });
-    }, interval);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!isLoading && videoRef.current) {
+    if (videoRef.current) {
       videoRef.current.muted = true;
       videoRef.current.play().catch(console.error);
     }
-  }, [isLoading]);
+  }, []);
 
+  // [수정] 컴포넌트 마운트 시 즉시 데이터 생성 시작
   useEffect(() => {
-    if (isLoading) return;
+    // 초기 데이터 생성
     setLogs(Array.from({ length: 12 }).map(generateLog));
+    
+    // 실시간 로그 생성 인터벌
     const interval = setInterval(() => {
       const newLog = generateLog();
       setLogs(prev => {
@@ -131,7 +116,7 @@ export default function PhysicalAIDashboard() {
       }));
     }, 800);
     return () => clearInterval(interval);
-  }, [isLoading]);
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -143,19 +128,7 @@ export default function PhysicalAIDashboard() {
     <ThemeProvider theme={theme}>
       <GlobalStyle />
       
-      <AnimatePresence>
-        {isLoading && (
-          <LoadingScreen initial={{ opacity: 1 }} exit={{ opacity: 0, y: -50 }} transition={{ duration: 0.5 }}>
-            <LoadingContent>
-              <Cpu size={48} color={theme.accent} style={{marginBottom: 20}} />
-              <LoadingTitle>Warehouse AI System Initializing</LoadingTitle>
-              <LoadingSub>물류 관제 시스템 리소스를 로드 중입니다...</LoadingSub>
-              <ProgressBarContainer><ProgressBarFill initial={{ width: 0 }} animate={{ width: `${progress}%` }} /></ProgressBarContainer>
-              <ProgressText>{Math.round(progress)}%</ProgressText>
-            </LoadingContent>
-          </LoadingScreen>
-        )}
-      </AnimatePresence>
+      {/* LoadingScreen 제거됨 */}
 
       <Container>
         <Header>
@@ -189,11 +162,11 @@ export default function PhysicalAIDashboard() {
                 <Grid />
                 <CamTag><span className="dot" /> CAM-01 (대차 창고) • Live</CamTag>
 
-                {/* ✅ 화이트 테마 현황판 (Modal) */}
+                {/* 화이트 테마 현황판 (Modal) */}
                 <StatsHud
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
+                  transition={{ delay: 0.2 }} // 딜레이를 줄여서 더 빠르게 뜨도록 수정
                 >
                   <HudItem>
                     <div className="icon-box"><FileText size={18} /></div>
@@ -251,10 +224,10 @@ export default function PhysicalAIDashboard() {
                     <MetaText $width="80px"><User size={12} color={theme.textSub} /> {log.workerId}</MetaText>
                     <MetaText $width="60px"><Activity size={12} color={theme.textSub} /> {log.confidence}%</MetaText>
                     <StatusContainer>
-                       {log.status === '정상' && <CheckCircle2 size={14} color={theme.success}/>}
-                       {log.status === '주의' && <AlertTriangle size={14} color={theme.warning}/>}
-                       {log.status === '위험' && <XCircle size={14} color={theme.critical}/>}
-                       <StatusBadge $status={log.status}>{log.status}</StatusBadge>
+                      {log.status === '정상' && <CheckCircle2 size={14} color={theme.success}/>}
+                      {log.status === '주의' && <AlertTriangle size={14} color={theme.warning}/>}
+                      {log.status === '위험' && <XCircle size={14} color={theme.critical}/>}
+                      <StatusBadge $status={log.status}>{log.status}</StatusBadge>
                     </StatusContainer>
                   </LogItem>
                 ))}
@@ -272,14 +245,7 @@ export default function PhysicalAIDashboard() {
 // Styled Components
 // -------------------------------------------------------------------------
 
-// --- Loading ---
-const LoadingScreen = styled(motion.div)` position: fixed; inset: 0; background: #fff; z-index: 9999; display: flex; justify-content: center; align-items: center; `;
-const LoadingContent = styled.div` display: flex; flex-direction: column; align-items: center; width: 320px; `;
-const LoadingTitle = styled.h2` font-size: 20px; font-weight: 800; color: #1E293B; margin-bottom: 8px; `;
-const LoadingSub = styled.p` font-size: 14px; color: #64748B; margin-bottom: 30px; `;
-const ProgressBarContainer = styled.div` width: 100%; height: 6px; background: #E2E8F0; border-radius: 99px; overflow: hidden; `;
-const ProgressBarFill = styled(motion.div)` height: 100%; background: #0EA5E9; border-radius: 99px; `;
-const ProgressText = styled.div` margin-top: 10px; font-size: 14px; font-weight: 700; color: #0EA5E9; font-family: monospace; `;
+// Loading 관련 스타일 컴포넌트 제거됨
 
 // --- Layout ---
 const Container = styled.div` width: 100vw; height: calc(100vh - 64px); background: ${p=>p.theme.bg}; color: ${p=>p.theme.text}; display: flex; flex-direction: column; `;
@@ -305,42 +271,38 @@ const Grid = styled.div` position: absolute; inset: 0; opacity: 0.15; background
 const pulse = keyframes` 0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1} `;
 const CamTag = styled.div` align-self: flex-end; background: rgba(0,0,0,0.7); color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; gap: 8px; .dot { width: 8px; height: 8px; background: #EF4444; border-radius: 50%; animation: ${pulse} 2s infinite; } `;
 
-// ✅ [수정됨] 화이트 테마 모달 (Stats HUD)
+// 화이트 테마 모달 (Stats HUD)
 const StatsHud = styled(motion.div)`
-  background: rgba(255, 255, 255, 0.9); /* 완전한 화이트 배경 (투명도 살짝) */
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(12px);
   border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.1); /* 연한 테두리 */
+  border: 1px solid rgba(0, 0, 0, 0.1);
   padding: 18px 28px;
   display: flex;
   align-items: center;
   gap: 32px;
-  color: #1E293B; /* 텍스트 진한색 */
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1); /* 부드러운 그림자 */
+  color: #1E293B;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
   width: 95%;
   align-self: center;
   margin-bottom: 10px;
-  pointer-events: auto; /* 마우스 상호작용 가능 */
+  pointer-events: auto;
 `;
 
 const HudItem = styled.div`
   display: flex; align-items: center; gap: 14px; flex: 1;
-  
   .icon-box { 
     width: 42px; height: 42px; 
-    background: #F1F5F9; /* 연한 회색 배경 */
+    background: #F1F5F9; 
     border-radius: 12px; 
     display: flex; align-items: center; justify-content: center; 
     color: ${p=>p.theme.accent}; 
   }
-  
   .content { display: flex; flex-direction: column; gap: 2px; }
-  
   .label { 
-    font-size: 11px; color: #64748B; /* 서브 텍스트 색상 */
+    font-size: 11px; color: #64748B; 
     text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;
   }
-  
   .value { 
     font-size: 20px; font-weight: 800; color: #0F172A; 
     font-family: 'Pretendard', sans-serif; letter-spacing: -0.5px;

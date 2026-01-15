@@ -29,7 +29,8 @@ export interface VWorldMarker {
   destLng?: number;
   arrival?: string;
   progress?: number;
-  rotation?: number; 
+  // rotation?: number; // [삭제] 회전값은 더 이상 사용하지 않음
+  flip?: boolean;      // [추가] 좌우 반전 여부
   isFocused?: boolean;
   driver?: string;
   cargo?: string;
@@ -106,7 +107,6 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
   const mapElement = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   
-  // 소스 & 오버레이 Refs
   const routeSourceRef = useRef<VectorSource<Feature<Geometry>> | null>(null);
   const remainingRouteSourceRef = useRef<VectorSource<Feature<Geometry>> | null>(null);
   const markerSourceRef = useRef<VectorSource<Feature<Geometry>> | null>(null);
@@ -114,7 +114,6 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
   const popupOverlayRef = useRef<Overlay | null>(null);
   const popupElementRef = useRef<HTMLDivElement | null>(null);
 
-  // 🎨 스타일
   const createStyles = () => ({
     baseRoute: [
       new Style({ stroke: new Stroke({ color: 'white', width: 10, lineCap: 'round' }), zIndex: 1 }),
@@ -125,7 +124,6 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     ]
   });
 
-  // 1. 지도 초기화 (최초 1회 실행)
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
 
@@ -160,8 +158,6 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     });
     mapRef.current = map;
 
-    // 🟢 [중요] 시설물 오버레이는 여기서 딱 한 번만 생성합니다.
-    // markers prop이 바뀌어도 이 부분은 재실행되지 않아야 합니다.
     const facilities = [
         { lat: 35.207843, lng: 128.666263, title: "LG전자", imageUrl: "/icons/LG.jpg" },
         { lat: 35.148734, lng: 128.859885, title: "고모텍 부산", imageUrl: "/icons/GMT.png" }
@@ -186,9 +182,8 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
       map.addOverlay(new Overlay({ position: mPos, element: el, positioning: 'center-center' }));
     });
 
-    // 🟢 팝업 오버레이 생성 (딱 하나만)
     const popupEl = document.createElement('div');
-    popupEl.style.pointerEvents = 'none'; // 클릭 통과
+    popupEl.style.pointerEvents = 'none'; 
     popupEl.style.zIndex = '1000';
 
     popupElementRef.current = popupEl;
@@ -196,13 +191,12 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     const popupOverlay = new Overlay({
       element: popupEl,
       positioning: 'bottom-center',
-      offset: [0, -35], // 아이콘 위로 띄움
+      offset: [0, -35], 
       stopEvent: false,
     });
     map.addOverlay(popupOverlay);
     popupOverlayRef.current = popupOverlay;
 
-    // 경로 그리기
     const projectedCoords = FIXED_NAV_PATH.map(coord => fromLonLat([coord[0], coord[1]]));
     const routeGeom = new LineString(projectedCoords);
     routeGeomRef.current = routeGeom;
@@ -211,7 +205,6 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     routeFeature.setStyle(createStyles().baseRoute);
     routeSource.addFeature(routeFeature);
 
-    // 지도 뷰 조정
     const extent = boundingExtent(projectedCoords);
     map.getView().fit(extent, { padding: [200, 200, 200, 200], duration: 1000 });
 
@@ -224,9 +217,6 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
       mapRef.current = null;
     };
   }, []);
-
-  // 2. 마커 & 팝업 업데이트
-  // components/vworld-map.tsx 의 두 번째 useEffect
 
   // 2. 마커 & 팝업 업데이트
   useEffect(() => {
@@ -243,46 +233,29 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     remainingRouteSource.clear();
     popupOverlay.setPosition(undefined);
 
-    // 🟢 [추가 1] 현재 줌 레벨 가져오기 및 동적 크기 계산
-    const currentZoom = map.getView().getZoom() || 10; // 값이 없으면 기본 10
-
-    // 기준 줌(예: 13)에서 현재 줌이 얼마나 차이나는지 계산 (1.2배씩 증감)
-    // 이 수치(13, 1.2)를 조절하면 커지는 속도를 바꿀 수 있습니다.
+    const currentZoom = map.getView().getZoom() || 10; 
     const zoomFactor = Math.pow(1.2, currentZoom - 13);
 
-    // 1) 타겟 트럭 이미지 스케일 계산 (기준 0.3)
     let dynamicIconScale = 0.3 * zoomFactor;
-    // 너무 작아지거나 너무 커지지 않게 제한 (최소 0.05, 최대 1.0)
     dynamicIconScale = Math.max(0.05, Math.min(dynamicIconScale, 1.0));
-    // 좌우 반전을 위해 X축은 음수 적용
-    const finalIconScale = [-dynamicIconScale, dynamicIconScale];
-
-    // 2) 빨간 점 반지름 계산 (기준 6px)
+    
     let dynamicDotRadius = 6 * zoomFactor;
-    // 최소 크기 제한 (2px 이하로는 안 작아지게)
     dynamicDotRadius = Math.max(2, dynamicDotRadius);
-
 
     markers.filter(car => !car.isFacility).forEach(car => {
       let carPos: Coordinate;
-      let rotation = 0;
-      let dx = 0;
-      let dy = 0;
+      // [수정] 회전값은 0으로 고정
+      const rotation = 0; 
       
-      const isTarget = car.title === focusedTitle; // 타겟 차량 여부 확인
+      const isTarget = car.title === focusedTitle; 
 
       if (typeof car.progress === 'number') {
-        // ... (경로 계산 및 팝업 로직은 기존과 동일하여 생략, 위 코드 참고) ...
         const progress = Math.max(0, Math.min(1, car.progress));
         carPos = routeGeom.getCoordinateAt(progress);
         
-        const nextPos = routeGeom.getCoordinateAt(Math.min(progress + 0.02, 1));
-        dx = nextPos[0] - carPos[0];
-        dy = nextPos[1] - carPos[1];
-        rotation = -Math.atan2(dy, dx) + Math.PI / 2;
+        // 경로에 따른 회전 로직 제거됨 (rotation = 0)
 
         if (isTarget) {
-          // ... (팝업 관련 기존 코드 유지) ...
           const flatCoords = routeGeom.getCoordinates();
           const startIndex = Math.floor((flatCoords.length - 1) * progress);
           const remainingCoords = [carPos, ...flatCoords.slice(startIndex)];
@@ -318,27 +291,27 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
         carPos = routeGeom.getFirstCoordinate();
       }
 
-      // 🟢 [수정] 타겟 차량 및 일반 차량 스타일에 동적 크기 적용
       const carFeature = new Feature({ geometry: new Point(carPos) });
       
       if (isTarget && car.imageUrl) {
-        // 타겟 차량: 트럭 이미지
+        // [수정] car.flip이 true면 X축을 음수로 반전 (-scaleX)
+        // car.flip: LG -> 고모텍 (서쪽 이동) 인 경우 true
+        const scaleX = car.flip ? -dynamicIconScale : dynamicIconScale;
+        const scaleY = dynamicIconScale;
+
         carFeature.setStyle(new Style({
           image: new Icon({
             src: car.imageUrl,
-            // 🟢 [수정 2] 고정값 대신 계산된 finalIconScale 사용
-            scale: finalIconScale, 
-            rotation: rotation - (Math.PI / 2),
+            scale: [scaleX, scaleY], // [수정] 배열 형태로 스케일 지정하여 좌우 반전 처리
+            rotation: 0, // [수정] 회전 없음
             rotateWithView: true,
             anchor: [0.5, 0.5]
           }),
           zIndex: 100 
         }));
       } else {
-        // 그 외 차량: 흰 테두리 빨간 점
         carFeature.setStyle(new Style({
           image: new CircleStyle({
-            // 🟢 [수정 3] 고정값(6) 대신 계산된 dynamicDotRadius 사용
             radius: dynamicDotRadius,
             fill: new Fill({ color: '#EF4444' }),
             stroke: new Stroke({ color: '#FFFFFF', width: 2 })

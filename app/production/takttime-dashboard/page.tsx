@@ -19,7 +19,6 @@ import {
   Camera,
   Activity,
   Settings,
-  Cpu,
   Loader2,
   AlertTriangle,
   Bot,
@@ -68,7 +67,7 @@ const AI_THRESHOLD = 80;
 const X_AXIS_HEIGHT = 30;
 const MARGIN = { top: 20, right: 20, left: 10, bottom: 0 };
 
-// 색상 상수 (불변 객체)
+// 색상 상수
 const colors = {
   bgPage: "#F8F9FA",
   bgCard: "#FFFFFF",
@@ -101,44 +100,21 @@ const GlobalStyle = createGlobalStyle`
     font-family: 'Inter', sans-serif; 
     color: ${colors.textMain}; 
     overflow: hidden; 
-    /* 폰트 렌더링 최적화 */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 `;
 
-// Keyframes (GPU 가속 활용)
+// Keyframes
 const spin = keyframes`from { transform: rotate(0deg); } to { transform: rotate(360deg); }`;
-const spinReverse = keyframes`from { transform: rotate(360deg); } to { transform: rotate(0deg); }`;
 const pulse = keyframes`0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; }`;
 const breathe = keyframes`0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; }`;
 const slideUp = keyframes`from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; }`;
 const fadeIn = keyframes`from { opacity: 0; } to { opacity: 1; }`;
-const popIn = keyframes`0% { transform: scale(0.5); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); opacity: 1; }`;
 
-// --- [스타일 최적화: 불필요한 Prop 전달 최소화, 고정 스타일은 CSS로 처리] ---
+// --- [스타일 최적화: 로딩 관련 스타일 제거됨] ---
 
-const BootContainer = styled.div`position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: ${colors.bgPage}; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999;`;
-const ScannerWrapper = styled.div`position: relative; width: 140px; height: 140px; display: flex; justify-content: center; align-items: center; margin-bottom: 40px;`;
-const ScannerRing = styled.div<{ $size: number; $color: string; $reverse?: boolean }>`
-  position: absolute; 
-  width: ${(props) => props.$size}px; 
-  height: ${(props) => props.$size}px; 
-  border: 2px solid transparent; 
-  border-top-color: ${(props) => props.$color}; 
-  border-left-color: ${(props) => props.$color}; 
-  border-radius: 50%; 
-  animation: ${(props) => (props.$reverse ? spinReverse : spin)} 1.5s linear infinite;
-  will-change: transform;
-`;
-const DynamicIconWrapper = styled.div`color: ${colors.primaryDark}; z-index: 2; display: flex; justify-content: center; align-items: center; animation: ${popIn} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;`;
-const LoadingTextGroup = styled.div`display: flex; flex-direction: column; align-items: center; gap: 12px;`;
-const MainLoadingText = styled.div`font-size: 1.5rem; font-weight: 800; color: ${colors.textMain}; letter-spacing: 1px;`;
-const SubLoadingText = styled.div`font-size: 0.95rem; color: ${colors.textSub}; font-weight: 600; height: 20px;`;
-const StyledProgressTrack = styled.div`width: 320px; height: 6px; background: #E5E7EB; border-radius: 99px; margin-top: 24px; overflow: hidden; position: relative;`;
-const StyledProgressFill = styled.div`height: 100%; background: ${colors.primaryDark}; transition: width 0.3s ease-out; border-radius: 99px; will-change: width;`;
-
-const PageLayout = styled.div<{ $visible: boolean }>`display: flex; width: 100vw; height: calc(100vh - 64px); overflow: hidden; background-color: ${colors.bgPage}; opacity: 0; ${(props) => props.$visible && css`animation: ${fadeIn} 0.8s ease-out forwards;`}`;
+const PageLayout = styled.div`display: flex; width: 100vw; height: calc(100vh - 64px); overflow: hidden; background-color: ${colors.bgPage}; animation: ${fadeIn} 0.5s ease-out forwards;`;
 const SidebarContainer = styled.div`width: 90px; height: 100%; background-color: ${colors.bgPage}; border-right: 1px solid ${colors.gridLine}; display: flex; flex-direction: column; align-items: center; padding: 24px 0; gap: 16px; z-index: 10; flex-shrink: 0;`;
 const SidebarButton = styled.button<{ $active: boolean }>`
   width: 60px; height: 60px; border-radius: 12px; font-family: "Rajdhani", sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; 
@@ -164,7 +140,7 @@ const MainChartPanel = styled.div`flex: 1; display: flex; flex-direction: column
 
 const RightFixedPanel = styled.div`
   width: 280px; background-color: #FAFAFA; display: flex; flex-direction: column; flex-shrink: 0; 
-  transition: background-color 0.3s ease; /* transition 속성을 구체적으로 명시 */
+  transition: background-color 0.3s ease;
 `;
 
 const PanelHeader = styled.div<{ $isAlert: boolean }>`
@@ -185,58 +161,14 @@ const rippleAnimation = keyframes`
 `;
 
 const SafeState = styled.div`
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  animation: ${fadeIn} 0.5s ease-out;
-
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; animation: ${fadeIn} 0.5s ease-out;
   .radar-container {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    background: #F0FDF4;
-    border: 1px solid #DCFCE7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);
-    animation: ${breathe} 3s infinite ease-in-out;
+    width: 120px; height: 120px; border-radius: 50%; background: #F0FDF4; border: 1px solid #DCFCE7; display: flex; align-items: center; justify-content: center; position: relative;
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1); animation: ${breathe} 3s infinite ease-in-out;
   }
-
-  .radar-icon {
-    color: ${colors.successDark};
-    z-index: 2;
-  }
-
-  .ripple {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    border: 1px solid ${colors.successLight};
-    opacity: 0;
-    /* 수정된 부분: 분리한 애니메이션 변수 참조 */
-    animation: ${rippleAnimation} 2s infinite linear;
-    will-change: transform, opacity;
-  }
-
-  .status-text {
-    text-align: center;
-    .main {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: ${colors.textMain};
-      margin-bottom: 6px;
-    }
-    .sub {
-      font-size: 0.85rem;
-      color: ${colors.textSub};
-    }
-  }
+  .radar-icon { color: ${colors.successDark}; z-index: 2; }
+  .ripple { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 1px solid ${colors.successLight}; opacity: 0; animation: ${rippleAnimation} 2s infinite linear; will-change: transform, opacity; }
+  .status-text { text-align: center; .main { font-size: 1.1rem; font-weight: 700; color: ${colors.textMain}; margin-bottom: 6px; } .sub { font-size: 0.85rem; color: ${colors.textSub}; } }
 `;
 
 const PulseDot = styled.div`width: 8px; height: 8px; background: ${colors.alertDark}; border-radius: 50%; animation: ${pulse} 1.5s infinite;`;
@@ -323,7 +255,6 @@ ReferenceLabel.displayName = "ReferenceLabel";
 const generateRandomData = (groupName: string) => {
   const count = 16;
   const baseRandom = groupName.charCodeAt(2) % 10;
-  // 20% 확률로 완전 무결점
   const isPerfectRun = Math.random() < 0.2;
 
   return Array.from({ length: count }, (_, i) => {
@@ -376,7 +307,6 @@ const Sidebar = memo(({ activeGroup, onGroupChange, groups }: { activeGroup: str
 ));
 Sidebar.displayName = "Sidebar";
 
-// [최적화] 상태 패널 컴포넌트 분리 (TopChart 재렌더링 시 영향 최소화)
 const StatusPanel = memo(({ alertedLots, onLotClick }: { alertedLots: ProcessData[], onLotClick: (lot: ProcessData) => void }) => {
   const hasAlerts = alertedLots.length > 0;
   
@@ -468,7 +398,6 @@ const TopChart = memo(({ data, isTransitioning, showDetail, onDetailToggle, aler
         )}
       </LegendBox>
       <ChartArea>
-        {/* [최적화] debounce 추가하여 리사이징 시 연산 최소화 */}
         <ResponsiveContainer width="100%" height="100%" debounce={50}>
           <ComposedChart data={data} margin={MARGIN}>
             <defs>
@@ -514,7 +443,6 @@ const TopChart = memo(({ data, isTransitioning, showDetail, onDetailToggle, aler
       </ChartArea>
     </MainChartPanel>
 
-    {/* 분리된 상태 패널 컴포넌트 */}
     <StatusPanel alertedLots={alertedLots} onLotClick={onLotClick} />
   </TechCard>
 ));
@@ -573,8 +501,7 @@ BottomChart.displayName = "BottomChart";
 export default function ProcessDashboard() {
   const [data, setData] = useState<ProcessData[]>([]);
   const [showDetail, setShowDetail] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadingStep, setLoadingStep] = useState(0); 
+  // isLoading 및 loadingStep 상태 제거
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState("GR1");
   const groups = useMemo(() => ["GR1", "GR2", "GR3", "GR4", "GR5"], []);
@@ -629,20 +556,9 @@ export default function ProcessDashboard() {
     setShowAiModal(true);
   }, []);
 
+  // [수정] 초기 로딩 타이머 제거 및 즉시 데이터 로드
   useEffect(() => {
-    setLoadingStep(0);
-    const timer1 = setTimeout(() => setLoadingStep(1), 1200);
-    const timer2 = setTimeout(() => setLoadingStep(2), 2200);
-    const timer3 = setTimeout(() => {
-      setData(generateRandomData("GR1"));
-      setIsLoading(false);
-    }, 3500);
-    
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-    };
+    setData(generateRandomData("GR1"));
   }, []);
 
   const mesMax = useMemo(() => {
@@ -661,34 +577,7 @@ export default function ProcessDashboard() {
   return (
     <>
       <GlobalStyle />
-      {isLoading && (
-        <BootContainer>
-          <ScannerWrapper>
-            <ScannerRing $size={120} $color={colors.primaryLight} />
-            <ScannerRing $size={100} $color={colors.primaryDark} $reverse />
-            <DynamicIconWrapper key={loadingStep}>
-              {loadingStep === 0 && <Cpu size={48} />}
-              {loadingStep === 1 && <Database size={48} />}
-              {loadingStep === 2 && <Zap size={48} />}
-            </DynamicIconWrapper>
-          </ScannerWrapper>
-          <LoadingTextGroup>
-            <MainLoadingText>
-              {loadingStep === 0 && "시스템 초기화 중..."}
-              {loadingStep === 1 && "데이터 동기화 중..."}
-              {loadingStep === 2 && "AI 모듈 보정 중..."}
-            </MainLoadingText>
-            <SubLoadingText>
-              {loadingStep === 0 && "보안 연결 확인 중..."}
-              {loadingStep === 1 && "실시간 공정 로그 수집 중..."}
-              {loadingStep === 2 && "시각화 컴포넌트 구성 중..."}
-            </SubLoadingText>
-          </LoadingTextGroup>
-          <StyledProgressTrack>
-            <StyledProgressFill style={{ width: `${(loadingStep + 1) * 33.3}%` }} />
-          </StyledProgressTrack>
-        </BootContainer>
-      )}
+      {/* BootContainer (로딩 화면) 제거됨 */}
 
       {showAiModal && selectedLot && (
         <FixedAiInsightPanel onClick={(e) => e.stopPropagation()}>
@@ -710,27 +599,26 @@ export default function ProcessDashboard() {
         </FixedAiInsightPanel>
       )}
 
-      {!isLoading && (
-        <PageLayout $visible={!isLoading}>
-          <Sidebar activeGroup={selectedGroup} onGroupChange={handleGroupChange} groups={groups} />
-          <MainContent>
-            <TopChartWrapper>
-              <TopChart 
-                data={data} 
-                isTransitioning={isTransitioning} 
-                showDetail={showDetail} 
-                onDetailToggle={handleDetailToggle} 
-                alertedLots={alertedLots} 
-                onLotClick={handleLotClick} 
-                mesMax={mesMax} 
-              />
-            </TopChartWrapper>
-            <BottomChartWrapper>
-              <BottomChart data={data} aiMax={aiMax} />
-            </BottomChartWrapper>
-          </MainContent>
-        </PageLayout>
-      )}
+      {/* isLoading 조건 없이 바로 렌더링 */}
+      <PageLayout>
+        <Sidebar activeGroup={selectedGroup} onGroupChange={handleGroupChange} groups={groups} />
+        <MainContent>
+          <TopChartWrapper>
+            <TopChart 
+              data={data} 
+              isTransitioning={isTransitioning} 
+              showDetail={showDetail} 
+              onDetailToggle={handleDetailToggle} 
+              alertedLots={alertedLots} 
+              onLotClick={handleLotClick} 
+              mesMax={mesMax} 
+            />
+          </TopChartWrapper>
+          <BottomChartWrapper>
+            <BottomChart data={data} aiMax={aiMax} />
+          </BottomChartWrapper>
+        </MainContent>
+      </PageLayout>
     </>
   );
 }

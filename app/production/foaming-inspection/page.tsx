@@ -13,14 +13,14 @@ import {
   FiX,
   FiAlertOctagon,
   FiLayers,    
-  FiGrid       
+  FiGrid
 } from 'react-icons/fi';
 
 // --------------------------------------------------------------------------
 // 1. Types & Constants
 // --------------------------------------------------------------------------
 
-const COMMON_FONT = "'Pretendard', sans-serif";
+const COMMON_FONT = "'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif";
 
 interface GaugeData {
   id: string;
@@ -41,7 +41,6 @@ interface AlertItemData {
   value?: string;
 }
 
-// API Response Types
 interface ApiDataItem {
   "time_diff": number;
   "Serial No.": string;
@@ -76,9 +75,6 @@ const METRIC_CONFIG = [
   { key: '가조립무게(g)', label: '가조립무게', unit: 'g', icon: <FiBox /> },
 ];
 
-// --------------------------------------------------------------------------
-// 2. Dummy Data (Fallback)
-// --------------------------------------------------------------------------
 const MOCK_API_RESPONSE: ApiResponse = {
   success: true,
   data: [
@@ -100,7 +96,7 @@ const MOCK_API_RESPONSE: ApiResponse = {
 };
 
 // --------------------------------------------------------------------------
-// 3. Styled Components & Keyframes
+// 3. Styled Components
 // --------------------------------------------------------------------------
 
 const shimmer = keyframes`
@@ -111,6 +107,16 @@ const shimmer = keyframes`
 const blink = keyframes`
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+`;
+
+const spin = keyframes`
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+`;
+
+const textPulse = keyframes`
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 `;
 
 const slideInRight = keyframes`
@@ -124,17 +130,16 @@ const dangerPulse = keyframes`
   100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 `;
 
+/* [FIXED] 높이 계산 정확히, overflow hidden으로 전체 스크롤 방지 */
 const PageContainer = styled.div`
-  background-color: #f5f7fa;
+  background-color: #f8fafc;
   width: 100vw;
   height: calc(100vh - 64px); 
-  overflow: hidden;
+  padding: 16px 24px;
+  overflow: hidden; /* 페이지 전체 스크롤 제거 */
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  color: #111;
-  padding-top: 12px; 
+  color: #0f172a;
   position: relative;
   font-family: ${COMMON_FONT};
   box-sizing: border-box;
@@ -142,8 +147,7 @@ const PageContainer = styled.div`
 
 const ContentWrapper = styled.div`
   width: 100%;
-  max-width: calc(100% - 48px);
-  height: calc(100% - 24px);
+  height: 100%; /* 부모 높이 꽉 채움 */
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -155,8 +159,8 @@ const HeaderContainer = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
-  flex-shrink: 0;
-  margin-bottom: 16px;
+  flex-shrink: 0; /* 절대 줄어들지 않음 */
+  margin-bottom: 12px;
   gap: 12px; 
 `;
 
@@ -182,9 +186,9 @@ const ButtonRow = styled.div`
   display: flex;
   align-items: center;
   width: 100%;
-  gap: 8px;
+  gap: 10px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 4px 4px 8px 4px;
   
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -192,20 +196,20 @@ const ButtonRow = styled.div`
 `;
 
 const TabButton = styled.button<{ $isActive: boolean; $hasError: boolean }>`
-  border: ${props => props.$hasError ? '2px solid #ef4444' : '1px solid #e2e8f0'};
+  border: ${props => props.$hasError ? '2px solid #ef4444' : '1px solid transparent'};
   outline: none;
   background: ${props => 
     props.$isActive 
       ? (props.$hasError ? '#ef4444' : '#1e293b') 
-      : (props.$hasError ? '#fef2f2' : '#fff')
+      : (props.$hasError ? '#fff5f5' : '#ffffff')
   };
   color: ${props => 
     props.$isActive 
       ? '#fff' 
       : (props.$hasError ? '#ef4444' : '#64748b')
   };
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -213,77 +217,83 @@ const TabButton = styled.button<{ $isActive: boolean; $hasError: boolean }>`
   flex-shrink: 0;
   min-width: 60px;
   justify-content: center;
-  
   box-shadow: ${props => props.$isActive 
-    ? 'inset 0 2px 4px rgba(0,0,0,0.1)' 
-    : '0 2px 4px rgba(0,0,0,0.03)'};
-  
-  transition: all 0.15s ease-in-out;
+    ? '0 4px 12px rgba(15, 23, 42, 0.3)' 
+    : '0 2px 8px rgba(0,0,0,0.04)'};
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-family: ${COMMON_FONT};
 
   &:hover {
+    transform: translateY(-2px);
     background: ${props => 
       props.$isActive 
         ? (props.$hasError ? '#dc2626' : '#0f172a') 
-        : (props.$hasError ? '#fee2e2' : '#f1f5f9')
+        : (props.$hasError ? '#fee2e2' : '#f8fafc')
     };
+    box-shadow: 0 6px 16px rgba(0,0,0,0.08);
   }
 `;
 
 const PageTitle = styled.h1`
   font-size: 28px;
-  font-weight: 700;
+  font-weight: 800;
   margin: 0;
-  color: #1e293b;
-  letter-spacing: -0.5px;
+  color: #0f172a;
+  letter-spacing: -0.7px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   font-family: ${COMMON_FONT};
 
   .proc-badge {
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 700;
     background: #eff6ff;
     color: #3b82f6;
-    padding: 4px 10px;
-    border-radius: 8px;
+    padding: 6px 12px;
+    border-radius: 99px;
     vertical-align: middle;
+    letter-spacing: -0.01em;
+    border: 1px solid #dbeafe;
   }
 `;
 
 const CurrentTime = styled.div`
-  font-size: 14px;
-  color: #64748b;
-  font-weight: 600;
+  font-size: 15px;
+  color: #475569;
+  font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   background: #fff;
-  padding: 8px 16px;
+  padding: 10px 20px;
   border-radius: 99px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  font-family: 'Pretendard';
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  font-family: ${COMMON_FONT};
+  letter-spacing: 0.5px;
 
   &::before {
     content: '';
     display: block;
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     background-color: #10b981;
     border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
     animation: ${blink} 1.5s infinite ease-in-out;
   }
 `;
 
 const DashboardGrid = styled.div`
   display: grid;
-  grid-template-columns: 20% 1fr;
-  gap: 20px;
-  flex: 1;
-  min-height: 0; 
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+  /* [FIXED] 높이 문제 해결 핵심: */
+  height: 100%; 
+  min-height: 0; /* 자식 스크롤 허용을 위해 필수 */
   padding-bottom: 0px;
 
   @media (max-width: 1400px) {
@@ -296,85 +306,161 @@ const LeftColumn = styled.div`
   flex-direction: column;
   gap: 20px;
   height: 100%;
+  min-height: 0; /* 자식 요소 찌그러짐 방지 */
 `;
 
 const RightColumn = styled.div`
   background: #fff;
-  border-radius: 20px;
-  padding: 20px 28px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  padding: 24px 32px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.02), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+  border: 1px solid #f1f5f9;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  overflow-y: auto;
+  height: 100%; /* 부모(Grid) 높이 100% 사용 */
+  overflow-y: auto; /* 내용이 넘치면 여기서만 스크롤 */
+  position: relative; 
   
   &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+`;
+
+const LoadingOverlay = styled.div<{ $isVisible: boolean }>`
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px); 
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 24px;
+  
+  opacity: ${props => props.$isVisible ? 1 : 0};
+  visibility: ${props => props.$isVisible ? 'visible' : 'hidden'};
+  transition: opacity 0.4s ease-in-out, visibility 0.4s ease-in-out;
+  
+  will-change: opacity;
+`;
+
+const TechSpinner = styled.div`
+  width: 60px;
+  height: 60px;
+  position: relative;
+  margin-bottom: 24px;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    border-top-color: #3b82f6;
+    border-right-color: #3b82f6;
+    animation: ${spin} 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  }
+  
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 10px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    border-bottom-color: #60a5fa;
+    border-left-color: #60a5fa;
+    animation: ${spin} 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite reverse;
+  }
+`;
+
+const LoadingText = styled.div`
+  font-size: 18px;
+  font-weight: 800;
+  color: #334155;
+  font-family: ${COMMON_FONT};
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  
+  .loading-dot {
+    animation: ${textPulse} 1.4s ease-in-out infinite;
+  }
+  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
 `;
 
 const SectionHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  padding-bottom: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 16px;
   flex-shrink: 0;
   border-bottom: 1px solid #f1f5f9;
 `;
 
 const SectionTitle = styled.h2`
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 800;
   color: #0f172a;
   margin: 0;
-  font-family: 'Pretendard';
+  font-family: ${COMMON_FONT};
+  letter-spacing: -0.02em;
 `;
 
 const DateLabel = styled.span`
   font-size: 13px;
+  font-weight: 600;
   color: #64748b;
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: #f8fafc;
-  padding: 6px 12px;
-  border-radius: 6px;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 8px 14px;
+  border-radius: 8px;
   font-family: ${COMMON_FONT};
-  svg { font-size: 14px; color: #94a3b8; }
+  svg { 
+    font-size: 14px; 
+    color: #3b82f6;
+    animation: ${spin} 3s linear infinite; 
+  }
 `;
 
 const MetricsList = styled.div`
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
-  flex: 1;
+  justify-content: flex-start;
   width: 100%;
-  gap: 8px;
-  padding-top: 12px;
-  overflow: hidden;
+  gap: 16px;
+  padding-top: 10px;
+  padding-bottom: 20px;
 `;
 
 const CardBase = styled.div<{ $status: 'good' | 'error', $clickable?: boolean }>`
-  background: ${props => props.$status === 'good' ? 'rgb(59 255 190 / 5%)' : 'rgb(255 101 101 / 5%)'};
-  border-radius: 20px;
-  padding: 20px;
+  background: #fff;
+  border-radius: 24px;
+  padding: 24px;
   flex: 1; 
+  /* [FIXED] 카드가 찌그러지지 않도록 min-height 설정 또는 shrink 방지 */
+  min-height: 200px; 
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-evenly;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  border: 2px solid ${props => props.$status === 'good' ? '#10b981' : '#ef4444'};
+  justify-content: space-between;
+  box-shadow: ${props => props.$status === 'good' 
+    ? '0 10px 30px -10px rgba(16, 185, 129, 0.1), 0 4px 6px -4px rgba(0,0,0,0.02)'
+    : '0 10px 30px -10px rgba(239, 68, 68, 0.1), 0 4px 6px -4px rgba(0,0,0,0.02)'
+  };
+  border: 1px solid ${props => props.$status === 'good' ? '#e2e8f0' : '#fee2e2'};
   position: relative;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   cursor: ${props => props.$clickable ? 'pointer' : 'default'};
   
   &:hover {
     transform: ${props => props.$clickable ? 'translateY(-4px)' : 'none'};
-    box-shadow: ${props => props.$clickable ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : '0 4px 6px -1px rgba(0, 0, 0, 0.05)'};
+    box-shadow: ${props => props.$clickable ? '0 20px 35px -10px rgba(0, 0, 0, 0.08)' : ''};
   }
 `;
 
@@ -383,72 +469,91 @@ const CardHeader = styled.div`
   text-align: left;
   font-size: 20px;
   line-height: 1.2;
-  font-weight: 700;
-  color: #334155;
+  font-weight: 800;
+  color: #1e293b;
   z-index: 1;
   font-family: ${COMMON_FONT};
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
 `;
 
 const StatusCircle = styled.div<{ $status: 'good' | 'error' }>`
-  width: 10vmin;
-  height: 10vmin;
-  min-width: 80px; min-height: 80px;
-  max-width: 120px; max-height: 120px;
+  width: 12vh;
+  height: 12vh;
+  max-width: 90px;
+  max-height: 90px;
+  min-width: 60px;
+  min-height: 60px;
   border-radius: 50%;
-  background: ${props => props.$status === 'good' ? '#10b981' : '#ef4444'};
+  background: ${props => props.$status === 'good' 
+    ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' 
+    : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'};
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 10px 20px ${props => props.$status === 'good' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'};
+  box-shadow: ${props => props.$status === 'good' 
+    ? '0 10px 20px rgba(16, 185, 129, 0.3)' 
+    : '0 10px 20px rgba(239, 68, 68, 0.3)'};
   z-index: 1;
+  margin: 8px 0;
+  flex-shrink: 0; /* 원형 찌그러짐 방지 */
 `;
 
 const StatusText = styled.div`
-  font-size: 36px;
-  font-weight: 800;
+  font-size: 32px;
+  font-weight: 900;
   color: #0f172a;
   z-index: 1;
   font-family: ${COMMON_FONT};
+  letter-spacing: -1px;
+  flex-shrink: 0;
 `;
 
 const StatusBadge = styled.div<{ $status: 'good' | 'error' }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 16px;
+  padding: 6px 14px;
   border-radius: 99px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   z-index: 1;
   font-family: ${COMMON_FONT};
-  ${props => props.$status === 'good' ? css`background-color: #D2F6EA; color: #01A871;` : css`background-color: #FFDDDD; color: #dc2626;`}
+  flex-shrink: 0;
+  ${props => props.$status === 'good' 
+    ? css`background-color: #ecfdf5; color: #059669; border: 1px solid #d1fae5;` 
+    : css`background-color: #fef2f2; color: #dc2626; border: 1px solid #fee2e2;`
+  }
 `;
 
 const LegendContainer = styled.div`
   width: 100%;
   background: #f8fafc;
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 12px;
+  padding: 10px 12px;
   display: flex;
-  justify-content: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 8px;
   z-index: 1;
+  margin-top: 8px;
+  border: 1px solid #f1f5f9;
+  flex-shrink: 0;
 `;
 
 const LegendItem = styled.div`
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
   color: #64748b;
-  font-weight: 500;
+  font-weight: 600;
   font-family: ${COMMON_FONT};
   &::before {
     content: '';
     display: block;
     width: 8px; height: 8px;
-    border-radius: 50%;
+    border-radius: 2px;
     background-color: ${props => props.color};
   }
 `;
@@ -456,84 +561,109 @@ const LegendItem = styled.div`
 const RowContainer = styled.div<{ $isError?: boolean }>`
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 24px;
   border-radius: 16px;
   position: relative;
-  flex: 1;
-  min-height: 54px;
-  ${props => props.$isError ? css`background: #FEF2F2; border: 2px solid #FCA5A5;` : css`background: #f1f5f9; border: 2px solid transparent; &:hover { background-color: #f8fafc; border-color: #e2e8f0; }`}
+  /* [FIXED] flex-shrink: 0 을 추가하여 화면이 좁아져도 절대 찌그러지지 않게 함 */
+  flex-shrink: 0; 
+  height: 95px; /* 높이도 조금 더 여유있게 확보 */
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
+
+  border: 1px solid ${props => props.$isError ? '#fecaca' : '#e2e8f0'};
+  background: ${props => props.$isError ? '#fff5f5' : '#ffffff'};
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+
+  &:hover {
+    transform: scale(1.005);
+    background-color: ${props => props.$isError ? '#fee2e2' : '#f8fafc'};
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  }
 `;
 
 const MetricInfo = styled.div`
-  width: 240px;
+  width: 260px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   flex-shrink: 0;
+  border-right: 1px solid #f1f5f9;
+  padding-right: 20px;
+  height: 60%;
 `;
 
 const IconBox = styled.div`
-  width: 40px; height: 40px;
-  background-color: #fff;
-  border-radius: 10px;
+  width: 44px; height: 44px;
+  background-color: #f1f5f9;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #64748b;
-  font-size: 18px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  font-size: 20px;
 `;
 
 const MetricLabelGroup = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 2px;
 `;
 
 const MetricName = styled.span`
   font-weight: 700;
-  font-size: 18px;
+  font-size: 17px;
   color: #1e293b;
   display: flex;
   align-items: center;
   gap: 4px;
   font-family: ${COMMON_FONT};
+  letter-spacing: -0.01em;
 `;
 
 const MetricUnit = styled.span`
   font-size: 13px;
-  color: #757d88;
-  font-weight: 400;
+  color: #94a3b8;
+  font-weight: 500;
   font-family: ${COMMON_FONT};
 `;
 
 const GaugeColumn = styled.div`
   flex: 1;
-  padding: 0 40px;
+  padding: 0 30px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  border-right: 1px solid #f1f5f9;
+  margin-right: 24px;
+  height: 100%; /* 부모 높이 다 쓰도록 */
+  flex-shrink: 0;
 `;
 
 const TrackArea = styled.div`
   position: relative;
-  width: 100%; height: 10px;
+  width: 100%; 
+  height: 12px; /* 명시적 높이 */
   margin-top: 10px;
+  flex-shrink: 0; /* 절대 줄어들지 않음 */
 `;
 
 const GaugeTrack = styled.div<{ $isError?: boolean }>`
-  width: 100%; height: 100%;
+  width: 100%; 
+  height: 100%;
   border-radius: 99px;
   background: ${props => props.$isError ? '#e2e8f0' : 'linear-gradient(90deg, #3498db 0%, #2ecc71 40%, #fff200 70%, #fd79a8 100%)'};
   position: relative;
   overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+  
   &::after {
     content: '';
     position: absolute;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 100%);
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0) 100%);
     background-size: 200% 100%;
-    animation: ${shimmer} 3s infinite linear;
+    animation: ${shimmer} 2.5s infinite linear;
     display: ${props => props.$isError ? 'none' : 'block'};
   }
 `;
@@ -541,10 +671,10 @@ const GaugeTrack = styled.div<{ $isError?: boolean }>`
 const GaugeLabels = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-top: 6px;
-  font-size: 14px;
-  color: #717983;
-  font-weight: 500;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 600;
   width: 100%;
   font-family: ${COMMON_FONT};
 `;
@@ -558,47 +688,48 @@ const GaugeMarker = styled.div<{ $percent: number, $isError?: boolean }>`
 
   .value-text {
     position: absolute;
-    bottom: 8px; left: 50%;
+    bottom: 12px; left: 50%;
     transform: translateX(-50%);
-    font-size: 18px; font-weight: 700;
+    font-size: 16px; font-weight: 800;
     color: ${props => props.$isError ? '#ef4444' : '#0f172a'};
     white-space: nowrap;
     text-align: center;
     font-family: ${COMMON_FONT};
+    text-shadow: 0 2px 4px rgba(255,255,255,0.8);
   }
   .handle {
     position: absolute;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    width: 18px; height: 10px;
+    width: 20px; height: 12px;
     background: ${props => props.$isError ? '#ef4444' : '#fff'};
-    border: 2px solid ${props => props.$isError ? '#b91c1c' : '#334155'};
+    border: 3px solid ${props => props.$isError ? '#b91c1c' : '#334155'};
     border-radius: 12px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.15);
     box-sizing: border-box;
   }
 `;
 
 const DangerPopup = styled.div`
   position: absolute;
-  left: 260px; top: -15px; z-index: 50;
+  left: 280px; top: -18px; z-index: 50;
   background: #ef4444; color: white;
-  padding: 10px 16px; border-radius: 12px;
+  padding: 12px 20px; border-radius: 12px;
   box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.6);
   display: flex; align-items: center; gap: 16px;
   animation: ${dangerPulse} 2s infinite;
 
   &::after {
     content: ''; position: absolute;
-    bottom: -6px; left: 20px;
+    bottom: -6px; left: 24px;
     width: 12px; height: 12px;
     background: #ef4444; transform: rotate(45deg);
   }
   .icon-area { font-size: 24px; display: flex; align-items: center; }
   .text-area { display: flex; flex-direction: column; gap: 2px; }
-  .warning-title { font-size: 13px; font-weight: 800; color: #fee2e2; text-transform: uppercase; font-family: ${COMMON_FONT}; }
-  .warning-msg { font-size: 14px; font-weight: 700; white-space: nowrap; font-family: ${COMMON_FONT}; }
-  .action-btn { background: white; color: #ef4444; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-family: ${COMMON_FONT}; &:hover { background: #fff1f2; } }
+  .warning-title { font-size: 12px; font-weight: 800; color: #fee2e2; text-transform: uppercase; letter-spacing: 0.05em; }
+  .warning-msg { font-size: 15px; font-weight: 700; white-space: nowrap; }
+  .action-btn { background: white; color: #ef4444; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); &:hover { background: #fff1f2; } }
 `;
 
 const ValueBox = styled.div<{ $isError?: boolean }>`
@@ -606,16 +737,17 @@ const ValueBox = styled.div<{ $isError?: boolean }>`
   background-color: ${props => props.$isError ? '#ef4444' : '#10b981'};
   border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  color: white; font-size: 16px; font-weight: 700;
-  box-shadow: 0 4px 6px -1px ${props => props.$isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)'};
+  color: white; font-size: 16px; font-weight: 800;
+  box-shadow: 0 4px 10px ${props => props.$isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)'};
   flex-shrink: 0;
   font-family: ${COMMON_FONT};
+  letter-spacing: -0.01em;
 `;
 
 const NotificationContainer = styled.div`
   position: absolute;
-  top: 20px; right: 20px;
-  width: 400px; z-index: 9999;
+  top: 24px; right: 24px;
+  width: 420px; z-index: 9999;
   display: flex; flex-direction: column; gap: 12px;
   pointer-events: none; 
   font-family: ${COMMON_FONT};
@@ -623,42 +755,42 @@ const NotificationContainer = styled.div`
 
 const SummaryBanner = styled.div`
   pointer-events: auto;
-  background-color: rgba(239, 68, 68, 0.95);
-  backdrop-filter: blur(4px);
-  color: white; padding: 16px 20px; border-radius: 12px;
+  background-color: rgba(220, 38, 38, 0.95);
+  backdrop-filter: blur(8px);
+  color: white; padding: 20px 24px; border-radius: 16px;
   display: flex; flex-direction: column;
-  box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 20px 25px -5px rgba(220, 38, 38, 0.3);
   animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
   
-  .header { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px; }
-  .header-left { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
-  .close-all-btn { cursor: pointer; color: white; opacity: 0.9; transition: all 0.2s; &:hover { opacity: 1; transform: scale(1.2); } }
-  .sub-text { font-size: 13px; opacity: 0.9; padding-left: 28px; }
+  .header { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; }
+  .header-left { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; }
+  .close-all-btn { cursor: pointer; color: white; opacity: 0.8; transition: all 0.2s; &:hover { opacity: 1; transform: scale(1.1); } }
+  .sub-text { font-size: 14px; opacity: 0.95; padding-left: 30px; font-weight: 500; }
 `;
 
 const AlertCardStyle = styled.div<{ $type: 'error' | 'warning' }>`
   pointer-events: auto;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  padding: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 14px;
+  padding: 18px 20px;
   position: relative;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'};
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-left: 5px solid ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'};
   display: flex; flex-direction: column;
   animation: ${slideInRight} 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
   transition: transform 0.2s;
   &:hover { transform: translateX(-4px); }
 
   .top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-  .title-group { display: flex; align-items: center; gap: 8px; }
-  .badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; color: white; background-color: ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'}; }
-  .title { font-size: 14px; font-weight: 700; color: #1e293b; font-family: ${COMMON_FONT}; }
+  .title-group { display: flex; align-items: center; gap: 10px; }
+  .badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; color: white; background-color: ${props => props.$type === 'error' ? '#ef4444' : '#f59e0b'}; }
+  .title { font-size: 15px; font-weight: 800; color: #1e293b; font-family: ${COMMON_FONT}; }
   .right-side { display: flex; align-items: center; gap: 12px; }
-  .time { font-size: 14px; color: #94a3b8; font-family: ${COMMON_FONT}; }
+  .time { font-size: 13px; color: #94a3b8; font-family: ${COMMON_FONT}; font-weight: 600; }
   .close-item-btn { cursor: pointer; color: #cbd5e1; transition: all 0.2s; &:hover { color: #64748b; transform: scale(1.1); } }
-  .desc { font-size: 13px; color: #475569; line-height: 1.5; white-space: pre-wrap; font-family: ${COMMON_FONT}; }
-  .value-highlight { display: block; margin-top: 4px; font-weight: 700; color: #0f172a; font-family: ${COMMON_FONT}; }
+  .desc { font-size: 14px; color: #475569; line-height: 1.5; white-space: pre-wrap; font-family: ${COMMON_FONT}; }
+  .value-highlight { display: block; margin-top: 6px; font-weight: 700; color: #0f172a; font-family: ${COMMON_FONT}; background: #f1f5f9; padding: 4px 8px; border-radius: 6px; width: fit-content; }
 `;
 
 // --------------------------------------------------------------------------
@@ -679,7 +811,6 @@ const LiveClock = memo(() => {
 });
 LiveClock.displayName = 'LiveClock';
 
-// [수정됨] 아이콘 크기 확대 적용 (size={48})
 const StatusCard = memo(({ 
   type, title, mainText, subText, onClick
 }: { 
@@ -688,7 +819,6 @@ const StatusCard = memo(({
   <CardBase $status={type} onClick={onClick} $clickable={!!onClick}>
     <CardHeader>{title}</CardHeader>
     <StatusCircle $status={type}>
-      {/* 여기서 아이콘 크기를 키웠습니다 */}
       {type === 'good' ? <FiCheck size={48} /> : <FiAlertTriangle size={48} />}
     </StatusCircle>
     <StatusText>{mainText}</StatusText>
@@ -827,12 +957,13 @@ export default function ProcessMonitorPage() {
   const [hiddenAlertIds, setHiddenAlertIds] = useState<string[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [apiLimits, setApiLimits] = useState<Record<string, {min: number, max: number}>>({});
+  
+  const [isLoading, setIsLoading] = useState(false);
 
   // 1. Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // [수정됨] API URL 변경
         const res = await fetch('https://1.254.24.170:24830/api/DX_API000022');
         if (!res.ok) throw new Error('API Failed');
         const json: ApiResponse = await res.json();
@@ -914,15 +1045,20 @@ export default function ProcessMonitorPage() {
   }, []);
 
   const handleCartChange = (cartNo: string) => {
+    setIsLoading(true);
+    
     setSelectedCartNo(cartNo);
     const cartData = cartList.find(c => c['대차번호'] === cartNo);
     if (cartData) {
       updateMetricsForCart(cartData, apiLimits);
       setHiddenAlertIds([]); 
     }
+
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
   };
 
-  // [New Helper] Helper to check if a specific cart has ANY error
   const checkCartError = useCallback((item: ApiDataItem) => {
     return METRIC_CONFIG.some(config => {
       const val = parseFloat(item[config.key]);
@@ -966,12 +1102,11 @@ export default function ProcessMonitorPage() {
 
         <ContentWrapper>
           <HeaderContainer>
-            {/* 상단: 타이틀 + 시계 */}
             <HeaderTopRow>
               <HeaderTitleArea>
                 <PageTitle>
                   설비이상 징후 탐지 AI
-                  <span style={{ marginLeft: '12px', fontSize: '18px', color: '#94a3b8' }}>|</span>
+                  <span style={{ marginLeft: '12px', fontSize: '18px', color: '#cbd5e1', fontWeight: 300 }}>|</span>
                   <span className="proc-badge">GR2 발포 공정</span>
                 </PageTitle>
               </HeaderTitleArea>
@@ -980,11 +1115,9 @@ export default function ProcessMonitorPage() {
               </HeaderClockArea>
             </HeaderTopRow>
 
-            {/* 하단: 버튼 리스트 (Full Width, Horizontal Scroll) */}
             <ButtonRow>
               {cartList.map((item) => {
                 const cNo = item['대차번호'];
-                // 대차에 에러가 있는지 미리 검사
                 const hasError = checkCartError(item);
                 
                 return (
@@ -1021,6 +1154,16 @@ export default function ProcessMonitorPage() {
             </LeftColumn>
 
             <RightColumn>
+              <LoadingOverlay $isVisible={isLoading}>
+                <TechSpinner />
+                <LoadingText>
+                  DATA SYNC
+                  <span className="loading-dot">.</span>
+                  <span className="loading-dot">.</span>
+                  <span className="loading-dot">.</span>
+                </LoadingText>
+              </LoadingOverlay>
+
               <SectionHeader>
                 <SectionTitle>대차 #{selectedCartNo} 공정 데이터</SectionTitle>
                 <DateLabel><FiRefreshCw /> 실시간 수신중</DateLabel>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useLayoutEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import styled, { keyframes } from "styled-components";
 import { Monitor, MousePointer2 } from "lucide-react";
@@ -118,14 +118,19 @@ const DesktopOnlyWrapper = styled.div`
 
 const NavContainer = styled.div`
   position: relative;
-  /* TopNavigation이 로딩화면 위에 보여야 하므로 가장 높은 z-index 부여 */
+  /* TopNavigation이 로딩화면 바로 아래에 위치하도록 z-index 설정 */
   z-index: 5000; 
 `;
 
-const MainContent = styled.main`
+const MainContent = styled.main<{ $isHidden: boolean }>`
   position: relative;
   z-index: 1;
   min-height: calc(100vh - 64px);
+  
+  /* [핵심] 로딩 중일 때 컨텐츠를 투명하게 처리하여 깜빡임 방지 */
+  opacity: ${(props) => (props.$isHidden ? 0 : 1)};
+  pointer-events: ${(props) => (props.$isHidden ? "none" : "auto")};
+  transition: opacity 0.2s ease-in;
 `;
 
 // --------------------------------------------------------------------------
@@ -135,9 +140,17 @@ const MainContent = styled.main`
 export default function ClientLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isLoading, setIsLoading } = useViewContext();
+  
+  // 경로 변경 감지용 Ref
+  const prevPathRef = useRef(pathname);
 
-  useEffect(() => {
-    setIsLoading(true);
+  // [수정] useLayoutEffect를 사용하여 화면이 그려지기(Paint) 전에 상태 업데이트
+  // 이를 통해 "이전 화면 -> 새 화면 깜빡임" 없이 즉시 로딩 화면으로 전환됨
+  useLayoutEffect(() => {
+    if (prevPathRef.current !== pathname) {
+      prevPathRef.current = pathname;
+      setIsLoading(true);
+    }
   }, [pathname, setIsLoading]);
 
   return (
@@ -171,12 +184,12 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
               key="global-loader"
               style={{ 
                 position: "fixed", 
-                // [수정] top을 0으로 해서 전체 배경을 흰색으로 채움 (어두운 부분 제거)
                 top: 0, 
                 left: 0,
                 right: 0,
                 bottom: 0,
-                // [중요] Nav(5000)보다 한 단계 낮게 설정 -> Nav가 로딩화면 위에 뜸
+                // Nav(5000)보다 낮게, MainContent(1)보다 높게 설정하여 
+                // 네비게이션바는 보이고, 컨텐츠는 가리도록 설정 (필요시 z-index 5001로 높여서 Nav도 가릴 수 있음)
                 zIndex: 4999, 
                 background: "#ffffff" 
               }}
@@ -184,7 +197,6 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
               exit={{ opacity: 0, filter: "blur(10px)" }}
               transition={{ duration: 0.6, ease: "easeInOut" }}
             >
-              {/* padding-top으로 컨텐츠만 살짝 내려주면 Nav에 가려지지 않음 */}
               <div style={{ paddingTop: "64px", height: "100%" }}>
                 <GmtLoadingScreen onComplete={() => setIsLoading(false)} />
               </div>
@@ -196,7 +208,8 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
           <TopNavigation isLoading={isLoading} />
         </NavContainer>
         
-        <MainContent>
+        {/* 로딩 중일 때 내용 숨김 ($isHidden) */}
+        <MainContent $isHidden={isLoading}>
             {children}
         </MainContent>
         

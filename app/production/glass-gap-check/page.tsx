@@ -51,16 +51,16 @@ const theme = {
     cardBg: '#FFFFFF',
     textPrimary: '#111827',
     textSecondary: '#6B7280',
-    accent: '#7C3AED', // 조금 더 진한 보라색
+    accent: '#7C3AED',
     success: '#059669',
     danger: '#DC2626',
     border: '#E5E7EB',
     shadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
 };
 
-// ─── [NEW UI COMPONENTS] ───
+// ─── [UI COMPONENTS] ───
 
-// 1. [헤더] 사운드 제어 버튼 (컨트롤 패널 스타일)
+// 1. [헤더] 사운드 제어 버튼
 const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => void }) => {
     const [isHover, setIsHover] = useState(false);
     const [isPress, setIsPress] = useState(false);
@@ -105,7 +105,7 @@ const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => v
     );
 };
 
-// 2. [카드] 이미지 확대 버튼 (플로팅 스타일)
+// 2. [카드] 이미지 확대 버튼
 const ZoomFloatingButton = ({ onClick }: { onClick: () => void }) => {
     const [isHover, setIsHover] = useState(false);
     return (
@@ -133,7 +133,7 @@ const ZoomFloatingButton = ({ onClick }: { onClick: () => void }) => {
     );
 };
 
-// 3. [모달] 주요 액션 버튼 (Primary)
+// 3. [모달] 주요 액션 버튼
 const PrimaryButton = ({ onClick, children, danger = false }: any) => {
     const [isHover, setIsHover] = useState(false);
     const [isPress, setIsPress] = useState(false);
@@ -148,7 +148,7 @@ const PrimaryButton = ({ onClick, children, danger = false }: any) => {
             onMouseUp={() => setIsPress(false)}
             style={{
                 width: '100%', padding: '16px', borderRadius: '14px', border: 'none',
-                background: isHover ? baseColor : baseColor, // 그라디언트 제거하고 깔끔한 솔리드 컬러
+                background: isHover ? baseColor : baseColor,
                 color: 'white', fontSize: '16px', fontWeight: 700,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                 boxShadow: isHover ? `0 8px 20px -6px ${baseColor}80` : `0 4px 10px -4px ${baseColor}60`,
@@ -232,40 +232,7 @@ const SoundPermissionModal = ({ onConfirm }: { onConfirm: () => void }) => {
     );
 };
 
-const LoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
-    const [progress, setProgress] = useState(0);
-    const [loadingText, setLoadingText] = useState("시스템 초기화 중...");
-
-    useEffect(() => {
-        const duration = 1500;
-        const interval = 15;
-        const step = 100 / (duration / interval);
-        const timer = setInterval(() => {
-            setProgress(prev => {
-                const next = prev + step;
-                if (next > 20 && next < 50) setLoadingText("API 데이터 수신 중...");
-                else if (next >= 50 && next < 80) setLoadingText("이미지 리소스 최적화...");
-                else if (next >= 80) setLoadingText("검사 UI 구성 완료...");
-                if (next >= 100) { clearInterval(timer); setTimeout(onComplete, 300); return 100; }
-                return next;
-            });
-        }, interval);
-        return () => clearInterval(timer);
-    }, [onComplete]);
-
-    return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ padding: '24px', backgroundColor: '#F3E8FF', borderRadius: '28px', marginBottom: '40px', boxShadow: `0 20px 40px -10px ${theme.accent}30` }}>
-                <Layers size={56} color={theme.accent} strokeWidth={1.5} />
-            </div>
-            <h2 style={{ fontSize: '28px', fontWeight: 900, color: theme.textPrimary, marginBottom: '12px', letterSpacing: '-0.5px' }}>Estify Glass Inspection</h2>
-            <p style={{ fontSize: '15px', color: theme.textSecondary, marginBottom: '32px', fontWeight: 500 }}>{loadingText}</p>
-            <div style={{ width: '360px', height: '6px', backgroundColor: '#F3F4F6', borderRadius: '10px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${progress}%`, background: theme.accent, borderRadius: '10px', transition: 'width 0.1s linear' }} />
-            </div>
-        </div>
-    );
-};
+// LoadingScreen 컴포넌트 제거됨
 
 const ImageModal = ({ isOpen, onClose, title, imgUrl }: { isOpen: boolean, onClose: () => void, title: string, imgUrl: string }) => {
     if (!isOpen) return null;
@@ -326,7 +293,6 @@ const Header = ({ layout, data, isSoundOn, onToggleSound }: { layout: any, data:
                     </div>
                 </div>
                 
-                {/* [NEW] 개선된 사운드 컨트롤 버튼 */}
                 <SoundControlButton isOn={isSoundOn} onClick={onToggleSound} />
             </div>
 
@@ -340,7 +306,7 @@ const Header = ({ layout, data, isSoundOn, onToggleSound }: { layout: any, data:
 // ─── [MAIN COMPONENT] ───
 
 export default function GlassGapInspection() {
-    const [isLoading, setIsLoading] = useState(true);
+    // isLoading 상태 제거됨
     const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
     const [modalInfo, setModalInfo] = useState<{ isOpen: boolean, title: string, imgUrl: string } | null>(null);
     const [apiData, setApiData] = useState<ApiData | null>(null);
@@ -445,15 +411,13 @@ export default function GlassGapInspection() {
                 </div>
                 <div style={{ flex: 1, margin: '16px', borderRadius: '16px', overflow: 'hidden', position: 'relative', border: `1px solid ${theme.border}`, backgroundColor: '#020617' }}>
                     <div style={{ width: '100%', height: '100%', backgroundImage: `url(${imgUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} />
-                    {/* [NEW] 플로팅 액션 버튼 */}
                     <ZoomFloatingButton onClick={() => setModalInfo({ isOpen: true, title, imgUrl })} />
                 </div>
             </div>
         );
     };
 
-    if (isLoading) return <LoadingScreen onComplete={() => setIsLoading(false)} />;
-
+    // 로딩 조건문 제거됨. 바로 컨텐츠 렌더링
     return (
         <div style={{
             backgroundColor: theme.bg, boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
