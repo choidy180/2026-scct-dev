@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
-import styled, { keyframes, css, createGlobalStyle } from "styled-components";
+import React, { useState, useEffect, useMemo, memo } from "react";
+import styled, { createGlobalStyle } from "styled-components";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
   ComposedChart,
   Line,
@@ -13,612 +14,907 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
-  LabelList,
 } from "recharts";
 import {
-  Camera,
   Activity,
-  Settings,
-  Loader2,
-  AlertTriangle,
-  Bot,
+  Grid,
+  Square,
+  LayoutTemplate,
+  Bell,
+  TrendingUp,
+  TrendingDown,
+  Video,
   X,
-  ChevronRight,
-  Database,
-  Server,
-  Zap,
-  CheckCircle2,
-  ShieldCheck,
-  ScanEye,
+  FileText,
+  Maximize2
 } from "lucide-react";
 
-// --- [1. 상수 및 데이터 타입] ---
+// --- [1. 설정 및 데이터] ---
 
-export interface ProcessData {
-  name: string;
-  taktTotal: number;
-  taktBase: number;
-  taktOver: number;
-  procAssembly: number;
-  procWelding: number;
-  procInspection: number;
-  production: number;
-  isOver: boolean;
-  aiVal: number;
-  aiBase: number;
-  aiOver: number;
-}
+const TARGET_TAKT = 12.0;
 
-interface ReferenceLabelProps {
-  viewBox?: any;
-  value?: string | number;
-}
+const VIDEO_PATHS = {
+  A: "/videos/line_a.mp4", 
+  B: "/videos/line_b.mp4",
+  C: "/videos/line_c.mp4",
+};
 
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: any[];
-  label?: string;
-  showDetail?: boolean;
-  type: "MES" | "AI";
-}
+const MOCK_CSV_DATA = `timestamp,message,type
+14:25:30,#4번 공정 텍타임 지연 (15.2초),error
+14:24:12,2호기 자재 공급 요청,warning
+14:20:00,라인 2 가동 시작,success
+13:55:40,#1번 공정 일시 정지 (센서 오류),error
+13:00:00,오후 작업조 투입 완료,success
+12:55:10,오전 작업조 작업 종료,success
+12:40:05,품질 검사 데이터 전송 완료,success
+11:30:22,3호기 유압 모터 온도 상승 주의,warning
+11:15:00,#2번 라인 자재 부족 알림,warning
+10:00:00,설비 정기 점검 완료,success`;
 
-const TARGET_TAKT_TIME = 100;
-const AI_THRESHOLD = 80;
-const X_AXIS_HEIGHT = 30;
-const MARGIN = { top: 20, right: 20, left: 10, bottom: 0 };
-
-// 색상 상수
-const colors = {
-  bgPage: "#F8F9FA",
+const COLORS = {
+  bgPage: "#F8FAFC",
   bgCard: "#FFFFFF",
-  primaryDark: "#F97316",
-  primaryLight: "#FFEDD5",
-  secondaryDark: "#0EA5E9",
-  secondaryLight: "#E0F2FE",
-  lineSolid: "#C2410C",
-  alertDark: "#EF4444",
-  alertLight: "#FCA5A5",
-  successDark: "#10B981",
-  successLight: "#6EE7B7",
-  processA: "#3B82F6",
-  processB: "#10B981",
-  processC: "#8B5CF6",
-  textMain: "#1F2937",
-  textSub: "#6B7280",
-  gridLine: "#E5E7EB",
-  bgBlack: "#111827",
-  textWhite: "#FFFFFF",
+  primary: "#3B82F6",
+  target: "#F97316",
+  alert: "#EF4444",
+  warning: "#F59E0B",
+  success: "#10B981",
+  textMain: "#0F172A",
+  textSub: "#64748B",
+  grid: "#E2E8F0",
+  borderBlue: "#3B82F6",
+  borderGreen: "#10B981",
+  borderYellow: "#F59E0B",
+  hoverBg: "#F1F5F9",
+  tabActive: "#2563EB",
+  videoBg: "#1E293B",
+};
+
+interface CycleData {
+  id: string;
+  name: string;
+  cycleTime: number;
+  target: number;
+  isOver: boolean;
+  production: number;
+}
+
+interface LogData {
+  time: string;
+  msg: string;
+  type: 'error' | 'success' | 'warning';
+}
+
+const generateLineData = (lineId: string) => {
+  return Array.from({ length: 16 }, (_, i) => {
+    const base = 11.5;
+    const noise = Math.random() * 2 - 0.5;
+    let cycleTime = Number((base + noise).toFixed(1));
+    if (Math.random() > 0.85) cycleTime += 3.5;
+    const isOver = cycleTime > TARGET_TAKT;
+    return {
+      id: `${lineId}-${i}`,
+      name: `#${101 + i}`,
+      cycleTime,
+      target: TARGET_TAKT,
+      isOver,
+      production: 100 + i * 5,
+    };
+  });
 };
 
 // --- [2. 스타일 컴포넌트] ---
 
 const GlobalStyle = createGlobalStyle`
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&family=Rajdhani:wght@600;700;800&display=swap');
   body { 
-    background-color: ${colors.bgPage}; 
-    margin: 0; padding: 0; 
-    font-family: 'Inter', sans-serif; 
-    color: ${colors.textMain}; 
+    background-color: ${COLORS.bgPage}; 
+    margin: 0; 
+    font-family: 'Pretendard', sans-serif;
     overflow: hidden; 
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    color: ${COLORS.textMain};
   }
-`;
-
-// Keyframes
-const spin = keyframes`from { transform: rotate(0deg); } to { transform: rotate(360deg); }`;
-const pulse = keyframes`0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; }`;
-const breathe = keyframes`0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; }`;
-const slideUp = keyframes`from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; }`;
-const fadeIn = keyframes`from { opacity: 0; } to { opacity: 1; }`;
-
-// --- [스타일 최적화: 로딩 관련 스타일 제거됨] ---
-
-const PageLayout = styled.div`display: flex; width: 100vw; height: calc(100vh - 64px); overflow: hidden; background-color: ${colors.bgPage}; animation: ${fadeIn} 0.5s ease-out forwards;`;
-const SidebarContainer = styled.div`width: 90px; height: 100%; background-color: ${colors.bgPage}; border-right: 1px solid ${colors.gridLine}; display: flex; flex-direction: column; align-items: center; padding: 24px 0; gap: 16px; z-index: 10; flex-shrink: 0;`;
-const SidebarButton = styled.button<{ $active: boolean }>`
-  width: 60px; height: 60px; border-radius: 12px; font-family: "Rajdhani", sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; 
-  background: ${colors.bgCard}; color: ${(props) => (props.$active ? colors.primaryDark : colors.textSub)}; 
-  border: 1px solid ${(props) => (props.$active ? colors.primaryDark : colors.gridLine)}; 
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, color 0.2s ease; 
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; 
-  &:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); color: ${colors.primaryDark}; border-color: ${colors.primaryDark}; } 
-  position: relative; overflow: hidden; 
-  &::after { content: ""; position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: ${(props) => props.$active ? colors.primaryDark : "transparent"}; }
-`;
-const MainContent = styled.div`flex: 1; height: 100%; display: flex; flex-direction: column; padding: 20px; gap: 20px; overflow: hidden;`;
-const TopChartWrapper = styled.div`flex: 1; min-height: 0; position: relative;`;
-const BottomChartWrapper = styled.div`flex: 1; min-height: 0;`;
-
-const TechCard = styled.div`
-  background: ${colors.bgCard}; width: 100%; height: 100%; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); 
-  display: flex; flex-direction: row; align-items: stretch; position: relative; overflow: hidden; border: 1px solid ${colors.gridLine}; z-index: 1;
-`;
-
-const InfoPanel = styled.div`width: 260px; border-right: 1px solid ${colors.gridLine}; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; flex-shrink: 0;`;
-const MainChartPanel = styled.div`flex: 1; display: flex; flex-direction: column; padding: 24px; min-width: 0; position: relative; border-right: 1px solid ${colors.gridLine};`;
-
-const RightFixedPanel = styled.div`
-  width: 280px; background-color: #FAFAFA; display: flex; flex-direction: column; flex-shrink: 0; 
-  transition: background-color 0.3s ease;
-`;
-
-const PanelHeader = styled.div<{ $isAlert: boolean }>`
-  padding: 16px; border-bottom: 1px solid ${colors.gridLine}; font-weight: 700; 
-  color: ${(props) => props.$isAlert ? colors.alertDark : colors.successDark}; 
-  background: ${(props) => props.$isAlert ? "#FEF2F2" : "#F0FDF4"}; 
-  font-size: 0.95rem; display: flex; align-items: center; justify-content: space-between; height: 54px; box-sizing: border-box; 
-  transition: background-color 0.3s ease, color 0.3s ease;
-`;
-
-const PanelBody = styled.div`
-  flex: 1; overflow-y: auto; padding: 12px; 
-  &::-webkit-scrollbar { width: 4px; } &::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
-`;
-const rippleAnimation = keyframes`
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(1.6); opacity: 0; }
-`;
-
-const SafeState = styled.div`
-  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; animation: ${fadeIn} 0.5s ease-out;
-  .radar-container {
-    width: 120px; height: 120px; border-radius: 50%; background: #F0FDF4; border: 1px solid #DCFCE7; display: flex; align-items: center; justify-content: center; position: relative;
-    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1); animation: ${breathe} 3s infinite ease-in-out;
-  }
-  .radar-icon { color: ${colors.successDark}; z-index: 2; }
-  .ripple { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 1px solid ${colors.successLight}; opacity: 0; animation: ${rippleAnimation} 2s infinite linear; will-change: transform, opacity; }
-  .status-text { text-align: center; .main { font-size: 1.1rem; font-weight: 700; color: ${colors.textMain}; margin-bottom: 6px; } .sub { font-size: 0.85rem; color: ${colors.textSub}; } }
-`;
-
-const PulseDot = styled.div`width: 8px; height: 8px; background: ${colors.alertDark}; border-radius: 50%; animation: ${pulse} 1.5s infinite;`;
-const HeaderGroup = styled.div<{ $themeColor?: "orange" | "sky" }>` .tag { display: inline-flex; align-items: center; gap: 10px; padding: 6px 12px; background: ${(props) => props.$themeColor === "sky" ? "#F0F9FF" : "#FFF7ED"}; color: ${(props) => props.$themeColor === "sky" ? colors.secondaryDark : colors.primaryDark}; font-weight: 700; font-size: 0.75rem; border-radius: 8px; margin-bottom: 16px; .dot { width: 8px; height: 8px; background: currentColor; border-radius: 50%; } } h2 { font-family: "Inter", sans-serif; font-size: 2rem; font-weight: 800; color: ${colors.textMain}; margin: 0; line-height: 1.2; .sub-eng { display: block; font-size: 0.9rem; font-weight: 600; margin-top: 4px; color: ${(props) => props.$themeColor === "sky" ? colors.secondaryDark : colors.primaryDark}; } } .desc { font-size: 0.9rem; color: ${colors.textSub}; margin-top: 10px; font-weight: 500; }`;
-const IconWrapper = styled.div<{ $themeColor?: "orange" | "sky" }>`width: 54px; height: 54px; background: linear-gradient(135deg, ${(props) => (props.$themeColor === "sky" ? "#F0F9FF" : "#FFF7ED")}, ${(props) => (props.$themeColor === "sky" ? "#E0F2FE" : "#FFEDD5")}); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: ${(props) => props.$themeColor === "sky" ? colors.secondaryDark : colors.primaryDark}; margin-bottom: 16px; border: 1px solid ${(props) => (props.$themeColor === "sky" ? "#E0F2FE" : "#FFEDD5")};`;
-const StatDisplay = styled.div`padding: 16px; border-radius: 12px; background: linear-gradient(to bottom right, #f9fafb, #f3f4f6); border: 1px solid ${colors.gridLine}; .label { font-size: 0.85rem; color: ${colors.textSub}; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; } .value { font-family: "Rajdhani", sans-serif; font-size: 2.4rem; font-weight: 700; color: ${colors.textMain}; line-height: 1; letter-spacing: -1px; span { font-size: 1rem; color: ${colors.textSub}; font-weight: 600; margin-left: 6px; } }`;
-const ToggleWrapper = styled.div`display: flex; align-items: center; gap: 12px; padding-top: 16px; border-top: 1px solid ${colors.gridLine}; span { font-size: 0.85rem; font-weight: 600; color: ${colors.textMain}; }`;
-const ToggleSwitch = styled.button<{ $isOn: boolean }>`width: 44px; height: 24px; border-radius: 99px; background: ${(props) => (props.$isOn ? colors.primaryDark : "#E5E7EB")}; border: none; position: relative; cursor: pointer; transition: background-color 0.2s ease; &::after { content: ""; position: absolute; top: 3px; left: ${(props) => (props.$isOn ? "23px" : "3px")}; width: 18px; height: 18px; border-radius: 50%; background: white; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); transition: left 0.2s ease; }`;
-const LegendBox = styled.div`display: flex; gap: 20px; margin-bottom: 6px; justify-content: flex-end; padding-right: 20px; flex-shrink: 0; .item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; color: ${colors.textSub}; } .color-box { width: 10px; height: 10px; border-radius: 3px; }`;
-const ChartArea = styled.div`flex: 1; min-height: 0; position: relative;`;
-const TransitionOverlay = styled.div<{ $active: boolean }>`position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 16px; background: rgba(255, 255, 255, 0.65); z-index: 50; opacity: ${(props) => (props.$active ? 1 : 0)}; pointer-events: ${(props) => (props.$active ? "all" : "none")}; transition: opacity 0.2s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; .spinner { color: ${colors.primaryDark}; animation: ${spin} 1s linear infinite; } .text { font-size: 0.95rem; font-weight: 600; color: ${colors.textMain}; letter-spacing: 0.5px; }`;
-const AlertItem = styled.button`background: white; border: 1px solid ${colors.gridLine}; border-left: 4px solid ${colors.alertDark}; padding: 12px 14px; border-radius: 8px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 8px; &:hover { background: #FFF1F2; } .name { font-weight: 700; font-size: 0.8rem; color: ${colors.textMain}; } .val { font-family: "Rajdhani"; font-weight: 800; color: ${colors.alertDark}; font-size: 0.9rem; }`;
-const FixedAiInsightPanel = styled.div`position: fixed; bottom: 24px; right: 24px; width: 380px; background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2); overflow: hidden; border: 1px solid ${colors.gridLine}; z-index: 1000; animation: ${slideUp} 0.4s cubic-bezier(0.16, 1, 0.3, 1); .header { background: ${colors.bgBlack}; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; color: white; .title { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem; letter-spacing: 0.5px; } .close-btn { background: rgba(255, 255, 255, 0.15); border: none; width: 28px; height: 28px; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; &:hover { background: rgba(255, 255, 255, 0.3); } } } .body { padding: 20px; display: flex; flex-direction: column; gap: 16px; } .ai-msg { display: flex; gap: 12px; .bot-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #F0F9FF, #E0F2FE); color: ${colors.secondaryDark}; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; } .bubble { background: #F9FAFB; padding: 14px; border-radius: 0 16px 16px 16px; font-size: 0.9rem; line-height: 1.5; color: ${colors.textMain}; border: 1px solid ${colors.gridLine}; strong { color: ${colors.alertDark}; font-weight: 700; background: #FEF2F2; padding: 0 4px; border-radius: 4px; } } } .stats { display: flex; gap: 10px; margin-top: 4px; .stat-box { flex: 1; background: #F8FAFC; border: 1px solid ${colors.gridLine}; border-radius: 10px; padding: 10px; text-align: center; .lbl { font-size: 0.75rem; color: ${colors.textSub}; margin-bottom: 4px; font-weight: 600; } .v { font-family: "Rajdhani"; font-weight: 700; font-size: 1.2rem; } } }`;
-const StylishTooltip = styled.div`background: rgba(255, 255, 255, 0.98); border: 1px solid ${colors.gridLine}; padding: 16px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); min-width: 200px; .header { font-size: 0.9rem; font-weight: 700; color: ${colors.textSub}; margin-bottom: 12px; } .row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.9rem; font-weight: 500; } .key { display: flex; align-items: center; gap: 8px; color: ${colors.textSub}; } .val { font-family: "Rajdhani"; font-weight: 700; color: ${colors.textMain}; font-size: 1.1rem; } .divider { height: 1px; background: ${colors.gridLine}; margin: 10px 0; }`;
-
-// --- [3. 헬퍼 및 컴포넌트] ---
-
-const CustomizedDot = memo((props: any) => {
-  const { cx, cy } = props;
-  const stroke = colors.lineSolid;
-  if (!cx || !cy) return null;
-  return (
-    <g>
-      <circle cx={cx} cy={cy} r={5} stroke={stroke} strokeWidth={2} fill="#fff" />
-      <circle cx={cx} cy={cy} r={2} fill={stroke} />
-    </g>
-  );
-});
-CustomizedDot.displayName = "CustomizedDot";
-
-const CustomTooltip = memo(({ active, payload, label, showDetail, type }: CustomTooltipProps) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload as ProcessData;
-    return (
-      <StylishTooltip>
-        <div className="header">{label}</div>
-        {type === "MES" && (
-          <>
-            <div className="row"><div className="key"><Activity size={14} color={colors.lineSolid} />생산량</div><div className="val" style={{ color: colors.lineSolid }}>{data.production}</div></div>
-            <div className="divider" />
-            <div className="row"><div className="key">총 택트 타임</div><div className="val" style={{ color: data.isOver ? colors.alertDark : colors.textMain }}>{data.taktTotal}초</div></div>
-            {showDetail && (
-              <div style={{ marginTop: 8, padding: 8, background: "#F8FAFC", borderRadius: 8 }}>
-                <div className="row"><div className="key">조립</div><div className="val">{data.procAssembly}초</div></div>
-                <div className="row"><div className="key">용접</div><div className="val">{data.procWelding}초</div></div>
-                <div className="row"><div className="key">검사</div><div className="val">{data.procInspection}초</div></div>
-              </div>
-            )}
-          </>
-        )}
-        {type === "AI" && (
-          <div className="row"><div className="key">AI 점수</div><div className="val" style={{ color: colors.successDark }}>{data.aiVal}</div></div>
-        )}
-      </StylishTooltip>
-    );
-  }
-  return null;
-});
-CustomTooltip.displayName = "CustomTooltip";
-
-const ReferenceLabel = memo((props: ReferenceLabelProps) => {
-  const { viewBox, value } = props;
-  const { x, y, width } = viewBox || {};
-  if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number") return null;
+  * { box-sizing: border-box; }
   
-  const text = value?.toString() || "";
-  const rectWidth = text.length * 7 + 24;
-  const rectHeight = 24;
-  const margin = 6;
-  const rectX = x + width - rectWidth;
-  const rectY = y - rectHeight - margin;
-  const textX = rectX + rectWidth / 2;
-  const textY = rectY + rectHeight / 2 + 1;
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+`;
+
+const LayoutContainer = styled.div`
+  display: flex;
+  width: 100vw;
+  height: calc(100vh - 64px);
+  background-color: ${COLORS.bgPage};
+`;
+
+const Sidebar = styled.div`
+  width: 80px;
+  background: ${COLORS.bgCard};
+  border-right: 1px solid ${COLORS.grid};
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 24px;
+  gap: 16px;
+  z-index: 20;
+  box-shadow: 2px 0 12px rgba(0,0,0,0.02);
+`;
+
+const NavItem = styled.button<{ $active: boolean }>`
+  width: 60px; height: 60px;
+  border-radius: 16px;
+  border: 1px solid ${(props) => (props.$active ? COLORS.primary : "transparent")};
+  background: ${(props) => (props.$active ? "#EFF6FF" : "transparent")};
+  color: ${(props) => (props.$active ? COLORS.primary : COLORS.textSub)};
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
   
-  return (
-    <g>
-      <rect x={rectX} y={rectY} width={rectWidth} height={rectHeight} fill="rgba(31, 41, 55, 0.85)" rx={12} />
-      <text x={textX} y={textY} fill={colors.textWhite} fontSize={11} fontWeight={700} textAnchor="middle" dominantBaseline="middle">{text}</text>
-    </g>
-  );
-});
-ReferenceLabel.displayName = "ReferenceLabel";
+  &:hover { 
+    background: ${(props) => (props.$active ? "#EFF6FF" : COLORS.hoverBg)}; 
+    color: ${(props) => (props.$active ? COLORS.primary : COLORS.textMain)}; 
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  }
+  span { font-size: 11px; font-weight: 700; letter-spacing: -0.5px; }
+`;
 
-const generateRandomData = (groupName: string) => {
-  const count = 16;
-  const baseRandom = groupName.charCodeAt(2) % 10;
-  const isPerfectRun = Math.random() < 0.2;
+const MainContent = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+`;
 
-  return Array.from({ length: count }, (_, i) => {
-    let taktTotal;
-    if (isPerfectRun) {
-      taktTotal = Math.floor(Math.random() * 35) + 60;
-    } else {
-      if ((i + baseRandom) % 4 === 3) taktTotal = Math.floor(Math.random() * 30) + 120;
-      else if ((i + baseRandom) % 5 === 0) taktTotal = Math.floor(Math.random() * 20) + 60;
-      else taktTotal = Math.floor(Math.random() * 30) + 80;
+const Header = styled.div`
+  height: 64px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: ${COLORS.bgCard};
+  border-bottom: 1px solid ${COLORS.grid};
+  flex-shrink: 0;
+  
+  .title-area {
+    display: flex; align-items: center; gap: 12px;
+    h1 { 
+      font-size: 1.4rem; font-weight: 800; color: ${COLORS.textMain}; margin: 0; 
+      display: flex; align-items: center; gap: 10px; letter-spacing: -0.5px;
     }
-    const production = Math.floor(Math.random() * 40) + 90 + baseRandom * 2;
-    const p1 = Math.floor(taktTotal * 0.4);
-    const p2 = Math.floor(taktTotal * 0.35);
-    const p3 = taktTotal - p1 - p2;
-    const aiRaw = Math.min(100, Math.floor(Math.random() * 40) + 60 + baseRandom);
-    
-    return {
-      name: `Lot-${i + 1}`,
-      taktTotal: taktTotal,
-      taktBase: Math.min(taktTotal, TARGET_TAKT_TIME),
-      taktOver: Math.max(0, taktTotal - TARGET_TAKT_TIME),
-      procAssembly: p1,
-      procWelding: p2,
-      procInspection: p3,
-      production: production,
-      isOver: taktTotal > TARGET_TAKT_TIME,
-      aiVal: aiRaw,
-      aiBase: Math.min(aiRaw, AI_THRESHOLD),
-      aiOver: Math.max(0, aiRaw - AI_THRESHOLD),
-    };
-  });
-};
+  }
+  .sub-text { font-size: 0.9rem; color: ${COLORS.textSub}; font-weight: 500; }
+`;
 
-// --- [4. 서브 컴포넌트 (Memoized)] ---
+const DashboardBody = styled.div`
+  flex: 1;
+  display: flex;
+  padding: 20px;
+  gap: 20px;
+  height: 100%;
+  overflow: hidden;
+`;
 
-const Sidebar = memo(({ activeGroup, onGroupChange, groups }: { activeGroup: string, onGroupChange: (g: string) => void, groups: string[] }) => (
-  <SidebarContainer>
-    {groups.map((group) => (
-      <SidebarButton key={group} $active={activeGroup === group} onClick={() => onGroupChange(group)}>
-        {group === "GR1" && <Database size={20} />}
-        {group === "GR2" && <Server size={20} />}
-        {group === "GR3" && <Activity size={20} />}
-        {group === "GR4" && <Zap size={20} />}
-        {group === "GR5" && <Settings size={20} />}
-        {group}
-      </SidebarButton>
-    ))}
-  </SidebarContainer>
-));
-Sidebar.displayName = "Sidebar";
+const ChartSection = styled.div`
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  overflow: hidden;
+`;
 
-const StatusPanel = memo(({ alertedLots, onLotClick }: { alertedLots: ProcessData[], onLotClick: (lot: ProcessData) => void }) => {
-  const hasAlerts = alertedLots.length > 0;
+const InfoSection = styled.div`
+  flex: 1;
+  min-width: 340px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  overflow: hidden;
+`;
+
+const ViewContainer = styled(motion.div)`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  overflow: hidden;
+`;
+
+const SingleChartCard = styled.div`
+  flex: 0.5; 
+  background: ${COLORS.bgCard};
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid ${COLORS.grid};
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  display: flex;
+  flex-direction: column;
+`;
+
+const BigScreenCard = styled.div`
+  flex: 0.5; 
+  background: ${COLORS.videoBg};
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  overflow: hidden;
+  border: 1px solid ${COLORS.grid};
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .live-indicator {
+    position: absolute; top: 20px; left: 20px;
+    background: rgba(239, 68, 68, 0.9);
+    color: white; padding: 4px 10px; border-radius: 6px;
+    font-size: 0.9rem; font-weight: 800;
+    display: flex; align-items: center; gap: 6px;
+    z-index: 10;
+    .dot { width: 8px; height: 8px; background: white; border-radius: 50%; animation: blink 1.5s infinite; }
+  }
+
+  @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+`;
+
+const MultiChartCard = styled.div`
+  flex: 1;
+  background: ${COLORS.bgCard};
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 0;
+  border: 1px solid ${COLORS.grid};
+  box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+`;
+
+const VideoBox = styled.div<{ $isLarge?: boolean }>`
+  width: ${(props) => props.$isLarge ? "40%" : "260px"}; 
+  height: 100%;
+  background: ${COLORS.videoBg};
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: width 0.4s ease; 
   
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .label {
+    position: absolute; bottom: 0; width: 100%;
+    background: rgba(0,0,0,0.6); color: white;
+    font-size: 0.85rem; padding: 6px 12px; font-weight: 600;
+    z-index: 10;
+  }
+  .live-badge {
+    position: absolute; top: 10px; left: 10px;
+    background: rgba(239, 68, 68, 0.9);
+    color: white; font-size: 0.7rem; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px;
+    z-index: 10;
+  }
+`;
+
+const ChartWrapper = styled.div`
+  flex: 1;
+  height: 100%;
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+`;
+
+const ProcessLabel = styled.div`
+  position: absolute;
+  top: 0; right: 0;
+  background: #EFF6FF;
+  color: ${COLORS.primary};
+  border: 1px solid #BFDBFE;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  z-index: 10;
+`;
+
+const KpiRow = styled.div`
+  display: flex;
+  gap: 16px;
+  height: 140px;
+  flex-shrink: 0;
+`;
+
+const KpiCard = styled.div<{ $borderColor: string }>`
+  flex: 1;
+  background: ${COLORS.bgCard};
+  border: 1px solid ${COLORS.grid};
+  border-radius: 16px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  position: relative;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+  
+  .label { font-size: 0.85rem; color: ${COLORS.textSub}; margin-bottom: 6px; font-weight: 600; }
+  .value { font-family: 'Rajdhani'; font-size: 2.2rem; font-weight: 800; color: ${COLORS.textMain}; }
+  .sub { 
+    font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 4px; 
+    color: ${(props) => props.$borderColor === COLORS.borderYellow ? COLORS.textMain : props.$borderColor};
+    background: ${(props) => props.$borderColor}15;
+    padding: 4px 10px; border-radius: 6px;
+  }
+`;
+
+// [NEW] 가변 높이 카드 (세로로 쌓기 위해)
+const WideKpiCard = styled.div<{ $height?: number }>`
+  height: ${(props) => props.$height || 140}px;
+  width: 100%;
+  background: ${COLORS.bgCard};
+  border: 1px solid ${COLORS.grid};
+  border-radius: 16px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: height 0.3s ease;
+  overflow: hidden;
+`;
+
+// [NEW] 세로형 그리드 (1개일 때와 다르게 동작)
+const TaktGrid = styled.div<{ $rows: number }>`
+  display: grid;
+  grid-template-rows: repeat(${(props) => props.$rows}, 1fr);
+  grid-template-columns: 1fr; /* 무조건 한 줄(세로) */
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+`;
+
+const TaktBox = styled.div<{ $isSingle?: boolean }>`
+  display: flex;
+  /* 싱글일 때는 세로 정렬, 멀티일 때는 가로 정렬 */
+  flex-direction: ${(props) => props.$isSingle ? 'column' : 'row'};
+  justify-content: ${(props) => props.$isSingle ? 'center' : 'space-between'};
+  align-items: center;
+  background: #F8FAFC;
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
+  padding: 0 20px;
+  
+  .line-name {
+    font-size: ${(props) => props.$isSingle ? '0.9rem' : '0.85rem'};
+    font-weight: 700;
+    color: ${COLORS.textSub};
+    margin-bottom: ${(props) => props.$isSingle ? '6px' : '0'};
+  }
+  .val-group {
+    display: flex;
+    flex-direction: ${(props) => props.$isSingle ? 'column' : 'row'};
+    align-items: center;
+    gap: ${(props) => props.$isSingle ? '2px' : '12px'};
+  }
+  .takt-val {
+    font-family: 'Rajdhani';
+    font-size: ${(props) => props.$isSingle ? '2.4rem' : '1.6rem'};
+    font-weight: 800;
+    color: ${COLORS.textMain};
+    line-height: 1;
+  }
+  .diff {
+    font-size: ${(props) => props.$isSingle ? '0.85rem' : '0.8rem'};
+    color: ${COLORS.success};
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #F0FDF4;
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+`;
+
+const AlertSection = styled.div`
+  flex: 1;
+  background: ${COLORS.bgCard};
+  border-radius: 16px;
+  border: 1px solid ${COLORS.grid};
+  padding: 20px;
+  display: flex; flex-direction: column;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+  overflow: hidden;
+  
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid ${COLORS.grid};
+    font-weight: 700; color: ${COLORS.textMain}; font-size: 0.95rem;
+    .view-all { 
+      font-size: 0.8rem; color: ${COLORS.primary}; cursor: pointer; font-weight: 600;
+      display: flex; align-items: center; gap: 4px;
+      &:hover { text-decoration: underline; }
+    }
+  }
+  .list-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+    &::-webkit-scrollbar { width: 4px; }
+  }
+`;
+
+const AlertItem = styled.div<{ $type: string }>`
+  display: flex; gap: 12px; margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: ${(props) => props.$type === 'error' ? '#FEF2F2' : props.$type === 'warning' ? '#FFFBEB' : '#F0FDF4'};
+  border: 1px solid transparent;
+  
+  &:hover { border-color: ${COLORS.grid}; }
+
+  .dot { 
+    width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; 
+    background: ${(props) => props.$type === 'error' ? COLORS.alert : props.$type === 'warning' ? COLORS.warning : COLORS.success};
+  }
+  .content {
+    .msg { font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 2px; color: ${COLORS.textMain}; }
+    .time { font-size: 0.75rem; color: ${COLORS.textSub}; font-weight: 500; }
+  }
+`;
+
+const ModalOverlay = styled(motion.div)`
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
+  z-index: 1000; display: flex; align-items: center; justify-content: center;
+`;
+
+const ModalContent = styled(motion.div)`
+  width: 90%; height: 90%; background: white; border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden;
+  .modal-header {
+    padding: 24px; border-bottom: 1px solid ${COLORS.grid};
+    display: flex; justify-content: space-between; align-items: center; background: ${COLORS.bgPage};
+    h2 { margin: 0; font-size: 1.5rem; display: flex; align-items: center; gap: 12px; color: ${COLORS.textMain}; }
+    .close-btn { 
+      background: white; border: 1px solid ${COLORS.grid}; border-radius: 50%; width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; color: ${COLORS.textSub};
+      &:hover { background: #fee2e2; color: ${COLORS.alert}; border-color: ${COLORS.alert}; }
+    }
+  }
+  .modal-body { flex: 1; overflow-y: auto; padding: 24px; background: white; }
+`;
+
+const LogTable = styled.table`
+  width: 100%; border-collapse: collapse;
+  thead {
+    position: sticky; top: 0; background: white; z-index: 10;
+    th { text-align: left; padding: 16px; border-bottom: 2px solid ${COLORS.grid}; color: ${COLORS.textSub}; font-weight: 700; font-size: 0.95rem; }
+  }
+  tbody {
+    tr { border-bottom: 1px solid ${COLORS.grid}; &:hover { background: ${COLORS.hoverBg}; } }
+    td { padding: 16px; font-size: 0.95rem; color: ${COLORS.textMain}; }
+  }
+  .type-badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 700;
+    &.error { background: #FEF2F2; color: ${COLORS.alert}; }
+    &.warning { background: #FFFBEB; color: ${COLORS.warning}; }
+    &.success { background: #F0FDF4; color: ${COLORS.success}; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  }
+`;
+
+const CustomTooltipBox = styled.div`
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid ${COLORS.grid};
+  padding: 10px 14px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  font-size: 0.85rem;
+  .label { font-weight: 700; color: ${COLORS.textMain}; margin-bottom: 4px; }
+  .val { font-family: 'Rajdhani'; font-weight: 700; color: ${COLORS.primary}; font-size: 1rem; }
+  .alert { color: ${COLORS.alert}; }
+`;
+
+const MonitorChart = memo(({ data }: { data: CycleData[] }) => {
   return (
-    <RightFixedPanel>
-      {hasAlerts ? (
-        <>
-          <PanelHeader $isAlert={true}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={16} color={colors.alertDark} />
-              지연 발생 ({alertedLots.length}건)
-            </div>
-            <PulseDot />
-          </PanelHeader>
-          <PanelBody>
-            {alertedLots.map((lot) => (
-              <AlertItem key={lot.name} onClick={() => onLotClick(lot)}>
-                <span className="name">{lot.name}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <span className="val">{lot.taktTotal}s</span>
-                  <ChevronRight size={14} color={colors.textSub} />
-                </div>
-              </AlertItem>
-            ))}
-          </PanelBody>
-        </>
-      ) : (
-        <>
-          <PanelHeader $isAlert={false}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldCheck size={16} color={colors.successDark} />
-              상태 양호
-            </div>
-          </PanelHeader>
-          <PanelBody>
-            <SafeState>
-              <div className="radar-container">
-                <div className="ripple" />
-                <div className="ripple" style={{ animationDelay: '1s' }} />
-                <ScanEye className="radar-icon" size={40} />
-              </div>
-              <div className="status-text">
-                <div className="main">All Systems Normal</div>
-                <div className="sub">실시간 공정 감시 중</div>
-              </div>
-            </SafeState>
-          </PanelBody>
-        </>
-      )}
-    </RightFixedPanel>
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.grid} />
+        <XAxis 
+          dataKey="name" 
+          axisLine={false} 
+          tickLine={false} 
+          tick={{ fill: COLORS.textSub, fontSize: 10, fontWeight: 600 }} 
+          dy={10} 
+        />
+        <YAxis hide domain={[8, 16]} />
+        <Tooltip
+          cursor={{ fill: COLORS.hoverBg }}
+          content={({ active, payload }) => {
+            if (active && payload && payload.length) {
+              const d = payload[0].payload;
+              return (
+                <CustomTooltipBox>
+                  <div className="label">{d.name}</div>
+                  <div className={d.isOver ? "val alert" : "val"}>{d.cycleTime}s</div>
+                </CustomTooltipBox>
+              );
+            }
+            return null;
+          }}
+        />
+        <ReferenceLine y={TARGET_TAKT} stroke={COLORS.target} strokeDasharray="3 3" strokeWidth={2} />
+        <Bar dataKey="cycleTime" maxBarSize={40} radius={[4, 4, 0, 0]}>
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={entry.isOver ? COLORS.alert : COLORS.primary} fillOpacity={0.9} />
+          ))}
+        </Bar>
+        <Line type="monotone" dataKey="cycleTime" stroke={COLORS.target} strokeWidth={2} dot={{r:3, fill:'white', stroke:COLORS.target}} activeDot={{r:5}} />
+      </ComposedChart>
+    </ResponsiveContainer>
   );
 });
-StatusPanel.displayName = "StatusPanel";
+MonitorChart.displayName = "MonitorChart";
 
-const TopChart = memo(({ data, isTransitioning, showDetail, onDetailToggle, alertedLots, onLotClick, mesMax }: any) => (
-  <TechCard>
-    <TransitionOverlay $active={isTransitioning}>
-      <Loader2 className="spinner" size={48} />
-      <div className="text">UPDATING DATA...</div>
-    </TransitionOverlay>
-
-    <InfoPanel>
-      <HeaderGroup $themeColor="orange">
-        <div className="tag"><div className="dot" style={{ backgroundColor: '#22c55e', animation: 'none' }} /> 시스템 가동 중</div>
-        <IconWrapper $themeColor="orange"><Settings size={30} /></IconWrapper>
-        <h2>공정 흐름도<br /><span className="sub-eng">(Process Flow)</span></h2>
-        <div className="desc">택트 타임 및 생산량 분석</div>
-      </HeaderGroup>
-      <ToggleWrapper>
-        <ToggleSwitch $isOn={showDetail} onClick={onDetailToggle} disabled={isTransitioning} style={{ cursor: isTransitioning ? "not-allowed" : "pointer" }} />
-        <span>상세 공정 보기</span>
-      </ToggleWrapper>
-    </InfoPanel>
-
-    <MainChartPanel>
-      <LegendBox>
-        <div className="item"><div className="color-box" style={{ background: colors.lineSolid }} />생산량</div>
-        {!showDetail ? (
-          <>
-            <div className="item"><div className="color-box" style={{ background: colors.primaryDark }} />정상 택트</div>
-            <div className="item"><div className="color-box" style={{ background: colors.alertDark }} />초과 택트</div>
-          </>
-        ) : (
-          <>
-            <div className="item"><div className="color-box" style={{ background: colors.processA }} />조립</div>
-            <div className="item"><div className="color-box" style={{ background: colors.processB }} />용접</div>
-            <div className="item"><div className="color-box" style={{ background: colors.processC }} />검사</div>
-          </>
-        )}
-      </LegendBox>
-      <ChartArea>
-        <ResponsiveContainer width="100%" height="100%" debounce={50}>
-          <ComposedChart data={data} margin={MARGIN}>
-            <defs>
-              <linearGradient id="normalTakt" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={colors.primaryLight} stopOpacity={0.9} />
-                <stop offset="100%" stopColor={colors.primaryDark} stopOpacity={1} />
-              </linearGradient>
-              <linearGradient id="overTakt" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#FCA5A5" stopOpacity={0.9} />
-                <stop offset="100%" stopColor={colors.alertDark} stopOpacity={1} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={colors.gridLine} />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} dy={12} tick={{ fill: colors.textSub, fontSize: 11, fontWeight: 600 }} height={X_AXIS_HEIGHT} />
-            <YAxis domain={[0, mesMax] as [number, number]} hide padding={{ top: 0, bottom: 0 }} />
-            <Tooltip content={<CustomTooltip showDetail={showDetail} type="MES" />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />
-            {!showDetail ? (
-              <>
-                <Bar dataKey="taktBase" stackId="takt" barSize={34} isAnimationActive={true} animationDuration={600}>
-                  {data.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill="url(#normalTakt)" radius={(entry.taktOver > 0 ? [0, 0, 6, 6] : [6, 6, 6, 6]) as any} />
-                  ))}
-                </Bar>
-                <Bar dataKey="taktOver" stackId="takt" fill="url(#overTakt)" barSize={34} radius={[6, 6, 0, 0] as any} isAnimationActive={true} animationDuration={600} />
-              </>
-            ) : (
-              <>
-                <Bar dataKey="procAssembly" stackId="proc" fill={colors.processA} barSize={34} radius={[0, 0, 4, 4] as any} isAnimationActive={true} animationDuration={600}>
-                    <LabelList dataKey="procAssembly" position="center" fill="#FFFFFF" fontSize={11} fontWeight="bold" />
-                </Bar>
-                <Bar dataKey="procWelding" stackId="proc" fill={colors.processB} barSize={34} isAnimationActive={true} animationDuration={600}>
-                    <LabelList dataKey="procWelding" position="center" fill="#FFFFFF" fontSize={11} fontWeight="bold" />
-                </Bar>
-                <Bar dataKey="procInspection" stackId="proc" fill={colors.processC} barSize={34} radius={[4, 4, 0, 0] as any} isAnimationActive={true} animationDuration={600}>
-                    <LabelList dataKey="procInspection" position="center" fill="#FFFFFF" fontSize={11} fontWeight="bold" />
-                </Bar>
-              </>
-            )}
-            <Line type="monotone" dataKey="production" stroke={colors.lineSolid} strokeWidth={3} dot={<CustomizedDot />} activeDot={{ r: 7, strokeWidth: 0, fill: colors.textMain }} isAnimationActive={true} animationDuration={800} animationEasing="ease-in-out" />
-            <ReferenceLine y={TARGET_TAKT_TIME} stroke={colors.alertDark} strokeDasharray="4 2" strokeWidth={2} label={<ReferenceLabel value={`목표 택트 (${TARGET_TAKT_TIME}초)`} />} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartArea>
-    </MainChartPanel>
-
-    <StatusPanel alertedLots={alertedLots} onLotClick={onLotClick} />
-  </TechCard>
-));
-TopChart.displayName = "TopChart";
-
-const BottomChart = memo(({ data, aiMax }: any) => (
-  <TechCard>
-    <InfoPanel>
-      <HeaderGroup $themeColor="sky">
-        <div className="tag"><div className="dot" style={{ backgroundColor: '#22c55e', animation: 'none' }} /> AI 분석 중</div>
-        <IconWrapper $themeColor="sky"><Camera size={30} /></IconWrapper>
-        <h2>AI 비전<br /><span className="sub-eng">(AI Vision)</span></h2>
-        <div className="desc">실시간 품질 검사</div>
-      </HeaderGroup>
-      <StatDisplay>
-        <div className="label">감지 정확도</div>
-        <div className="value" style={{ color: colors.secondaryDark }}>99.8 <span>%</span></div>
-      </StatDisplay>
-    </InfoPanel>
-
-    <MainChartPanel style={{ borderRight: 'none' }}>
-      <LegendBox>
-        <div className="item"><div className="color-box" style={{ background: colors.successDark }} />정상 품질</div>
-        <div className="item"><div className="color-box" style={{ background: colors.alertDark }} />결함 의심</div>
-      </LegendBox>
-      <ChartArea>
-        <ResponsiveContainer width="100%" height="100%" debounce={50}>
-          <ComposedChart data={data} margin={MARGIN}>
-            <defs>
-              <linearGradient id="mintBarGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={colors.successLight} stopOpacity={0.9} />
-                <stop offset="100%" stopColor={colors.successDark} stopOpacity={1} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={colors.gridLine} />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} dy={12} tick={{ fill: colors.textSub, fontSize: 11, fontWeight: 600 }} height={X_AXIS_HEIGHT} />
-            <YAxis domain={[0, aiMax] as [number, number]} hide padding={{ top: 0, bottom: 0 }} />
-            <Tooltip content={<CustomTooltip type="AI" />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />
-            <Bar dataKey="aiBase" stackId="ai" barSize={34} isAnimationActive={true} animationDuration={600}>
-              {data.map((entry: any, index: number) => (
-                <Cell key={`cell-ai-${index}`} fill="url(#mintBarGrad)" radius={(entry.aiOver > 0 ? [0, 0, 6, 6] : [6, 6, 6, 6]) as any} />
-              ))}
-            </Bar>
-            <Bar dataKey="aiOver" stackId="ai" fill="url(#overTakt)" barSize={34} radius={[6, 6, 0, 0] as any} isAnimationActive={true} animationDuration={600} />
-            <ReferenceLine y={AI_THRESHOLD} stroke={colors.alertDark} strokeDasharray="4 2" strokeWidth={2} label={<ReferenceLabel value={`결함 임계값 (${AI_THRESHOLD})`} />} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartArea>
-    </MainChartPanel>
-  </TechCard>
-));
-BottomChart.displayName = "BottomChart";
-
-// --- [5. 메인 컴포넌트] ---
+// --- [Main Component] ---
 
 export default function ProcessDashboard() {
-  const [data, setData] = useState<ProcessData[]>([]);
-  const [showDetail, setShowDetail] = useState(false);
-  // isLoading 및 loadingStep 상태 제거
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [selectedGroup, setSelectedGroup] = useState("GR1");
-  const groups = useMemo(() => ["GR1", "GR2", "GR3", "GR4", "GR5"], []);
-  const [selectedLot, setSelectedLot] = useState<ProcessData | null>(null);
-  const [showAiModal, setShowAiModal] = useState(false);
+  const [viewMode, setViewMode] = useState<1 | 2 | 3>(1); 
+  const [data, setData] = useState<{A: CycleData[], B: CycleData[], C: CycleData[]}>({ A: [], B: [], C: [] });
+  const [alertLogs, setAlertLogs] = useState<LogData[]>([]);
+  const [showLogModal, setShowLogModal] = useState(false);
 
-  // 핸들러 Memoized
-  const getAiAnalysis = useCallback((lot: ProcessData, allData: ProcessData[]) => {
-    const avgAssy = allData.reduce((acc, cur) => acc + cur.procAssembly, 0) / allData.length;
-    const avgWeld = allData.reduce((acc, cur) => acc + cur.procWelding, 0) / allData.length;
-    const avgInsp = allData.reduce((acc, cur) => acc + cur.procInspection, 0) / allData.length;
-    
-    const diffAssy = ((lot.procAssembly - avgAssy) / avgAssy) * 100;
-    const diffWeld = ((lot.procWelding - avgWeld) / avgWeld) * 100;
-    const diffInsp = ((lot.procInspection - avgInsp) / avgInsp) * 100;
-    
-    let maxDiffVal = diffAssy;
-    let maxDiffName = "조립";
-    
-    if (diffWeld > maxDiffVal) { maxDiffVal = diffWeld; maxDiffName = "용접"; }
-    if (diffInsp > maxDiffVal) { maxDiffVal = diffInsp; maxDiffName = "검사"; }
-    
-    return (
-      <>
-        현재 해당 LOT는 전체 평균 대비 <strong>{maxDiffName} 공정</strong>이 <strong>{maxDiffVal.toFixed(1)}%</strong> 높게 측정되고 있습니다. 해당 공정 설비의 부하율을 점검해보시는 것을 추천드립니다.
-      </>
-    );
-  }, []);
-
-  const handleGroupChange = useCallback((group: string) => {
-    if (isTransitioning || selectedGroup === group) return;
-    setIsTransitioning(true);
-    setShowAiModal(false);
-    setTimeout(() => {
-      setSelectedGroup(group);
-      setData(generateRandomData(group));
-      setTimeout(() => { setIsTransitioning(false); }, 300);
-    }, 200);
-  }, [isTransitioning, selectedGroup]);
-
-  const handleDetailToggle = useCallback(() => {
-    if (isTransitioning) return;
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setShowDetail((prev) => !prev);
-      setTimeout(() => { setIsTransitioning(false); }, 300);
-    }, 200);
-  }, [isTransitioning]);
-
-  const handleLotClick = useCallback((lot: ProcessData) => {
-    setSelectedLot(lot);
-    setShowAiModal(true);
-  }, []);
-
-  // [수정] 초기 로딩 타이머 제거 및 즉시 데이터 로드
   useEffect(() => {
-    setData(generateRandomData("GR1"));
+    const update = () => {
+      setData({
+        A: generateLineData("A"),
+        B: generateLineData("B"),
+        C: generateLineData("C")
+      });
+    };
+    update();
+    const interval = setInterval(update, 2000);
+
+    const lines = MOCK_CSV_DATA.trim().split('\n').slice(1);
+    const logs = lines.map(line => {
+      const [time, msg, type] = line.split(',');
+      return { time, msg, type: type.trim() as any };
+    });
+    setAlertLogs(logs);
+
+    return () => clearInterval(interval);
   }, []);
 
-  const mesMax = useMemo(() => {
-    if (!data.length) return 150;
-    const maxVal = Math.max(...data.map((d) => Math.max(d.taktTotal, d.production)));
-    return Math.ceil(Math.max(maxVal, TARGET_TAKT_TIME * 1.8) / 10) * 10;
+  const avgTakts = useMemo(() => {
+    const calcAvg = (arr: CycleData[]) => (arr.reduce((acc, cur) => acc + cur.cycleTime, 0) / (arr.length || 1)).toFixed(1);
+    return {
+      A: calcAvg(data.A),
+      B: calcAvg(data.B),
+      C: calcAvg(data.C)
+    };
   }, [data]);
 
-  const aiMax = useMemo(() => {
-    if (!data.length) return 120;
-    return Math.ceil(Math.max(...data.map((d) => d.aiVal), AI_THRESHOLD * 1.5) / 10) * 10;
-  }, [data]);
+  const containerVariants: Variants = {
+    initial: { opacity: 0, scale: 0.98, y: 10 },
+    animate: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+    exit: { opacity: 0, scale: 0.98, y: -10, transition: { duration: 0.2 } }
+  };
 
-  const alertedLots = useMemo(() => data.filter((d) => d.isOver), [data]);
+  const modalVariants: Variants = {
+    initial: { opacity: 0, scale: 0.9 },
+    animate: { opacity: 1, scale: 1, transition: { type: "spring", damping: 25, stiffness: 300 } },
+    exit: { opacity: 0, scale: 0.9, transition: { duration: 0.2 } }
+  };
 
   return (
     <>
       <GlobalStyle />
-      {/* BootContainer (로딩 화면) 제거됨 */}
+      <LayoutContainer>
+        <Sidebar>
+          <NavItem $active={viewMode === 1} onClick={() => setViewMode(1)}>
+            <Square size={22} strokeWidth={2.5} /><span>1개 라인</span>
+          </NavItem>
+          <NavItem $active={viewMode === 2} onClick={() => setViewMode(2)}>
+            <Grid size={22} strokeWidth={2.5} /><span>2개 라인</span>
+          </NavItem>
+          <NavItem $active={viewMode === 3} onClick={() => setViewMode(3)}>
+            <LayoutTemplate size={22} strokeWidth={2.5} /><span>3개 라인</span>
+          </NavItem>
+        </Sidebar>
 
-      {showAiModal && selectedLot && (
-        <FixedAiInsightPanel onClick={(e) => e.stopPropagation()}>
-          <div className="header">
-            <div className="title"><Bot size={20} /> AI Analysis</div>
-            <button className="close-btn" onClick={() => setShowAiModal(false)}><X size={18} /></button>
-          </div>
-          <div className="body">
-            <div style={{ fontSize: "1.15rem", fontWeight: 800, color: colors.textMain }}>{selectedLot.name} 상세 분석</div>
-            <div className="ai-msg">
-              <div className="bot-icon"><Bot size={24} /></div>
-              <div className="bubble">{getAiAnalysis(selectedLot, data)}</div>
-            </div>
-            <div className="stats">
-              <div className="stat-box"><div className="lbl">총 소요</div><div className="v" style={{ color: colors.alertDark }}>{selectedLot.taktTotal}s</div></div>
-              <div className="stat-box"><div className="lbl">목표 대비</div><div className="v">+{selectedLot.taktTotal - TARGET_TAKT_TIME}s</div></div>
-            </div>
-          </div>
-        </FixedAiInsightPanel>
-      )}
-
-      {/* isLoading 조건 없이 바로 렌더링 */}
-      <PageLayout>
-        <Sidebar activeGroup={selectedGroup} onGroupChange={handleGroupChange} groups={groups} />
         <MainContent>
-          <TopChartWrapper>
-            <TopChart 
-              data={data} 
-              isTransitioning={isTransitioning} 
-              showDetail={showDetail} 
-              onDetailToggle={handleDetailToggle} 
-              alertedLots={alertedLots} 
-              onLotClick={handleLotClick} 
-              mesMax={mesMax} 
-            />
-          </TopChartWrapper>
-          <BottomChartWrapper>
-            <BottomChart data={data} aiMax={aiMax} />
-          </BottomChartWrapper>
+          <Header>
+            <div className="title-area">
+              <Activity color={COLORS.primary} size={26} />
+              <h1>GR3 실시간 텍타임(Takt Time) 및 생산 분석</h1>
+            </div>
+            <div className="sub-text">Real-time Cycle Time & Production Monitoring</div>
+          </Header>
+
+          <DashboardBody>
+            <ChartSection>
+              <AnimatePresence mode="wait">
+                {viewMode === 1 && (
+                  <ViewContainer
+                    key="view-1"
+                    // @ts-ignore
+                    variants={containerVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                  >
+                    <SingleChartCard>
+                      <div style={{position:'absolute', top: 12, left: 24, fontSize:'0.8rem', color: COLORS.textSub, display:'flex', gap:16, fontWeight: 600}}>
+                         <span style={{display:'flex', alignItems:'center', gap:4}}>
+                           <div style={{width:10, height:2, background:COLORS.target}}/> 목표 (12s)
+                         </span>
+                         <span style={{display:'flex', alignItems:'center', gap:4}}>
+                           <div style={{width:10, height:10, borderRadius:2, background:COLORS.primary}}/> 실적
+                         </span>
+                      </div>
+                      <div style={{flex:1, marginTop: 10}}>
+                        <MonitorChart data={data['A']} />
+                      </div>
+                    </SingleChartCard>
+
+                    <BigScreenCard>
+                       <video src={VIDEO_PATHS.A} autoPlay muted loop playsInline />
+                       <div className="live-indicator"><div className="dot"/>LIVE</div>
+                    </BigScreenCard>
+                  </ViewContainer>
+                )}
+
+                {viewMode === 2 && (
+                  <ViewContainer
+                    key="view-2"
+                    // @ts-ignore
+                    variants={containerVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                  >
+                     <MultiChartCard>
+                        <VideoBox $isLarge={true}>
+                          <video src={VIDEO_PATHS.A} autoPlay muted loop playsInline />
+                          <div className="live-badge">LIVE</div>
+                          <span className="label">발포 CAM-01</span>
+                        </VideoBox>
+                        <ChartWrapper>
+                           <ProcessLabel>발포</ProcessLabel>
+                           <div style={{flex:1, marginTop: 8}}>
+                              <MonitorChart data={data['A']} />
+                           </div>
+                        </ChartWrapper>
+                     </MultiChartCard>
+                     
+                     <MultiChartCard>
+                        <VideoBox $isLarge={true}>
+                          <video src={VIDEO_PATHS.B} autoPlay muted loop playsInline />
+                          <div className="live-badge">LIVE</div>
+                          <span className="label">총조립1 CAM-01</span>
+                        </VideoBox>
+                        <ChartWrapper>
+                           <ProcessLabel>총조립1</ProcessLabel>
+                           <div style={{flex:1, marginTop: 8}}>
+                              <MonitorChart data={data['B']} />
+                           </div>
+                        </ChartWrapper>
+                     </MultiChartCard>
+                  </ViewContainer>
+                )}
+
+                {viewMode === 3 && (
+                  <ViewContainer
+                    key="view-3"
+                    // @ts-ignore
+                    variants={containerVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                  >
+                     <MultiChartCard>
+                        <VideoBox $isLarge={false}>
+                          <video src={VIDEO_PATHS.A} autoPlay muted loop playsInline />
+                          <div className="live-badge">LIVE</div>
+                          <span className="label">발포 CAM-01</span>
+                        </VideoBox>
+                        <ChartWrapper>
+                           <ProcessLabel>발포</ProcessLabel>
+                           <div style={{flex:1, marginTop: 8}}>
+                              <MonitorChart data={data['A']} />
+                           </div>
+                        </ChartWrapper>
+                     </MultiChartCard>
+                     
+                     <MultiChartCard>
+                        <VideoBox $isLarge={false}>
+                          <video src={VIDEO_PATHS.B} autoPlay muted loop playsInline />
+                          <div className="live-badge">LIVE</div>
+                          <span className="label">총조립1 CAM-01</span>
+                        </VideoBox>
+                        <ChartWrapper>
+                           <ProcessLabel>총조립1</ProcessLabel>
+                           <div style={{flex:1, marginTop: 8}}>
+                              <MonitorChart data={data['B']} />
+                           </div>
+                        </ChartWrapper>
+                     </MultiChartCard>
+
+                     <MultiChartCard>
+                        <VideoBox $isLarge={false}>
+                          <video src={VIDEO_PATHS.C} autoPlay muted loop playsInline />
+                          <div className="live-badge">LIVE</div>
+                          <span className="label">총조립2 CAM-01</span>
+                        </VideoBox>
+                        <ChartWrapper>
+                           <ProcessLabel>총조립2</ProcessLabel>
+                           <div style={{flex:1, marginTop: 8}}>
+                              <MonitorChart data={data['C']} />
+                           </div>
+                        </ChartWrapper>
+                     </MultiChartCard>
+                  </ViewContainer>
+                )}
+              </AnimatePresence>
+            </ChartSection>
+
+            <InfoSection>
+              <KpiRow>
+                <KpiCard $borderColor={COLORS.borderBlue}>
+                  <div className="label">종합 가동률 (OEE)</div>
+                  <div className="value">89.4%</div>
+                  <div className="sub"><TrendingUp size={14} /> 목표 대비 +1.2%</div>
+                </KpiCard>
+                <KpiCard $borderColor={COLORS.borderGreen}>
+                  <div className="label">현재 생산량</div>
+                  <div className="value" style={{ color: COLORS.success }}>1,245</div>
+                  <div className="sub" style={{ color: COLORS.success, background: '#F0FDF4' }}>목표: 1,400</div>
+                </KpiCard>
+              </KpiRow>
+
+              {/* [수정된 부분] 뷰 모드에 따라 높이가 변하고 세로로 쌓이는 KPI 카드 */}
+              <WideKpiCard $height={viewMode === 1 ? 140 : viewMode === 2 ? 190 : 240}>
+                {viewMode === 1 ? (
+                  <TaktGrid $rows={1}>
+                    <TaktBox $isSingle={true}>
+                      <span className="line-name">평균 텍타임 (발포)</span>
+                      <div className="val-group">
+                        <span className="takt-val">{avgTakts.A}초</span>
+                        <span className="diff"><TrendingDown size={14}/> 0.2초 단축</span>
+                      </div>
+                    </TaktBox>
+                  </TaktGrid>
+                ) : (
+                  <TaktGrid $rows={viewMode}>
+                    <TaktBox $isSingle={false}>
+                      <span className="line-name">발포 (A)</span>
+                      <div className="val-group">
+                        <span className="takt-val">{avgTakts.A}s</span>
+                        <span className="diff"><TrendingDown size={12}/> -0.2</span>
+                      </div>
+                    </TaktBox>
+                    <TaktBox $isSingle={false}>
+                      <span className="line-name">총조립1 (B)</span>
+                      <div className="val-group">
+                        <span className="takt-val">{avgTakts.B}s</span>
+                        <span className="diff"><TrendingDown size={12}/> -0.1</span>
+                      </div>
+                    </TaktBox>
+                    {viewMode === 3 && (
+                      <TaktBox $isSingle={false}>
+                        <span className="line-name">총조립2 (C)</span>
+                        <div className="val-group">
+                          <span className="takt-val">{avgTakts.C}s</span>
+                          <span className="diff" style={{color: COLORS.alert, background:'#FEF2F2'}}><TrendingUp size={12}/> +0.5</span>
+                        </div>
+                      </TaktBox>
+                    )}
+                  </TaktGrid>
+                )}
+              </WideKpiCard>
+
+              <AlertSection>
+                 <div className="header">
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <div style={{padding:6, background:'#FEF2F2', borderRadius:8}}>
+                        <Bell color={COLORS.alert} size={18} />
+                      </div>
+                      실시간 알림 로그
+                    </div>
+                    <div className="view-all" onClick={() => setShowLogModal(true)}>
+                      <Maximize2 size={12} /> 전체 보기
+                    </div>
+                 </div>
+                 <div className="list-wrapper">
+                    {alertLogs.slice(0, 5).map((log, idx) => (
+                       <AlertItem key={idx} $type={log.type}>
+                          <div className="dot" />
+                          <div className="content">
+                             <span className="msg">{log.msg}</span>
+                             <span className="time">{log.time}</span>
+                          </div>
+                       </AlertItem>
+                    ))}
+                 </div>
+              </AlertSection>
+            </InfoSection>
+          </DashboardBody>
         </MainContent>
-      </PageLayout>
+
+        <AnimatePresence>
+          {showLogModal && (
+            <ModalOverlay
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLogModal(false)}
+            >
+              <ModalContent
+                // @ts-ignore
+                variants={modalVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <h2><FileText size={28} color={COLORS.primary} /> 전체 알림 및 로그 내역</h2>
+                  <button className="close-btn" onClick={() => setShowLogModal(false)}>
+                    <X size={24} />
+                  </button>
+                </div>
+                <div className="modal-body">
+                  <LogTable>
+                    <thead>
+                      <tr>
+                        <th style={{width: '12%'}}>시간</th>
+                        <th style={{width: '12%'}}>유형</th>
+                        <th>메시지 내용</th>
+                        <th style={{width: '12%'}}>상태</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {alertLogs.map((log, idx) => (
+                        <tr key={idx}>
+                          <td>{log.time}</td>
+                          <td>
+                            <span className={`type-badge ${log.type}`}>
+                              <div className="dot"/>
+                              {log.type === 'error' ? '오류' : log.type === 'warning' ? '경고' : '정보'}
+                            </span>
+                          </td>
+                          <td style={{fontWeight: 600}}>{log.msg}</td>
+                          <td>{log.type === 'success' ? '해결됨' : '확인 필요'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </LogTable>
+                </div>
+              </ModalContent>
+            </ModalOverlay>
+          )}
+        </AnimatePresence>
+
+      </LayoutContainer>
     </>
   );
 }
