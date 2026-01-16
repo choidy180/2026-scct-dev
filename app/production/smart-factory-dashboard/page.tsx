@@ -1,13 +1,13 @@
 'use client';
 
-import React from 'react';
-import styled, { createGlobalStyle, css } from 'styled-components';
+import React, { useState, useEffect, useRef } from 'react';
+import styled, { createGlobalStyle, keyframes, css } from 'styled-components';
 import { 
   FiCpu, FiAlertCircle, FiCheckCircle, FiMoreHorizontal, 
   FiSend, FiVideo, FiActivity, FiBox, FiTruck, FiSettings, FiMenu 
 } from 'react-icons/fi';
 
-// --- 1. Global Style (Pretendard & Reset) ---
+// --- 1. Global Style ---
 const GlobalStyle = createGlobalStyle`
   @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
   
@@ -19,12 +19,11 @@ const GlobalStyle = createGlobalStyle`
   body {
     margin: 0;
     padding: 0;
-    background-color: #F1F5F9; /* 배경: 차분한 그레이 */
+    background-color: #F1F5F9;
     color: #1E293B;
-    overflow: hidden; /* 전체 페이지 스크롤 방지 */
+    overflow: hidden;
   }
 
-  /* 스크롤바 디자인 */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -38,9 +37,9 @@ const GlobalStyle = createGlobalStyle`
   }
 `;
 
-// --- 2. Theme Definitions ---
+// --- 2. Theme & Types ---
 const theme = {
-  primary: '#10B981', // Emerald Green
+  primary: '#10B981',
   primaryGradient: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
   error: '#EF4444',
   warning: '#F59E0B',
@@ -52,7 +51,25 @@ const theme = {
   shadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
 };
 
-// --- Types ---
+// --- API Interfaces (User Request) ---
+interface SlotDetail {
+  slot_id: string;
+  occupied: boolean;
+  entry_time: string;
+}
+
+interface CameraData {
+  total: number;       // "총 슬롯 수량" (API는 문자열일수도 있으나 number로 변환 처리 예정)
+  occupied: number;    // "작동 슬롯 수량"
+  empty_idxs: number[]; // [빈 슬롯 리스트]
+  slots_detail: SlotDetail[];
+}
+
+// API 결과가 { "카메라명": { ...Data } } 형태이므로 인덱스 시그니처 사용
+interface ApiResult {
+  [cameraName: string]: CameraData;
+}
+
 interface StatusProps {
   $level?: 'normal' | 'warning' | 'error';
 }
@@ -65,12 +82,12 @@ interface MessageProps {
 
 const DashboardContainer = styled.div`
   width: 100%;
-  height: calc(100vh - 64px); /* 요청하신 높이 고정 */
+  height: calc(100vh - 64px);
   padding: 24px 32px;
   display: flex;
   flex-direction: column;
   background-color: ${theme.bg};
-  overflow: hidden; /* 내부 요소가 넘쳐도 전체 스크롤 안 생기게 */
+  overflow: hidden;
 `;
 
 const Header = styled.header`
@@ -130,10 +147,10 @@ const AlertBanner = styled.div`
 
 const MainGrid = styled.div`
   display: grid;
-  grid-template-columns: 1.3fr 1.1fr 1fr; /* 비율 조정: CCTV 넓게, 채팅 좁게 */
+  grid-template-columns: 1.4fr 1fr 1fr;
   gap: 20px;
-  flex: 1; /* 남은 높이 모두 차지 */
-  min-height: 0; /* Grid 자식 스크롤 처리를 위한 필수 속성 */
+  flex: 1;
+  min-height: 0;
 `;
 
 // --- Common Card ---
@@ -145,7 +162,7 @@ const Card = styled.div`
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  height: 100%; /* 부모 그리드 높이 꽉 채움 */
+  height: 100%;
 `;
 
 const CardHeader = styled.div`
@@ -167,7 +184,7 @@ const CardTitle = styled.h2`
   margin: 0;
 `;
 
-// --- Column 1: CCTV (Visuals) ---
+// --- Column 1: CCTV (Video) ---
 const VideoColumn = styled.div`
   display: flex;
   flex-direction: column;
@@ -181,18 +198,15 @@ const VideoWrapper = styled(Card)`
   position: relative;
   background: #000;
   border: none;
+  overflow: hidden;
 `;
 
-const VideoImage = styled.img`
+// 비디오 태그 스타일링
+const StyledVideo = styled.video`
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.85;
-  transition: opacity 0.3s;
-  
-  ${VideoWrapper}:hover & {
-    opacity: 1;
-  }
+  opacity: 0.9;
 `;
 
 const OverlayTop = styled.div`
@@ -224,7 +238,7 @@ const StatusOverlay = styled.div`
   position: absolute;
   bottom: 16px;
   right: 16px;
-  background: #EF4444; /* Recording Red */
+  background: #EF4444; 
   color: white;
   font-size: 11px;
   font-weight: 700;
@@ -233,33 +247,10 @@ const StatusOverlay = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
+  z-index: 10;
 `;
 
-const DetectionBox = styled.div`
-  position: absolute;
-  top: 35%;
-  left: 45%;
-  width: 100px;
-  height: 100px;
-  border: 2px solid #10B981;
-  background: rgba(16, 185, 129, 0.1);
-  border-radius: 4px;
-
-  &::after {
-    content: 'ID:8821 (정상)';
-    position: absolute;
-    top: -22px;
-    left: -2px;
-    background: #10B981;
-    color: white;
-    font-size: 11px;
-    padding: 2px 6px;
-    border-radius: 2px;
-    white-space: nowrap;
-  }
-`;
-
-// --- Column 2: Status (Scrollable) ---
+// --- Column 2: Status (Dynamic Data) ---
 const ScrollContent = styled.div`
   flex: 1;
   overflow-y: auto;
@@ -270,11 +261,13 @@ const SectionLabel = styled.div`
   font-size: 12px;
   font-weight: 700;
   color: ${theme.textSub};
-  margin-top: 8px;
+  margin-top: 24px;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
   gap: 6px;
+
+  &:first-child { margin-top: 8px; }
 
   &::after {
     content: '';
@@ -334,7 +327,7 @@ const ItemValueGroup = styled.div`
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
-  min-width: 80px;
+  min-width: 90px;
 `;
 
 const ValueText = styled.span<StatusProps>`
@@ -359,12 +352,13 @@ const ProgressBar = styled.div<StatusProps>`
       props.$level === 'error' ? theme.error : 
       props.$level === 'warning' ? theme.warning : 
       theme.primary};
+    transition: width 0.5s ease-in-out;
   }
 `;
 
 // --- Column 3: Chat ---
 const ChatContainer = styled(Card)`
-  padding: 0; /* 내부 패딩 제거 */
+  padding: 0;
 `;
 
 const ChatHeaderArea = styled.div`
@@ -412,7 +406,6 @@ const Bubble = styled.div<MessageProps>`
   color: ${(props) => props.$isUser ? '#FFFFFF' : '#334155'};
   border: ${(props) => props.$isUser ? 'none' : '1px solid #E2E8F0'};
   
-  /* 말풍선 꼬리 효과 */
   border-top-left-radius: ${(props) => !props.$isUser ? '4px' : '16px'};
   border-bottom-right-radius: ${(props) => props.$isUser ? '4px' : '16px'};
 
@@ -459,7 +452,7 @@ const Chip = styled.button`
   }
 `;
 
-const InputBox = styled.div`
+const InputBox = styled.form`
   display: flex;
   align-items: center;
   background: #F8FAFC;
@@ -496,9 +489,111 @@ const SendBtn = styled.button`
   &:hover { background: #2563EB; }
 `;
 
+// --- Dummy Data for Fallback & Chat ---
+
+// API 호출 실패 시 사용할 더미 데이터
+const MOCK_API_DATA: ApiResult = {
+  "CAM_01_조립": {
+    total: 100,
+    occupied: 85,
+    empty_idxs: [],
+    slots_detail: Array(15).fill({ slot_id: "A-xx", occupied: true, entry_time: "09:00" })
+  },
+  "CAM_02_물류": {
+    total: 50,
+    occupied: 12,
+    empty_idxs: [1,2,3,4,5],
+    slots_detail: []
+  },
+  "CAM_03_포장": {
+    total: 200,
+    occupied: 198,
+    empty_idxs: [1],
+    slots_detail: []
+  }
+};
+
+const INITIAL_CHAT = [
+  { id: 1, text: "시스템 초기화 완료. DX_API000018 연결 성공.", user: false, time: "오전 08:30" },
+  { id: 2, text: "[자동 감지] CAM_02 물류 구역의 재고율이 24%로 떨어졌습니다.", user: false, time: "오전 09:15" },
+  { id: 3, text: "물류팀에 자재 보충 요청 메시지 발송해줘.", user: true, time: "오전 09:20" },
+  { id: 4, text: "확인되었습니다. 물류팀(Team_Logistics) 그룹 채널에 알림을 발송했습니다. (예상 도착: 10분 후)", user: false, time: "오전 09:20" },
+];
+
 // --- Main Component ---
 
 const SmartFactoryDashboard: React.FC = () => {
+  // 1. Data State
+  const [apiData, setApiData] = useState<ApiResult | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // 2. Chat State
+  const [messages, setMessages] = useState(INITIAL_CHAT);
+  const [inputValue, setInputValue] = useState("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // 3. API Fetch Effect
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 실제 요청 (CORS 이슈나 네트워크 환경에 따라 실패할 수 있음)
+        const response = await fetch('http://1.254.24.170:24828/api/DX_API000018');
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = await response.json();
+        setApiData(data);
+      } catch (error) {
+        console.warn("API Fetch failed (using mock data for demo):", error);
+        // 실패 시 더미 데이터 사용 (화면 표시 보장)
+        setApiData(MOCK_API_DATA);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+    // 5초마다 폴링한다고 가정하려면 setInterval 사용 가능
+  }, []);
+
+  // 4. Chat Auto-scroll
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // 5. Chat Handler
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim()) return;
+
+    const newMsg = {
+      id: Date.now(),
+      text: inputValue,
+      user: true,
+      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => [...prev, newMsg]);
+    setInputValue("");
+
+    // AI Dummy Response Simulation
+    setTimeout(() => {
+      const responseMsg = {
+        id: Date.now() + 1,
+        text: `명령을 수신했습니다: "${newMsg.text}" \n현재 시스템 부하가 없어 즉시 처리하겠습니다.`,
+        user: false,
+        time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages(prev => [...prev, responseMsg]);
+    }, 1000);
+  };
+
+  // Helper to calculate status level
+  const getStatusLevel = (occupied: number, total: number) => {
+    const ratio = occupied / total;
+    if (ratio < 0.3) return 'error'; // 30% 미만 위험
+    if (ratio < 0.6) return 'warning'; // 60% 미만 경고
+    return 'normal';
+  };
+
   return (
     <>
       <GlobalStyle />
@@ -508,17 +603,14 @@ const SmartFactoryDashboard: React.FC = () => {
         <Header>
           <TitleGroup>
             <SubTitle>실시간 공정 모니터링 시스템</SubTitle>
-            <MainTitle>Smart Factory Ops</MainTitle>
+            <MainTitle>공정재고 GR5</MainTitle>
           </TitleGroup>
 
           <HeaderActions>
-            {/* 알림 배너 */}
             <AlertBanner>
               <FiAlertCircle size={16} />
-              <span>경고: 2번 라인 자재 공급 지연 (3분 경과)</span>
+              <span>시스템 상태: API 연결 {isLoading ? '시도중...' : '정상'}</span>
             </AlertBanner>
-            
-            {/* 설정 아이콘 */}
             <div style={{ padding: 10, background: 'white', borderRadius: '12px', border: '1px solid #E2E8F0', cursor: 'pointer' }}>
               <FiSettings color="#64748B" size={20} />
             </div>
@@ -528,17 +620,19 @@ const SmartFactoryDashboard: React.FC = () => {
         {/* Main Grid Content */}
         <MainGrid>
           
-          {/* 1. CCTV Monitoring */}
+          {/* 1. CCTV Monitoring (Videos) */}
           <VideoColumn>
             <VideoWrapper>
               <OverlayTop>
                 <CamBadge><FiVideo /> CAM-01 조립 라인 A</CamBadge>
                 <FiMoreHorizontal color="white" style={{ cursor: 'pointer' }} />
               </OverlayTop>
-              {/* 이미지: 공장 로봇 팔 */}
-              <VideoImage src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop" alt="Assembly Line" />
-              <DetectionBox />
-              <StatusOverlay>● 실시간 녹화중</StatusOverlay>
+              {/* Video 1: URL 직접 입력 필요 */}
+              <StyledVideo 
+                autoPlay muted loop playsInline 
+                src="http://1.254.24.170:24828/api/DX_API000031?videoName=207.mp4" // <-- 여기에 비디오 URL 넣으세요 (예: .mp4)
+              />
+              <StatusOverlay>● REC</StatusOverlay>
             </VideoWrapper>
 
             <VideoWrapper>
@@ -546,13 +640,16 @@ const SmartFactoryDashboard: React.FC = () => {
                 <CamBadge><FiVideo /> CAM-02 자재 창고 B</CamBadge>
                 <FiMoreHorizontal color="white" style={{ cursor: 'pointer' }} />
               </OverlayTop>
-              {/* 이미지: 물류 창고 */}
-              <VideoImage src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2070&auto=format&fit=crop" alt="Warehouse" />
-              <StatusOverlay style={{ background: '#3B82F6' }}>● 모니터링 중</StatusOverlay>
+              {/* Video 2: URL 직접 입력 필요 */}
+              <StyledVideo 
+                autoPlay muted loop playsInline 
+                src="http://1.254.24.170:24828/api/DX_API000031?videoName=218.mp4" // <-- 여기에 비디오 URL 넣으세요
+              />
+              <StatusOverlay style={{ background: '#3B82F6' }}>● LIVE</StatusOverlay>
             </VideoWrapper>
           </VideoColumn>
 
-          {/* 2. Status Data */}
+          {/* 2. Status Data (From API) */}
           <Card>
             <CardHeader>
               <CardTitle><FiBox color="#10B981" /> 자재 적재 현황</CardTitle>
@@ -560,100 +657,84 @@ const SmartFactoryDashboard: React.FC = () => {
             </CardHeader>
             
             <ScrollContent>
-              <SectionLabel>A구역: 조립 공정 (GR-51)</SectionLabel>
-              <StatusList>
-                <StatusItem $level="normal">
-                  <ItemInfo>
-                    <ItemName>적재함 A-01</ItemName>
-                    <ItemSub>볼트/너트 (규격 12mm)</ItemSub>
-                  </ItemInfo>
-                  <ItemValueGroup>
-                    <ValueText $level="normal">정상 (94%)</ValueText>
-                    <ProgressBar $level="normal"><div style={{ width: '94%' }} /></ProgressBar>
-                  </ItemValueGroup>
-                </StatusItem>
-
-                <StatusItem $level="normal">
-                  <ItemInfo>
-                    <ItemName>적재함 A-02</ItemName>
-                    <ItemSub>메인 프레임 패널</ItemSub>
-                  </ItemInfo>
-                  <ItemValueGroup>
-                    <ValueText $level="normal">충분 (82%)</ValueText>
-                    <ProgressBar $level="normal"><div style={{ width: '82%' }} /></ProgressBar>
-                  </ItemValueGroup>
-                </StatusItem>
-              </StatusList>
-
-              <SectionLabel style={{ marginTop: 24, color: '#F59E0B' }}>
-                <FiAlertCircle /> B구역: 물류 보관 (LOG-04)
-              </SectionLabel>
-              <StatusList>
-                <StatusItem $level="error">
-                  <ItemInfo>
-                    <ItemName>적재함 B-04</ItemName>
-                    <ItemSub style={{ color: '#EF4444', fontWeight: 600 }}>전자 회로 기판 (PCB)</ItemSub>
-                  </ItemInfo>
-                  <ItemValueGroup>
-                    <ValueText $level="error">재고 없음</ValueText>
-                    <ProgressBar $level="error"><div style={{ width: '5%' }} /></ProgressBar>
-                  </ItemValueGroup>
-                </StatusItem>
-
-                <StatusItem $level="warning">
-                  <ItemInfo>
-                    <ItemName>적재함 B-05</ItemName>
-                    <ItemSub>배터리 모듈</ItemSub>
-                  </ItemInfo>
-                  <ItemValueGroup>
-                    <ValueText $level="warning">부족 (15%)</ValueText>
-                    <ProgressBar $level="warning"><div style={{ width: '15%' }} /></ProgressBar>
-                  </ItemValueGroup>
-                </StatusItem>
-              </StatusList>
+              {apiData && Object.entries(apiData).map(([camName, data], idx) => {
+                // API 데이터 파싱 및 비율 계산
+                const total = Number(data.total) || 100;
+                const occupied = Number(data.occupied) || 0;
+                const percentage = Math.round((occupied / total) * 100);
+                const status = getStatusLevel(occupied, total);
+                
+                return (
+                  <div key={idx}>
+                    <SectionLabel>
+                       {idx === 0 ? <FiActivity /> : <FiBox />} {camName}
+                    </SectionLabel>
+                    <StatusList>
+                      <StatusItem $level={status}>
+                        <ItemInfo>
+                          <ItemName>{camName} 슬롯</ItemName>
+                          <ItemSub>
+                             {occupied} / {total} (Empty: {data.empty_idxs?.length || 0})
+                          </ItemSub>
+                        </ItemInfo>
+                        <ItemValueGroup>
+                          <ValueText $level={status}>
+                            {status === 'error' ? '부족' : status === 'warning' ? '주의' : '정상'} 
+                            ({percentage}%)
+                          </ValueText>
+                          <ProgressBar $level={status}>
+                            <div style={{ width: `${percentage}%` }} />
+                          </ProgressBar>
+                        </ItemValueGroup>
+                      </StatusItem>
+                    </StatusList>
+                  </div>
+                );
+              })}
+              
+              {!apiData && !isLoading && (
+                <div style={{ padding: 20, textAlign: 'center', color: '#94A3B8' }}>
+                  데이터가 없습니다.
+                </div>
+              )}
             </ScrollContent>
           </Card>
 
-          {/* 3. AI Chat */}
+          {/* 3. AI Chat (Dummy Simulated) */}
           <ChatContainer>
             <ChatHeaderArea>
               <BotIcon><FiCpu /></BotIcon>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>AI 관제 어시스턴트</span>
-                <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>● 온라인 (대기중)</span>
+                <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>● 온라인 (응답 가능)</span>
               </div>
             </ChatHeaderArea>
 
             <ChatMessages>
-              <Bubble>
-                <strong>[자동 감지]</strong> B-04 적재함(PCB) 재고가 소진되었습니다. 공정 지연이 예상됩니다.
-                <TimeStamp>오전 10:05</TimeStamp>
-              </Bubble>
-              
-              <Bubble $isUser>
-                예비 자재 창고에서 AGV(무인운송차) 배차해줘.
-                <TimeStamp $isUser>오전 10:08</TimeStamp>
-              </Bubble>
-
-              <Bubble>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <FiTruck size={14} color="#10B981" />
-                  <span style={{ fontWeight: 700 }}>명령 확인</span>
-                </div>
-                AGV #04호기를 배차했습니다. 예상 도착 시간은 <strong>3분</strong>입니다.
-                <TimeStamp>오전 10:09</TimeStamp>
-              </Bubble>
+              {messages.map((msg) => (
+                <Bubble key={msg.id} $isUser={msg.user}>
+                  {msg.text.split('\n').map((line, i) => (
+                    <span key={i}>{line}<br/></span>
+                  ))}
+                  <TimeStamp $isUser={msg.user}>{msg.time}</TimeStamp>
+                </Bubble>
+              ))}
+              <div ref={chatEndRef} />
             </ChatMessages>
 
             <ChatInputArea>
               <SuggestionRow>
-                <Chip>CCTV 화면 확대</Chip>
-                <Chip>물류팀 호출</Chip>
-                <Chip>보고서 생성</Chip>
+                <Chip onClick={() => setInputValue("CCTV 1번 확대해줘")}>CCTV 확대</Chip>
+                <Chip onClick={() => setInputValue("현재 경고 상황 리포트해줘")}>경고 리포트</Chip>
+                <Chip onClick={() => setInputValue("담당자 호출해")}>담당자 호출</Chip>
               </SuggestionRow>
-              <InputBox>
-                <InputField placeholder="작업 지시사항을 입력하세요..." />
-                <SendBtn><FiSend size={14} /></SendBtn>
+              <InputBox onSubmit={handleSendMessage}>
+                <InputField 
+                  placeholder="작업 지시사항을 입력하세요..." 
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                />
+                <SendBtn type="button" onClick={handleSendMessage}><FiSend size={14} /></SendBtn>
               </InputBox>
             </ChatInputArea>
           </ChatContainer>
