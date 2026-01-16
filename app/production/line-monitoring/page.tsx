@@ -706,8 +706,8 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
   const matchedData = apiData.find(item => parseInt(item.대차번호) === activeNumber);
 
   const displayImage = matchedData?.FILEPATH1 || "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
-  const displayValue1 = matchedData?.AI_LABEL ? matchedData.AI_LABEL.toFixed(4) : "0.0000";
-  const displayValue2 = matchedData?.AI_LABEL ? matchedData.AI_LABEL.toFixed(4) : "0.0000";
+  const displayValue1 = matchedData?.AI_LABEL ? Number(matchedData.AI_LABEL).toFixed(4) : "0.0000";
+  const displayValue2 = matchedData?.AI_LABEL ? Number(matchedData.AI_LABEL).toFixed(4) : "0.0000";
 
   const hoverMatchedData = hoveredInfo 
     ? apiData.find(item => parseInt(item.대차번호) === parseInt(hoveredInfo.name.replace("GR", ""), 10))

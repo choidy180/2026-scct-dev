@@ -592,7 +592,7 @@ export default function ProcessDashboard() {
       });
     };
     update();
-    const interval = setInterval(update, 2000);
+    // const interval = setInterval(update, 2000);
 
     const lines = MOCK_CSV_DATA.trim().split('\n').slice(1);
     const logs = lines.map(line => {
@@ -601,7 +601,7 @@ export default function ProcessDashboard() {
     });
     setAlertLogs(logs);
 
-    return () => clearInterval(interval);
+    // return () => clearInterval(interval);
   }, []);
 
   const avgTakts = useMemo(() => {

@@ -1,11 +1,11 @@
 'use client';
 
 import GmtLoadingScreen from '@/components/loading/gmt-loading';
-import React from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 
 // =============================================================================
-// 0. GLOBAL STYLE & THEME (Clean White & Intuitive)
+// 0. GLOBAL STYLE & THEME
 // =============================================================================
 
 const GlobalStyle = createGlobalStyle`
@@ -16,20 +16,19 @@ const GlobalStyle = createGlobalStyle`
     padding: 0;
     box-sizing: border-box;
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-    background-color: #F5F7FA; /* 더 밝고 산뜻한 쿨 그레이 */
+    background-color: #F5F7FA;
     color: #1A202C;
     overflow: hidden;
   }
   * { box-sizing: border-box; }
   
-  /* 커스텀 스크롤바 */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
 `;
 
 // =============================================================================
-// 1. DATA DEFINITIONS
+// 1. DATA DEFINITIONS (LAYOUT CONSTANTS)
 // =============================================================================
 
 const JIG_1_L = ['GJ01', 'GJ03', 'GJ05', 'GJ07', 'GJ09', 'GJ11', 'GJ13', 'GJ15', 'GJ17'];
@@ -44,27 +43,24 @@ const GF_GRID = [
 
 const GA_TOP_1 = ['10','09','08','07','06','05','04','03','02','01'];
 const GA_TOP_2 = ['20','19','18','17','16','15','14','13','12','11'];
-const GA_TOP_VALS: Record<string, string> = { '09':'5606', '08':'5606', '07':'5606', '06':'5606', '05':'1919', '19':'5606', '18':'5606', '17':'5606', '16':'5606', '15':'5606', '14':'5606' };
 
 const GA_ROWS = [
-  { l:['30','29','28'], r:['27','26','25','24','23','22','21'], v:{'25':'5603','24':'5603','23':'5603','22':'7903'} },
-  { l:['40','39','38'], r:['37','36','35','34','33','32','31'], v:{} },
-  { l:['50','49','48'], r:['47','46','45','44','43','42','41'], v:{} },
-  { l:['60','59','58'], r:['57','56','55','54','53','52','51'], v:{'54':'5603','53':'5603','52':'5603'} },
-  { l:['70','69','68'], r:['67','66','65','64','63','62','61'], v:{'64':'5603','63':'5603','62':'1924'} }
+  { l:['30','29','28'], r:['27','26','25','24','23','22','21'] },
+  { l:['40','39','38'], r:['37','36','35','34','33','32','31'] },
+  { l:['50','49','48'], r:['47','46','45','44','43','42','41'] },
+  { l:['60','59','58'], r:['57','56','55','54','53','52','51'] },
+  { l:['70','69','68'], r:['67','66','65','64','63','62','61'] }
 ];
 
 const GB_34_L = ['34','33','32'];
 const GB_34_R = ['31','30','29','28','27','26','25','24','23','22','21','20','19','18'];
 const GB_17_L = ['17','16','15'];
 const GB_17_R = ['14','13','12','11','10','09','08','07','06','05','04','03','02','01'];
-const GB_VALS: Record<string, string> = { '28':'3803', '26':'6917', '25':'6917', '24':'6917', '23':'6917', '11':'3803', '09':'6917', '08':'6917', '07':'6917', '06':'6917' };
 
 const GC_L_TOP = ['26','25','24','23','22','21','20','19','18'];
 const GC_L_BTM = ['13','12','11','10','09','08','07','06','05'];
 const GC_R_TOP = ['17','16','15','14'];
 const GC_R_BTM = ['04','03','02','01'];
-const GC_VALS: Record<string, string> = { '11':'4709', '05':'5501', '15':'7901', '04':'6906', '02':'6726' };
 
 const GE_L = ['28'];
 const GE_BODY = [{l:'27',r:'26'}, {l:'25',r:'24'}, {l:'23',r:'22'}];
@@ -80,27 +76,10 @@ const GD_GRID = [
   ['27','26','25'],['24','23','22'],['21','20','19'],['18','17','16'],['15','14','13'],['12','11','10'],['09','08','07'],['06','05','04'],['03','02','01']
 ];
 
-const INVENTORY = [
-  { code: 'ADC30047501', qty: 318 }, { code: 'AGF04075606', qty: 182 }, { code: 'AGF04075603', qty: 180 },
-  { code: 'ADC30006917', qty: 154 }, { code: 'ACQ30707903', qty: 93 }, { code: 'ACQ30707901', qty: 62 },
-  { code: 'ADC30021002', qty: 30 }, { code: 'ADC30003803', qty: 18 }, { code: 'ADC75566732', qty: 5 },
-  { code: 'ADC75566726', qty: 4 }, { code: 'ADC30035501', qty: 3 }, { code: 'ADC30024709', qty: 2 }
-];
-
-const STATS = [
-  { name: 'GA', total: 70, used: 23 },
-  { name: 'GB', total: 34, used: 8 },
-  { name: 'GC', total: 26, used: 6 },
-  { name: 'GD', total: 50, used: 4 },
-  { name: 'GE', total: 28, used: 18 },
-  { name: 'GF', total: 24, used: 0 },
-];
-
 // =============================================================================
-// 2. STYLED COMPONENTS (Clean & Intuitive)
+// 2. STYLED COMPONENTS
 // =============================================================================
 
-// *** Widths (FHD fit) ***
 const W_JIG = '58px';
 const W_NARROW = '48px';
 const W_WIDE = '96px';
@@ -115,7 +94,6 @@ const Layout = styled.div`
   background-color: #F5F7FA;
 `;
 
-// --- SIDE PANELS (White Theme Cards) ---
 const Panel = styled.div`
   background: white;
   border-radius: 12px;
@@ -140,7 +118,6 @@ const Header = styled.div`
   align-items: center;
 `;
 
-// --- CENTER MAP (No Box, Just Layout) ---
 const MapCanvas = styled.div`
   flex: 1;
   position: relative;
@@ -154,7 +131,6 @@ const MapCanvas = styled.div`
 const MapContent = styled.div`
   display: flex;
   gap: 40px;
-  /* Scaled slightly to ensure no scroll on smaller FHD headers/footers */
   transform-origin: top center;
   @media (max-height: 1000px) { transform: scale(0.95); }
 `;
@@ -173,12 +149,10 @@ const ColRight = styled.div`
   padding-top: 5px;
 `;
 
-// --- GRID STYLES (Border Collapse Logic) ---
 const GridContainer = styled.div`
   display: flex;
   flex-direction: column;
   width: fit-content;
-  /* Outer Border (Top/Left) */
   border-top: 1px solid #A0AEC0;
   border-left: 1px solid #A0AEC0;
   background-color: white;
@@ -194,10 +168,14 @@ const CellBox = styled.div<{ w: string }>`
   height: ${CELL_HEIGHT};
   display: flex;
   flex-direction: column;
-  /* Inner Border (Bottom/Right) */
   border-right: 1px solid #A0AEC0;
   border-bottom: 1px solid #A0AEC0;
   background-color: white;
+  position: relative;
+  &:hover {
+    z-index: 10;
+    box-shadow: inset 0 0 0 2px #4299e1;
+  }
 `;
 
 const CellHeader = styled.div`
@@ -209,11 +187,10 @@ const CellHeader = styled.div`
   font-size: 10px;
   font-weight: 700;
   color: #141414;
-  background-color: #EDF2F7; /* Light Gray Header Background */
+  background-color: #EDF2F7;
   border-bottom: 1px solid #E2E8F0;
 `;
 
-// FIX: Used transient prop $active to prevent prop leakage to DOM
 const CellValue = styled.div<{ $active?: boolean }>`
   flex: 1;
   width: 100%;
@@ -222,10 +199,10 @@ const CellValue = styled.div<{ $active?: boolean }>`
   justify-content: center;
   font-size: 11px;
   font-weight: 800;
-  /* Green for Active, White for Empty */
   background-color: ${props => props.$active ? '#48BB78' : 'white'};
   color: ${props => props.$active ? 'white' : 'transparent'};
   transition: background-color 0.2s;
+  cursor: pointer;
 `;
 
 const SectionTitle = styled.div`
@@ -236,7 +213,6 @@ const SectionTitle = styled.div`
   margin-left: 2px;
 `;
 
-// --- INTERACTIVE CARDS (Sidebar Items) ---
 const StatusCard = styled.div`
   padding: 12px 15px;
   border-bottom: 1px solid #F7FAFC;
@@ -281,7 +257,7 @@ const InvCard = styled.div`
   transition: background 0.2s;
   
   &:hover {
-    background-color: #F0FFF4; /* Light Green Tint on Hover */
+    background-color: #F0FFF4;
   }
 `;
 
@@ -300,39 +276,268 @@ const InvQty = styled.div`
   border-radius: 10px;
 `;
 
+const TooltipBox = styled.div`
+  position: fixed;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 12px;
+  min-width: 200px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  backdrop-filter: blur(4px);
+  
+  .tooltip-header {
+    font-size: 14px;
+    font-weight: 800;
+    color: #2D3748;
+    border-bottom: 1px solid #E2E8F0;
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    
+    .label { color: #718096; font-weight: 500; }
+    .value { color: #2D3748; font-weight: 700; }
+  }
+
+  .status-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    &.occupied { background: #C6F6D5; color: #22543D; }
+    &.empty { background: #EDF2F7; color: #718096; }
+  }
+`;
+
 // =============================================================================
-// 3. COMPONENTS
+// 3. TYPES
 // =============================================================================
 
-const Cell = ({ id, val, w }: any) => (
-  <CellBox w={w}>
-    <CellHeader>{id}</CellHeader>
-    <CellValue $active={!!val}>{val}</CellValue>
-  </CellBox>
-);
+interface ApiSlotDetail {
+  slot_id: number;
+  occupied: boolean;
+  loc_code: string;
+  label001: string | null;
+  vehicle_id: string | null;
+  entry_time: string | null;
+}
 
-const JigStrip = ({ ids }: { ids: string[] }) => (
-  <Row>
-    {ids.map(id => <Cell key={id} id={id} w={W_JIG} />)}
-  </Row>
-);
+interface ApiZoneData {
+  total: number;
+  occupied: number;
+  slots_detail: ApiSlotDetail[];
+}
+
+type ApiResponse = Record<string, ApiZoneData>;
+
+interface SlotDataMap {
+  [locCode: string]: ApiSlotDetail;
+}
+
+interface InventoryItem {
+  code: string;
+  qty: number;
+}
+
+interface ZoneStat {
+  name: string;
+  total: number;
+  used: number;
+}
+
+interface TooltipState {
+  x: number;
+  y: number;
+  data: ApiSlotDetail | null;
+  locCode: string;
+}
+
+// =============================================================================
+// 4. COMPONENTS
+// =============================================================================
 
 export default function FinalDashboard() {
-  const totalCap = STATS.reduce((a,b)=>a+b.total,0);
-  const totalUsed = STATS.reduce((a,b)=>a+b.used,0);
-  const totalPercent = Math.round((totalUsed / totalCap) * 100);
+  const [loading, setLoading] = useState(true);
+  const [mapData, setMapData] = useState<SlotDataMap>({});
+  const [hoverInfo, setHoverInfo] = useState<TooltipState | null>(null);
+  
+  // 데이터 Fetching
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch('http://1.254.24.170:24828/api/DX_API000014');
+        const json: ApiResponse = await res.json();
+        
+        const newMap: SlotDataMap = {};
+        
+        Object.values(json).forEach((zone) => {
+          if (zone.slots_detail) {
+            zone.slots_detail.forEach((slot) => {
+              if (slot.loc_code) {
+                newMap[slot.loc_code] = slot;
+              }
+            });
+          }
+        });
+
+        setMapData(newMap);
+      } catch (error) {
+        console.error("API Fetch Error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 통계 계산
+  const stats = useMemo<ZoneStat[]>(() => {
+    const zones = ['GA', 'GB', 'GC', 'GD', 'GE', 'GF'];
+    const result = zones.map(zoneName => ({ name: zoneName, total: 0, used: 0 }));
+    
+    Object.values(mapData).forEach(slot => {
+      const prefix = slot.loc_code.substring(0, 2); 
+      const zoneIdx = zones.indexOf(prefix);
+      if (zoneIdx !== -1) {
+        result[zoneIdx].total += 1;
+        if (slot.occupied) {
+          result[zoneIdx].used += 1;
+        }
+      }
+    });
+
+    return result;
+  }, [mapData]);
+
+  // 재고 집계
+  const inventory = useMemo<InventoryItem[]>(() => {
+    const invMap: Record<string, number> = {};
+    Object.values(mapData).forEach(slot => {
+      if (slot.occupied && slot.label001) {
+        const code = slot.label001;
+        invMap[code] = (invMap[code] || 0) + 1;
+      }
+    });
+    return Object.entries(invMap)
+      .map(([code, qty]) => ({ code, qty }))
+      .sort((a, b) => b.qty - a.qty);
+  }, [mapData]);
+
+  const totalCap = stats.reduce((a, b) => a + b.total, 0);
+  const totalUsed = stats.reduce((a, b) => a + b.used, 0);
+  const totalPercent = totalCap > 0 ? Math.round((totalUsed / totalCap) * 100) : 0;
+
+  // 날짜 포맷팅
+  const formatTime = (isoString: string | null) => {
+    if (!isoString) return '-';
+    try {
+      const date = new Date(isoString);
+      return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
+    } catch {
+      return isoString;
+    }
+  };
+
+  // Cell 컴포넌트
+  const Cell = ({ id, w }: { id: string, w: string }) => {
+    const slot = mapData[id];
+    const isOccupied = slot?.occupied;
+    
+    // [수정] 적재됨 && ID 존재 시 뒤 4자리, ID 없으면 0000
+    const displayVal = isOccupied 
+      ? (slot?.label001 ? slot.label001.slice(-4) : '0000') 
+      : '';
+
+    return (
+      <CellBox 
+        w={w}
+        onMouseEnter={(e) => {
+          setHoverInfo({
+            x: e.clientX,
+            y: e.clientY,
+            data: slot || null,
+            locCode: id
+          });
+        }}
+        onMouseLeave={() => {
+          setHoverInfo(null);
+        }}
+      >
+        <CellHeader>{id}</CellHeader>
+        <CellValue $active={isOccupied}>
+          {displayVal}
+        </CellValue>
+      </CellBox>
+    );
+  };
+
+  const JigStrip = ({ ids }: { ids: string[] }) => (
+    <Row>
+      {ids.map(id => <Cell key={id} id={id} w={W_JIG} />)}
+    </Row>
+  );
 
   return (
     <>
       <GlobalStyle />
+      {loading && <GmtLoadingScreen />}
+      
+      {/* 툴팁 UI */}
+      {hoverInfo && (
+        <TooltipBox style={{ top: hoverInfo.y + 15, left: hoverInfo.x + 15 }}>
+          <div className="tooltip-header">
+            <span>{hoverInfo.locCode}</span>
+            <span className={`status-badge ${hoverInfo.data?.occupied ? 'occupied' : 'empty'}`}>
+              {hoverInfo.data?.occupied ? '적재됨' : '빈 공간'}
+            </span>
+          </div>
+          {hoverInfo.data?.occupied ? (
+            <>
+              <div className="tooltip-row">
+                <span className="label">Label ID</span>
+                {/* [수정] ID 없으면 0000 표시 */}
+                <span className="value">{hoverInfo.data.label001 || '0000'}</span>
+              </div>
+              <div className="tooltip-row">
+                <span className="label">Vehicle</span>
+                <span className="value">{hoverInfo.data.vehicle_id || '-'}</span>
+              </div>
+              <div className="tooltip-row">
+                <span className="label">입고 시간</span>
+                <span className="value">{formatTime(hoverInfo.data.entry_time)}</span>
+              </div>
+            </>
+          ) : (
+            <div className="tooltip-row" style={{justifyContent: 'center', color: '#A0AEC0', padding: '10px 0'}}>
+              데이터 없음
+            </div>
+          )}
+        </TooltipBox>
+      )}
+
       <Layout>
-        
         {/* LEFT: STATUS */}
         <LeftPanel>
           <Header>구역별 가동 현황</Header>
           <div style={{overflowY:'auto', flex:1, padding:'5px 0'}}>
-            {STATS.map(s => {
-              const pct = Math.round((s.used / s.total) * 100);
+            {stats.map(s => {
+              const pct = s.total > 0 ? Math.round((s.used / s.total) * 100) : 0;
               return (
                 <StatusCard key={s.name}>
                   <StatLabelRow>
@@ -350,7 +555,9 @@ export default function FinalDashboard() {
             <div style={{fontSize:'12px', color:'#718096', marginBottom:'5px'}}>전체 가동률</div>
             <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
               <div style={{fontSize:'24px', fontWeight:'800', color:'#2D3748'}}>{totalPercent}%</div>
-              <div style={{fontSize:'13px', fontWeight:'600', color:'#48BB78'}}>정상 운영 중</div>
+              <div style={{fontSize:'13px', fontWeight:'600', color:'#48BB78'}}>
+                {totalPercent > 90 ? '혼잡' : '정상 운영 중'}
+              </div>
             </div>
           </div>
         </LeftPanel>
@@ -358,6 +565,7 @@ export default function FinalDashboard() {
         {/* CENTER: MAP */}
         <MapCanvas>
           <MapContent>
+            {/* ... 기존 레이아웃 유지 ... */}
             
             {/* === LEFT COLUMN === */}
             <ColLeft>
@@ -374,8 +582,8 @@ export default function FinalDashboard() {
                     <JigStrip ids={JIG_1_R} />
                     <JigStrip ids={JIG_1_R} />
                   </GridContainer>
-              </div>
-              <div style={{marginTop:'10px', marginLeft:'60px'}}>
+                </div>
+                <div style={{marginTop:'10px', marginLeft:'60px'}}>
                   <GridContainer>
                     <JigStrip ids={JIG_BTM} />
                     <JigStrip ids={JIG_BTM} />
@@ -388,12 +596,12 @@ export default function FinalDashboard() {
                 <SectionTitle>GA</SectionTitle>
                 <GridContainer>
                   <Row>
-                      {GA_TOP_1.slice(0,3).map((n) => <Cell key={n} id={`GA${n}`} w={W_NARROW} val={GA_TOP_VALS[n]} />)}
-                      {GA_TOP_1.slice(3).map((n) => <Cell key={n} id={`GA${n}`} w={W_WIDE} val={GA_TOP_VALS[n]} />)}
+                      {GA_TOP_1.slice(0,3).map((n) => <Cell key={n} id={`GA${n}`} w={W_NARROW} />)}
+                      {GA_TOP_1.slice(3).map((n) => <Cell key={n} id={`GA${n}`} w={W_WIDE} />)}
                   </Row>
                   <Row>
-                      {GA_TOP_2.slice(0,3).map((n) => <Cell key={n} id={`GA${n}`} w={W_NARROW} val={GA_TOP_VALS[n]} />)}
-                      {GA_TOP_2.slice(3).map((n) => <Cell key={n} id={`GA${n}`} w={W_WIDE} val={GA_TOP_VALS[n]} />)}
+                      {GA_TOP_2.slice(0,3).map((n) => <Cell key={n} id={`GA${n}`} w={W_NARROW} />)}
+                      {GA_TOP_2.slice(3).map((n) => <Cell key={n} id={`GA${n}`} w={W_WIDE} />)}
                   </Row>
                 </GridContainer>
               </div>
@@ -405,19 +613,19 @@ export default function FinalDashboard() {
                   {/* GA Rows */}
                   {GA_ROWS.map((row, i) => (
                       <Row key={i}>
-                          {row.l.map(n => <Cell key={n} id={`GA${n}`} w={W_NARROW} val={(row.v as any)[n]} />)}
-                          {row.r.map(n => <Cell key={n} id={`GA${n}`} w={W_WIDE} val={(row.v as any)[n]} />)}
+                          {row.l.map(n => <Cell key={n} id={`GA${n}`} w={W_NARROW} />)}
+                          {row.r.map(n => <Cell key={n} id={`GA${n}`} w={W_WIDE} />)}
                       </Row>
                   ))}
-                  {/* Divider visual via thick border on next row */}
+                  
                   {/* GB Rows */}
                   <Row>
-                      {GB_34_L.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
-                      {GB_34_R.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
+                      {GB_34_L.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} />)}
+                      {GB_34_R.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} />)}
                   </Row>
                   <Row>
-                      {GB_17_L.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
-                      {GB_17_R.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} val={GB_VALS[n]} />)}
+                      {GB_17_L.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} />)}
+                      {GB_17_R.map(n => <Cell key={n} id={`GB${n}`} w={W_NARROW} />)}
                   </Row>
                 </GridContainer>
               </div>
@@ -428,11 +636,11 @@ export default function FinalDashboard() {
                 <div style={{display:'flex', gap:'20px'}}>
                   <GridContainer>
                       <Row>{GC_L_TOP.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} />)}</Row>
-                      <Row>{GC_L_BTM.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} val={GC_VALS[n]} />)}</Row>
+                      <Row>{GC_L_BTM.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} />)}</Row>
                   </GridContainer>
                   <GridContainer>
-                      <Row>{GC_R_TOP.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} val={GC_VALS[n]} />)}</Row>
-                      <Row>{GC_R_BTM.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} val={GC_VALS[n]} />)}</Row>
+                      <Row>{GC_R_TOP.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} />)}</Row>
+                      <Row>{GC_R_BTM.map(n => <Cell key={n} id={`GC${n}`} w={W_NARROW} />)}</Row>
                   </GridContainer>
                 </div>
               </div>
@@ -459,7 +667,7 @@ export default function FinalDashboard() {
                     <GridContainer>
                         {GF_GRID.map((row, i) => (
                             <Row key={i}>
-                                {row.map(n => <Cell key={n} id={`GF${n}`} w={W_NARROW} val={['22','21','20','17'].includes(n)?'7501':undefined} />)}
+                                {row.map(n => <Cell key={n} id={`GF${n}`} w={W_NARROW} />)}
                             </Row>
                         ))}
                     </GridContainer>
@@ -488,8 +696,8 @@ export default function FinalDashboard() {
                         <GridContainer>
                             {GD_STRIP.map((p,i) => (
                                 <Row key={i}>
-                                    <Cell id={`GD${p.l}`} w={W_NARROW} val={['45','43','41','39'].includes(p.l) ? (p.l==='39'?'3804':'1002') : undefined} />
-                                    <Cell id={`GD${p.r}`} w={W_NARROW} val={p.r==='42'?'6732':undefined} />
+                                    <Cell id={`GD${p.l}`} w={W_NARROW} />
+                                    <Cell id={`GD${p.r}`} w={W_NARROW} />
                                 </Row>
                             ))}
                         </GridContainer>
@@ -503,14 +711,14 @@ export default function FinalDashboard() {
                         <GridContainer style={{marginBottom:'20px'}}>
                             {GE_GRID.map((row,i) => (
                                 <Row key={i}>
-                                    {row.map(n => <Cell key={n} id={`GE${n}`} w={W_NARROW} val="7501" />)}
+                                    {row.map(n => <Cell key={n} id={`GE${n}`} w={W_NARROW} />)}
                                 </Row>
                             ))}
                         </GridContainer>
 
                         {/* GD Grid */}
                         <GridContainer>
-                            <Row>{GD_GRID_H.map(id => <Cell key={id} id={id} w={W_NARROW} val="7501" />)}</Row>
+                            <Row>{GD_GRID_H.map(id => <Cell key={id} id={id} w={W_NARROW} />)}</Row>
                             {GD_GRID.map((row,i) => (
                                 <Row key={i}>
                                     {row.map(n => <Cell key={n} id={`GD${n}`} w={W_NARROW} />)}
@@ -533,17 +741,22 @@ export default function FinalDashboard() {
             <span style={{fontSize:'12px', background:'#C6F6D5', color:'#22543D', padding:'2px 8px', borderRadius:'12px'}}>Live</span>
           </Header>
           <div style={{overflowY:'auto', flex:1, padding:'5px 0'}}>
-            {INVENTORY.map((item) => (
-              <InvCard key={item.code}>
-                <InvCode>{item.code}</InvCode>
-                <InvQty>{item.qty}</InvQty>
-              </InvCard>
-            ))}
+            {inventory.length > 0 ? (
+              inventory.map((item) => (
+                <InvCard key={item.code}>
+                  <InvCode>{item.code}</InvCode>
+                  <InvQty>{item.qty}</InvQty>
+                </InvCard>
+              ))
+            ) : (
+              <div style={{padding:'20px', textAlign:'center', color:'#A0AEC0', fontSize:'13px'}}>
+                데이터 없음
+              </div>
+            )}
           </div>
         </RightPanel>
 
       </Layout>
-      <GmtLoadingScreen/>
     </>
   );
 }
