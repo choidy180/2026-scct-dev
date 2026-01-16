@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import TopNavigation from "@/components/navigation/top-navigation";
 import { useViewContext } from "./view-context";
 import GmtLoadingScreen from "@/components/loading/gmt-loading";
+import ChatbotWidget from "@/components/chatbot-widget";
 
 // --------------------------------------------------------------------------
 // 1. Mobile Blocker Styles (모바일 차단 화면 스타일)
@@ -215,7 +216,7 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
         <NavContainer>
           <TopNavigation isLoading={isLoading && !isSkipLoading} />
         </NavContainer>
-        
+        <ChatbotWidget/>
         {/* 로딩 중일 때 내용 숨김 ($isHidden) - 예외 경로면 숨기지 않음 */}
         <MainContent $isHidden={isLoading && !isSkipLoading}>
             {children}

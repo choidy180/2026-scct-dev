@@ -1,485 +1,395 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import styled from 'styled-components';
-import { 
-  FiMessageSquare, 
-  FiSend, 
-  FiCpu, 
-  FiActivity, 
-  FiClock, 
-  FiX 
-} from 'react-icons/fi';
+import React, { useState, useRef, useEffect, memo, useCallback } from "react";
+import styled, { keyframes, css } from "styled-components";
+import { X, Send, Sparkles, MessageSquare } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 // --------------------------------------------------------------------------
-// 1. Types
+// 1. Animations (Subtle & Premium)
+// --------------------------------------------------------------------------
+
+const hoverFloat = keyframes`
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-4px); }
+`;
+
+// 버튼 주변으로 은은하게 퍼지는 붉은 파장 (너무 과하지 않게 수정)
+const softPulse = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+`;
+
+// --------------------------------------------------------------------------
+// 2. Styled Components (Refined Design)
+// --------------------------------------------------------------------------
+
+const WidgetWrapper = styled.div`
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: 'Pretendard', sans-serif;
+  pointer-events: none;
+`;
+
+// [수정] 버튼 크기 축소 (58px -> 50px) 및 디자인 정제
+const FabButton = styled(motion.button)<{ $isOpen: boolean }>`
+  pointer-events: auto;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  
+  /* Deep & Modern Red Gradient */
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: white;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  /* 부드러운 그림자 */
+  box-shadow: 0 8px 20px rgba(185, 28, 28, 0.4);
+  transition: transform 0.2s ease;
+
+  ${(props) =>
+    !props.$isOpen &&
+    css`
+      /* 닫혀있을 때만 은은한 맥동 효과 */
+      animation: ${softPulse} 3s infinite;
+    `}
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 25px rgba(185, 28, 28, 0.5);
+  }
+  &:active {
+    transform: scale(0.95);
+  }
+`;
+
+const ChatContainer = styled(motion.div)`
+  pointer-events: auto;
+  width: 320px; /* 너비 최적화 */
+  height: 480px; /* 높이 최적화 */
+  margin-bottom: 16px;
+  background: #ffffff;
+  border-radius: 20px;
+  
+  /* 고급스러운 확산형 그림자 (진한 테두리 제거) */
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 10px 40px -5px rgba(0, 0, 0, 0.15);
+  
+  border: 1px solid rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform-origin: bottom right;
+`;
+
+// [수정] 헤더 디자인 전면 수정 (연두색 UI 제거)
+const Header = styled.div`
+  padding: 16px 20px;
+  background: #fff;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .bot-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: #fee2e2;
+      color: #dc2626;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .text-area {
+      display: flex;
+      flex-direction: column;
+      
+      h3 {
+        font-size: 15px;
+        font-weight: 700;
+        color: #111827;
+        margin: 0;
+        line-height: 1.2;
+      }
+      
+      span {
+        font-size: 11px;
+        color: #9ca3af;
+        font-weight: 500;
+      }
+    }
+  }
+
+  .close-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.2s;
+    
+    &:hover {
+      background: #f3f4f6;
+      color: #4b5563;
+    }
+  }
+`;
+
+const MessagesList = styled.div`
+  flex: 1;
+  padding: 16px;
+  background: #f9fafb; /* 아주 연한 그레이 배경 */
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  /* 스크롤바 숨김 */
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+`;
+
+const MessageRow = styled.div<{ $isUser: boolean }>`
+  display: flex;
+  justify-content: ${(props) => (props.$isUser ? "flex-end" : "flex-start")};
+`;
+
+const Bubble = styled.div<{ $isUser: boolean }>`
+  max-width: 80%;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  position: relative;
+  
+  ${(props) =>
+    props.$isUser
+      ? css`
+          /* User: Gomotec Red Solid */
+          background: #dc2626;
+          color: white;
+          border-radius: 16px 16px 2px 16px;
+          box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+        `
+      : css`
+          /* Bot: Clean White */
+          background: white;
+          color: #374151;
+          border-radius: 16px 16px 16px 2px;
+          border: 1px solid #e5e7eb;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+        `}
+`;
+
+const InputWrapper = styled.form`
+  padding: 12px 16px;
+  background: white;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  input {
+    flex: 1;
+    background: #f3f4f6;
+    border: 1px solid transparent;
+    border-radius: 20px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #1f2937;
+    outline: none;
+    transition: all 0.2s;
+
+    &::placeholder { color: #9ca3af; }
+    &:focus {
+      background: white;
+      border-color: #e5e7eb;
+      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.05);
+    }
+  }
+
+  button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: #dc2626;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.2s;
+    
+    &:hover { background: #fef2f2; }
+    &:disabled { color: #d1d5db; cursor: default; background: transparent; }
+  }
+`;
+
+// --------------------------------------------------------------------------
+// 3. Logic & Component
 // --------------------------------------------------------------------------
 
 interface Message {
   id: number;
   text: string;
-  sender: 'bot' | 'user';
-  timestamp: string;
+  isUser: boolean;
 }
 
-// --------------------------------------------------------------------------
-// 2. Chatbot Styled Components (스타일은 기존과 동일)
-// --------------------------------------------------------------------------
-
-const ChatWidgetWrapper = styled.div`
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 10000;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 16px;
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-`;
-
-const ChatButton = styled.button<{ $isOpen: boolean }>`
-  width: 64px;
-  height: 64px;
-  background-color: #172033;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  color: white;
-  position: relative;
-  overflow: hidden;
-
-  &:hover {
-    transform: scale(1.05) translateY(-2px);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
-    background-color: #1e293b;
-  }
-  &:active { transform: scale(0.95); }
-
-  svg {
-    transition: transform 0.3s ease;
-    transform: ${props => props.$isOpen ? 'rotate(90deg)' : 'rotate(0deg)'};
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 22px;
-    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.05);
-    pointer-events: none;
-  }
-`;
-
-const ChatWindow = styled.div<{ $isOpen: boolean }>`
-  width: 380px;
-  height: 600px;
-  background: #fff;
-  border-radius: 24px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0,0,0,0.03);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transform-origin: bottom right;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  
-  opacity: ${props => props.$isOpen ? 1 : 0};
-  transform: ${props => props.$isOpen ? 'scale(1) translateY(0)' : 'scale(0.9) translateY(20px)'};
-  pointer-events: ${props => props.$isOpen ? 'auto' : 'none'};
-  visibility: ${props => props.$isOpen ? 'visible' : 'hidden'};
-`;
-
-const ChatHeader = styled.div`
-  background: linear-gradient(135deg, #2a2a5a 0%, #151530 100%);
-  padding: 24px;
-  color: white;
-  position: relative;
-  flex-shrink: 0;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: -50%; left: -50%;
-    width: 200%; height: 200%;
-    pointer-events: none;
-  }
-
-  .header-content {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-  }
-
-  .title-area {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .avatar {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-  }
-
-  .text-info {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .name {
-    font-size: 16px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .status-dot {
-    width: 6px;
-    height: 6px;
-    background-color: #10b981;
-    border-radius: 50%;
-    box-shadow: 0 0 8px #10b981;
-  }
-
-  .status-text {
-    font-size: 12px;
-    opacity: 0.7;
-    margin-top: 2px;
-  }
-
-  .close-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    cursor: pointer;
-    transition: background 0.2s;
-    &:hover { background: rgba(255, 255, 255, 0.2); }
-  }
-`;
-
-const ChatBody = styled.div`
-  flex: 1;
-  background-color: #f8fafc;
-  padding: 20px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-
-  &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-thumb {
-    background-color: #cbd5e1;
-    border-radius: 4px;
-  }
-`;
-
-const MessageBubble = styled.div<{ $isUser?: boolean }>`
-  max-width: 85%;
-  align-self: ${props => props.$isUser ? 'flex-end' : 'flex-start'};
-  
-  .bubble {
-    background: ${props => props.$isUser ? '#1e293b' : '#fff'};
-    color: ${props => props.$isUser ? '#fff' : '#1e293b'};
-    padding: 14px 16px;
-    border-radius: 18px;
-    border-top-left-radius: ${props => !props.$isUser ? '4px' : '18px'};
-    border-top-right-radius: ${props => props.$isUser ? '4px' : '18px'};
-    box-shadow: ${props => props.$isUser ? 'none' : '0 2px 10px rgba(0,0,0,0.03)'};
-    font-size: 14px;
-    line-height: 1.5;
-    border: ${props => props.$isUser ? 'none' : '1px solid #e2e8f0'};
-  }
-
-  .timestamp {
-    font-size: 11px;
-    color: #94a3b8;
-    margin-top: 6px;
-    margin-left: 4px;
-    display: block;
-    text-align: ${props => props.$isUser ? 'right' : 'left'};
-  }
-`;
-
-const LoadingBubble = styled.div`
-  align-self: flex-start;
-  background: #fff;
-  padding: 12px 16px;
-  border-radius: 18px;
-  border-top-left-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-  border: 1px solid #e2e8f0;
-  display: flex;
-  gap: 4px;
-
-  span {
-    width: 6px;
-    height: 6px;
-    background: #cbd5e1;
-    border-radius: 50%;
-    animation: bounce 1.4s infinite ease-in-out both;
-  }
-  
-  span:nth-child(1) { animation-delay: -0.32s; }
-  span:nth-child(2) { animation-delay: -0.16s; }
-
-  @keyframes bounce {
-    0%, 80%, 100% { transform: scale(0); }
-    40% { transform: scale(1); }
-  }
-`;
-
-const QuickReplies = styled.div`
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  &::-webkit-scrollbar { display: none; }
-`;
-
-const ReplyChip = styled.button`
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  padding: 8px 14px;
-  border-radius: 20px;
-  font-size: 13px;
-  color: #475569;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-
-  &:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-    color: #0f172a;
-  }
-  svg { color: #64748b; }
-`;
-
-const ChatFooter = styled.div`
-  padding: 16px 20px;
-  background: #fff;
-  border-top: 1px solid #f1f5f9;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-`;
-
-const InputField = styled.input`
-  flex: 1;
-  background: #f1f5f9;
-  border: none;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  color: #1e293b;
-  outline: none;
-  transition: box-shadow 0.2s;
-
-  &::placeholder { color: #94a3b8; }
-  &:focus { box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2); }
-`;
-
-const SendButton = styled.button`
-  width: 44px;
-  height: 44px;
-  background: #1e293b;
-  border-radius: 12px;
-  border: none;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s;
-
-  &:hover { background: #0f172a; }
-`;
-
-// --------------------------------------------------------------------------
-// 3. Logic & Export
-// --------------------------------------------------------------------------
+// [최적화] 메시지 컴포넌트 분리 및 메모이제이션
+const ChatMessage = memo(({ msg }: { msg: Message }) => (
+  <MessageRow $isUser={msg.isUser}>
+    <Bubble $isUser={msg.isUser}>
+      {msg.text}
+    </Bubble>
+  </MessageRow>
+));
+ChatMessage.displayName = "ChatMessage";
 
 export default function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  
-  // 초기 메시지 상태
+  const [inputText, setInputText] = useState("");
+  // [수정] 봇 이름 반영
   const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      text: "안녕하세요! AI 공정 모니터링 챗봇입니다.\n현재 GR2 라인의 특이사항이 감지되었습니다. 무엇을 도와드릴까요?",
-      sender: 'bot',
-      timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-    }
+    { id: 1, text: "안녕하세요! GMT봇입니다. 궁금한 점을 물어보세요.", isUser: false },
   ]);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // 입력 핸들러 최적화
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputText(e.target.value);
+  }, []);
 
-  // 스크롤 자동 이동
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim()) return;
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isTyping]);
+    const text = inputText;
+    setInputText("");
 
-  // 메시지 전송 핸들러
-  const handleSendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    setMessages((prev) => [...prev, { id: Date.now(), text, isUser: true }]);
 
-    // 1. 유저 메시지 추가
-    const newUserMsg: Message = {
-      id: Date.now(),
-      text: text,
-      sender: 'user',
-      timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-    };
-    
-    setMessages(prev => [...prev, newUserMsg]);
-    setInputText('');
-    setIsTyping(true); // 봇 타이핑 시작
-
-    // 2. AI 응답 시뮬레이션 (1.5초 딜레이)
+    // AI 응답 시뮬레이션
     setTimeout(() => {
-      const botResponseText = getSimulatedResponse(text);
-      const newBotMsg: Message = {
-        id: Date.now() + 1,
-        text: botResponseText,
-        sender: 'bot',
-        timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-      };
-      
-      setMessages(prev => [...prev, newBotMsg]);
-      setIsTyping(false); // 봇 타이핑 종료
-    }, 1200);
-  };
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now() + 1, text: "요청하신 내용을 확인하고 있습니다.", isUser: false },
+      ]);
+    }, 600);
+  }, [inputText]);
 
-  // 간단한 키워드 기반 응답 로직
-  const getSimulatedResponse = (input: string): string => {
-    if (input.includes('상태') || input.includes('공정')) {
-      return "현재 공정 효율은 98.5%이며, 모든 라인이 정상 가동 중입니다. 다만 R액 압력이 다소 높게 측정되고 있습니다.";
+  // 자동 스크롤
+  useEffect(() => {
+    if (isOpen) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-    if (input.includes('데이터') || input.includes('모니터링')) {
-      return "실시간 데이터 요약:\n- R액 압력: 120.3 kg/m²\n- 탱크온도: 16.9°C\n- 발포시간: 1.64초\n\n특이사항 없이 안정적인 수치입니다.";
-    }
-    if (input.includes('안녕')) {
-      return "반갑습니다! 오늘도 안전한 공정 운영을 지원하겠습니다.";
-    }
-    return "죄송합니다. 해당 질문에 대한 정확한 데이터를 찾고 있습니다. 다시 한 번 말씀해 주시겠습니까?";
-  };
+  }, [messages, isOpen]);
 
   return (
-    <ChatWidgetWrapper>
-      <ChatWindow $isOpen={isOpen}>
-        
-        {/* Header */}
-        <ChatHeader>
-          <div className="header-content">
-            <div className="title-area">
-              <div className="avatar"><FiCpu /></div>
-              <div className="text-info">
-                <div className="name">
-                  AI 어시스턴트
-                  <div className="status-dot" />
+    <WidgetWrapper>
+      <AnimatePresence>
+        {isOpen && (
+          <ChatContainer
+            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+            transition={{ type: "spring", stiffness: 350, damping: 25 }}
+          >
+            {/* Header: Clean & Minimal */}
+            <Header>
+              <div className="bot-info">
+                <div className="avatar">
+                  <Sparkles size={18} strokeWidth={2} />
                 </div>
-                <div className="status-text">● 실시간 공정 분석 중</div>
+                <div className="text-area">
+                  <h3>GMT봇</h3>
+                  <span>Always Online</span>
+                </div>
               </div>
-            </div>
-            <button className="close-btn" onClick={() => setIsOpen(false)}>
-              <FiX size={16} />
-            </button>
-          </div>
-        </ChatHeader>
+              <button className="close-btn" onClick={() => setIsOpen(false)}>
+                <X size={18} />
+              </button>
+            </Header>
 
-        {/* Body */}
-        <ChatBody>
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} $isUser={msg.sender === 'user'}>
-              <div className="bubble">
-                {msg.text.split('\n').map((line, i) => (
-                  <React.Fragment key={i}>
-                    {line}
-                    {i !== msg.text.split('\n').length - 1 && <br />}
-                  </React.Fragment>
-                ))}
-              </div>
-              <span className="timestamp">{msg.timestamp}</span>
-            </MessageBubble>
-          ))}
+            {/* Chat Area */}
+            <MessagesList>
+              {messages.map((msg) => (
+                <ChatMessage key={msg.id} msg={msg} />
+              ))}
+              <div ref={bottomRef} />
+            </MessagesList>
 
-          {/* 타이핑 인디케이터 */}
-          {isTyping && (
-            <LoadingBubble>
-              <span /><span /><span />
-            </LoadingBubble>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </ChatBody>
-
-        {/* Quick Replies (항상 노출되어 클릭 유도) */}
-        <div style={{ padding: '0 20px 10px 20px', backgroundColor:'#f8fafc' }}>
-          <div style={{fontSize:'12px', color:'#64748b', fontWeight:600, marginBottom:'8px'}}>추천 질문</div>
-          <QuickReplies>
-            <ReplyChip onClick={() => handleSendMessage('현재 공정 상태는?')}>
-              <FiActivity size={14}/>현재 공정 상태는?
-            </ReplyChip>
-            <ReplyChip onClick={() => handleSendMessage('실시간 모니터링 데이터 알려줘')}>
-              <FiClock size={14}/>실시간 모니터링 데이터
-            </ReplyChip>
-          </QuickReplies>
-        </div>
-
-        {/* Footer */}
-        <ChatFooter>
-          <InputField 
-            placeholder="메시지를 입력하세요..." 
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(inputText)}
-          />
-          <SendButton onClick={() => handleSendMessage(inputText)}>
-            <FiSend size={18} style={{marginLeft:'-2px'}} />
-          </SendButton>
-        </ChatFooter>
-
-      </ChatWindow>
-
-      {/* Floating Button */}
-      <ChatButton onClick={() => setIsOpen(!isOpen)} $isOpen={isOpen}>
-        {isOpen ? (
-          <FiX size={28} />
-        ) : (
-          <FiMessageSquare size={28} style={{ marginTop: '2px' }} />
+            {/* Input Area */}
+            <InputWrapper onSubmit={handleSubmit}>
+              <input
+                type="text"
+                placeholder="메시지를 입력하세요..."
+                value={inputText}
+                onChange={handleInputChange}
+              />
+              <button type="submit" disabled={!inputText.trim()}>
+                <Send size={18} />
+              </button>
+            </InputWrapper>
+          </ChatContainer>
         )}
-      </ChatButton>
-    </ChatWidgetWrapper>
+      </AnimatePresence>
+
+      <FabButton
+        $isOpen={isOpen}
+        onClick={() => setIsOpen(!isOpen)}
+        whileTap={{ scale: 0.9 }}
+        aria-label="GMT봇 열기"
+      >
+        <AnimatePresence mode="wait">
+          {isOpen ? (
+            <motion.div
+              key="close"
+              initial={{ rotate: -90, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              exit={{ rotate: 90, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <X size={24} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="chat"
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              style={{ display: "flex" }}
+            >
+              <MessageSquare size={24} fill="currentColor" fillOpacity={0.2} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </FabButton>
+    </WidgetWrapper>
   );
 }
