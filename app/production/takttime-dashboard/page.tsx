@@ -34,9 +34,9 @@ import {
 const TARGET_TAKT = 12.0;
 
 const VIDEO_PATHS = {
-  A: "/videos/line_a.mp4", 
-  B: "/videos/line_b.mp4",
-  C: "/videos/line_c.mp4",
+  A: "http://1.254.24.170:24828/api/DX_API000031?videoName=223.mp4", 
+  B: "http://1.254.24.170:24828/api/DX_API000031?videoName=225.mp4",
+  C: "http://1.254.24.170:24828/api/DX_API000031?videoName=224.mp4",
 };
 
 const MOCK_CSV_DATA = `timestamp,message,type
