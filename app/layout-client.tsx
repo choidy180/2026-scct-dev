@@ -9,7 +9,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import TopNavigation from "@/components/navigation/top-navigation";
 import { useViewContext } from "./view-context";
 import GmtLoadingScreen from "@/components/loading/gmt-loading";
-// import ChatbotWidget from "@/components/chatbot-widget"; 
 
 // --------------------------------------------------------------------------
 // 1. Mobile Blocker Styles (모바일 차단 화면 스타일)
@@ -118,7 +117,6 @@ const DesktopOnlyWrapper = styled.div`
 
 const NavContainer = styled.div`
   position: relative;
-  /* TopNavigation이 로딩화면 바로 아래에 위치하도록 z-index 설정 */
   z-index: 5000; 
 `;
 
@@ -127,7 +125,7 @@ const MainContent = styled.main<{ $isHidden: boolean }>`
   z-index: 1;
   min-height: calc(100vh - 64px);
   
-  /* [핵심] 로딩 중일 때 컨텐츠를 투명하게 처리하여 깜빡임 방지 */
+  /* 로딩 중일 때 컨텐츠 투명 처리 */
   opacity: ${(props) => (props.$isHidden ? 0 : 1)};
   pointer-events: ${(props) => (props.$isHidden ? "none" : "auto")};
   transition: opacity 0.2s ease-in;
@@ -144,14 +142,25 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
   // 경로 변경 감지용 Ref
   const prevPathRef = useRef(pathname);
 
-  // [수정] useLayoutEffect를 사용하여 화면이 그려지기(Paint) 전에 상태 업데이트
-  // 이를 통해 "이전 화면 -> 새 화면 깜빡임" 없이 즉시 로딩 화면으로 전환됨
+  // [수정 1] 로딩 애니메이션을 건너뛸 경로인지 확인
+  // master-dashboard가 포함된 모든 하위 경로에서도 로딩을 끄려면 includes 사용
+  // 정확히 해당 페이지만 끄려면 pathname === '/master-dashboard' 사용
+  const isSkipLoading = pathname?.includes("master-dashboard");
+
+  // [수정 2] useLayoutEffect에서 예외 처리 적용
   useLayoutEffect(() => {
     if (prevPathRef.current !== pathname) {
       prevPathRef.current = pathname;
-      setIsLoading(true);
+
+      // master-dashboard 경로가 아닐 때만 로딩 시작
+      if (!isSkipLoading) {
+        setIsLoading(true);
+      } else {
+        // 혹시 모를 상태 꼬임 방지를 위해 예외 경로에서는 확실하게 끔
+        setIsLoading(false);
+      }
     }
-  }, [pathname, setIsLoading]);
+  }, [pathname, setIsLoading, isSkipLoading]);
 
   return (
     <>
@@ -179,7 +188,8 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
         
         {/* ✅ 로딩 스크린 오버레이 */}
         <AnimatePresence mode="wait">
-          {isLoading && (
+          {/* [수정 3] isSkipLoading일 경우 렌더링 자체를 막음 */}
+          {isLoading && !isSkipLoading && (
             <motion.div
               key="global-loader"
               style={{ 
@@ -188,8 +198,6 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
                 left: 0,
                 right: 0,
                 bottom: 0,
-                // Nav(5000)보다 낮게, MainContent(1)보다 높게 설정하여 
-                // 네비게이션바는 보이고, 컨텐츠는 가리도록 설정 (필요시 z-index 5001로 높여서 Nav도 가릴 수 있음)
                 zIndex: 4999, 
                 background: "#ffffff" 
               }}
@@ -205,15 +213,14 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
         </AnimatePresence>
 
         <NavContainer>
-          <TopNavigation isLoading={isLoading} />
+          <TopNavigation isLoading={isLoading && !isSkipLoading} />
         </NavContainer>
         
-        {/* 로딩 중일 때 내용 숨김 ($isHidden) */}
-        <MainContent $isHidden={isLoading}>
+        {/* 로딩 중일 때 내용 숨김 ($isHidden) - 예외 경로면 숨기지 않음 */}
+        <MainContent $isHidden={isLoading && !isSkipLoading}>
             {children}
         </MainContent>
         
-        {/* <ChatbotWidget /> */}
       </DesktopOnlyWrapper>
     </>
   );

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styled, { css } from 'styled-components';
 import { usePathname, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { FiBell, FiSettings, FiGrid, FiInfo } from 'react-icons/fi';
 
 // --- Types ---
@@ -86,8 +87,11 @@ const NavInner = styled.div`
 
 const LogoArea = styled.div`
   display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: #333; cursor: pointer;
+  
+  /* 기존 아이콘 스타일은 유지하되 필요 시 사용 */
   .logo-icon { width: 32px; height: 32px; background: #D31145; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 4px 10px rgba(211, 17, 69, 0.3); }
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  
+  font-family: 'Pretendard';
 `;
 
 const MenuArea = styled.div`
@@ -204,6 +208,7 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
   const pathname = usePathname();
   const router = useRouter();
   
+  // [수정] useRef 타입 명시: HTMLButtonElement의 배열 또는 null
   const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const menuAreaRef = useRef<HTMLDivElement>(null);
 
@@ -213,9 +218,8 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
     }
   }, [hoveredMenu]);
 
-  // [수정된 부분] 현재 URL(pathname)과 일치하는 SubMenu Item이 있는 대분류 Key를 찾아 반환
+  // 현재 URL(pathname)과 일치하는 SubMenu Item이 있는 대분류 Key를 찾아 반환
   const getCurrentActiveMenu = useCallback(() => {
-    // 1. 현재 경로와 정확히 일치하거나 하위 경로인 아이템을 찾음
     const activeKey = MENU_KEYS.find(key => 
       subMenuData[key].items.some(item => 
         pathname === item.href || pathname.startsWith(item.href)
@@ -224,12 +228,11 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
 
     if (activeKey) return activeKey;
 
-    // 2. 일치하는 항목이 없을 경우(기본값 또는 루트 경로 등) Fallback 로직
     if (pathname.includes('/material')) return "자재관리";
-    if (pathname.includes('/production')) return "공정품질"; // Default for production
+    if (pathname.includes('/production')) return "공정품질";
     if (pathname.includes('/transport')) return "출하관리";
     
-    return "자재관리"; // 최후의 기본값
+    return "자재관리"; 
   }, [pathname]);
 
   const currentActiveMenu = getCurrentActiveMenu();
@@ -260,7 +263,6 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
       const relativeX = childRect.left - parentRect.left;
       
       setGliderStyle(prev => {
-        // 불필요한 리렌더링 방지
         if (Math.abs(prev.x - relativeX) < 0.5 && Math.abs(prev.width - childRect.width) < 0.5) {
           return prev;
         }
@@ -300,8 +302,16 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
     <NavWrapper onMouseLeave={handleNavLeave} $isDisabled={isLoading}>
       <NavContainer>
         <NavInner>
-          <LogoArea onClick={(e: any) => handleMenuClick(e, "자재관리")}>
-            <div className="logo-icon"><FiGrid /></div>
+          <LogoArea onClick={(e: any) => router.push('/master-dashboard')}>
+            <div style={{ position: 'relative', width: '60px', height: '40px' }}>
+                <Image 
+                    src="/logo/gmt_logo.png"
+                    alt="Company Logo"
+                    fill
+                    style={{ objectFit: 'contain' }}
+                    priority
+                />
+            </div>
             <h4>고모텍 AI 관제센터</h4>
           </LogoArea>
           
@@ -315,7 +325,7 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
             {MENU_KEYS.map((menu, index) => (
               <MenuItem 
                 key={menu}
-                ref={(el) => { tabsRef.current[index] = el }}
+                ref={(el) => { if(el) tabsRef.current[index] = el; }} // [수정] el이 null이 아닐 때만 할당
                 $isActive={currentActiveMenu === menu} 
                 onClick={(e) => handleMenuClick(e, menu)}
                 onMouseEnter={() => !isLoading && setHoveredMenu(menu)}

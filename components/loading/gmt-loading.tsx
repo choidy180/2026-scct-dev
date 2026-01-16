@@ -11,7 +11,7 @@ interface GmtLoadingScreenProps {
 }
 
 // --- Assets ---
-const LOGO_URL = '/logo/gmt_logo.png'; 
+// const LOGO_URL = '/logo/gmt_logo.png'; 
 
 // --- Keyframes ---
 const pulseGreen = keyframes`
@@ -299,7 +299,8 @@ const GmtLoadingScreen = ({ onComplete }: GmtLoadingScreenProps) => {
           >
             {/* [최적화] Next/Image 사용 + priority 적용 */}
             <Image 
-              src={LOGO_URL} 
+              src={'/logo/gmt_logo_copy.png'}
+              // src={LOGO_URL} 
               alt="GMT Logo" 
               width={160}
               height={160}

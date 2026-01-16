@@ -14,7 +14,7 @@ const ScctDevPage = () => {
   // 1. 루트 경로('/')로 들어오면 강제로 운송관리 페이지로 보냄
   useEffect(() => {
     if (pathname === '/' || pathname === '') {
-      router.replace('/transport/realtime-status');
+      router.replace('/master-dashboard');
     }
   }, [pathname, router]);
   return (
