@@ -405,7 +405,7 @@ const ShipmentManagementPage = () => {
           <Truck size={24} />
         </IconBox>
         <TitleArea>
-          <h1>실시간 하이브리드 출하관리 시스템 (Shipment 2026)</h1>
+          <h1>주간/월간 출하관리 시스템</h1>
           <SubInfo>
             <LiveIndicator>
               <PulseDot />

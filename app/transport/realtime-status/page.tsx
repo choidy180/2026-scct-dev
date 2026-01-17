@@ -5,7 +5,8 @@ import styled from "styled-components";
 import axios from "axios";
 import { 
   Sun, Navigation, Truck, Activity, 
-  BarChart2, ArrowRight, Calendar, RefreshCw, CheckCircle
+  BarChart2, ArrowRight, Calendar, RefreshCw, CheckCircle,
+  AlertCircle, Coffee
 } from "lucide-react";
 import { format } from "date-fns";
 import dynamic from "next/dynamic";
@@ -113,9 +114,7 @@ const useVehicleSimulation = () => {
           durationSec = h * 3600 + m * 60 + s;
         }
 
-        // 🟢 [수정됨] 상태 판단 로직 강화
-        // 1. API 상태가 "도착" 이면 도착
-        // 2. 혹은 (현재시간 - 출발시간)이 소요시간을 넘겼으면(남은시간 0 이하) 도착으로 간주
+        // 상태 판단 로직 강화
         const elapsedSec = (now - startTime) / 1000;
         const isTimeOver = elapsedSec >= durationSec;
         const isArrived = (item.상태 === "도착") || isTimeOver;
@@ -129,7 +128,7 @@ const useVehicleSimulation = () => {
           totalDistanceKm: 45, 
           baseDurationSec: durationSec,
           startTime: startTime,
-          status: isArrived ? 'Arrived' : 'Moving', // 조건에 따라 상태 강제 할당
+          status: isArrived ? 'Arrived' : 'Moving', 
           cargo: "전자부품/사출물",
           temp: "상온"
         };
@@ -138,7 +137,7 @@ const useVehicleSimulation = () => {
       setVehicles(mappedVehicles);
       vehiclesRef.current = mappedVehicles;
 
-      // 🟢 [수정됨] 운행 중인 차량만 필터링하여 타겟 설정
+      // 운행 중인 차량만 필터링하여 타겟 설정
       const movingVehicles = mappedVehicles.filter(v => v.status === 'Moving');
       
       if (movingVehicles.length > 0) {
@@ -147,7 +146,7 @@ const useVehicleSimulation = () => {
           return stillMoving ? prev : movingVehicles[0].id;
         });
       } else {
-        setTargetVehicleId(null); // 모두 도착이면 타겟 해제 -> 카드 숨김
+        setTargetVehicleId(null); 
       }
 
     } catch (err) {
@@ -186,21 +185,14 @@ const useVehicleSimulation = () => {
         const currentMarkers: VWorldMarker[] = [...baseMarkers];
         
         currentVehicles.forEach(v => {
-          // 🟢 [수정됨] 도착한 차량('Arrived')은 지도 마커 생성 루프에서 제외
-          // 즉, 지도에 표시되지 않음.
           if (v.status === 'Arrived') return;
 
-          // --- 아래는 'Moving' 상태인 차량만 실행됨 ---
           const elapsedSec = (now - v.startTime) / 1000;
           const totalDuration = v.baseDurationSec;
           let progress = elapsedSec / totalDuration;
           
           if (progress > 1) progress = 1;
           if (progress < 0) progress = 0;
-
-          // 만약 루프 도중 시간이 다 되어 100%가 되면, 다음 fetch때 status가 Arrived로 바뀌겠지만
-          // 시각적으로 100% 위치에 잠깐 있는 것은 자연스러우므로 렌더링 함.
-          // 단, 이미 status가 Arrived로 데이터가 들어온 놈들은 위에서 return됨.
 
           const currentLat = v.startPos.lat + (v.destPos.lat - v.startPos.lat) * progress;
           const currentLng = v.startPos.lng + (v.destPos.lng - v.startPos.lng) * progress;
@@ -241,6 +233,28 @@ const useVehicleSimulation = () => {
 
 // ─── [Components] ───
 
+const NoDataModal = React.memo(() => (
+  <ModalOverlay>
+    <ModalContent>
+      <div className="icon-wrapper">
+        <div className="pulse-ring"></div>
+        <Truck size={42} strokeWidth={1.5} color="#64748b" />
+      </div>
+      <div className="text-content">
+        <h2 className="title">현재 운행 중인 차량이 없습니다</h2>
+        <p className="desc">
+          모든 배차가 완료되었거나 대기 중입니다.<br />
+          새로운 배차 정보가 수신되면 자동으로 갱신됩니다.
+        </p>
+      </div>
+      <div className="status-pill">
+        <span className="dot" /> 시스템 대기 중
+      </div>
+    </ModalContent>
+  </ModalOverlay>
+));
+NoDataModal.displayName = "NoDataModal";
+
 const KpiItem = React.memo(({ label, value, unit, trend, trendColor }: any) => (
   <StyledKpiItem>
     <div className="label">{label}</div>
@@ -275,7 +289,6 @@ const KpiWidget = React.memo(({ vehicleCount, movingCount }: { vehicleCount: num
 KpiWidget.displayName = "KpiWidget";
 
 const RightInfoPanel = React.memo(({ currentTime, weather, vehicles }: any) => {
-    // 통계 계산 시 v.status를 기준으로 함 (이미 로직에서 시간 초과면 Arrived로 변경되어 있음)
     const arrivedCount = vehicles.filter((v: SimulationVehicle) => v.status === 'Arrived').length;
     const movingCount = vehicles.filter((v: SimulationVehicle) => v.status === 'Moving').length;
 
@@ -370,12 +383,14 @@ export default function LocalMapPage() {
     return map;
   }, [markers]);
 
+  // 운행 중인 차량 카운트
+  const movingCount = vehicles.filter(v => v.status === 'Moving').length;
+
   // 타겟 차량 데이터 계산
   const targetTruckData = useMemo(() => {
     if (!targetVehicleId) return null;
     
     const v = vehicles.find(veh => veh.id === targetVehicleId);
-    // 🟢 [수정됨] 만약 선택된 차량이 시간 초과로 인해 'Arrived'가 되었다면 null 처리 (카드 숨김)
     if (!v || v.status === 'Arrived') return null;
 
     const marker = markerMap.get(v.id);
@@ -424,16 +439,18 @@ export default function LocalMapPage() {
         <VWorldMap markers={markers} focusedTitle={targetVehicleId} />
       </MapWrapper>
 
+      {/* 모달 조건부 렌더링: 로딩중이 아니고, 운행중인 차량이 0대일 때 */}
+      {!isLoading && movingCount === 0 && <NoDataModal />}
+
       <TopControlPanel currentTime={currentTime} onRefresh={fetchData} loading={isLoading} />
 
       {/* 좌측 패널 */}
       <LeftControlPanel>
         <KpiWidget 
           vehicleCount={vehicles.length} 
-          movingCount={vehicles.filter(v => v.status === 'Moving').length} // 🟢 실제 운행 차량 수
+          movingCount={movingCount}
         />
 
-        {/* 🟢 타겟 차량이 있고, 운행 중일 때만 표시 */}
         {targetTruckData && (
           <DetailCardWrapper>
             <VehicleStatusCard {...targetTruckData} />
@@ -447,17 +464,9 @@ export default function LocalMapPage() {
           </div>
           <div className="list-container">
             {vehicles.map((v) => {
-              // 🟢 [수정됨] 지도에 마커가 없어도(도착 차량) 리스트에는 표시
-              // 단, 진행률은 상태에 따라 강제 설정
               const isArrived = v.status === 'Arrived';
-              const progressPct = isArrived ? 100 : 0; 
-              // *운행 중* 차량의 디테일한 진행률은 markerMap(애니메이션 루프)에서 가져오면 더 부드러움
-              // 하지만 도착 차량은 markerMap에 없으므로 위처럼 처리.
-              
-              const m = markerMap.get(v.id);
-              const displayPct = isArrived ? 100 : Math.floor((m?.progress || 0) * 100);
-
-              const remainingSec = Math.max(0, v.baseDurationSec * (1 - (m?.progress || 0)));
+              const displayPct = isArrived ? 100 : Math.floor((markerMap.get(v.id)?.progress || 0) * 100);
+              const remainingSec = Math.max(0, v.baseDurationSec * (1 - (markerMap.get(v.id)?.progress || 0)));
               const remainingMin = Math.ceil(remainingSec / 60);
 
               return (
@@ -465,7 +474,6 @@ export default function LocalMapPage() {
                   key={v.id}
                   $active={v.id === targetVehicleId} 
                   $isDelayed={false}
-                  // 도착 차량 클릭 시에는 타겟팅 하지 않거나, 히스토리 조회만 하도록 함 (여기선 타겟팅 제외)
                   onClick={() => !isArrived && setTargetVehicleId(v.id)} 
                   style={{ cursor: isArrived ? 'default' : 'pointer', opacity: isArrived ? 0.8 : 1 }}
                 >
@@ -595,3 +603,85 @@ const AnalyticsWidget = styled(GlassCard)`padding: 20px; display: flex; flex-dir
 const WidgetTitle = styled.div`font-size: 16px; font-weight: 800; color: #334155; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; .count { background: #ef4444; color: white; font-size: 12px; padding: 2px 8px; border-radius: 99px; }`;
 const CompactTable = styled.table`width: 100%; border-collapse: collapse; font-size: 14px; th { text-align: left; color: #94a3b8; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; } td { padding: 8px 0; color: #334155; font-weight: 700; border-bottom: 1px solid #f1f5f9; } tr:last-child td { border-bottom: none; } .status { display: flex; align-items: center; gap: 8px; } .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } .dot.blue { background: #3B82F6; } .dot.green { background: #10B981; } .dot.gray { background: #E2E8F0; } .count { text-align: center; color: #0f172a; } .ratio { text-align: right; color: #64748b; font-weight: 600; }`;
 const SystemTicker = styled.div`display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #94a3b8; padding-left: 24px; border-left: 1px solid #e2e8f0; .spin { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
+
+// Modal Styles
+const ModalOverlay = styled.div`
+  position: absolute; inset: 0; z-index: 999;
+  background: rgba(248, 250, 252, 0.4); 
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.5s ease-out;
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+`;
+
+const ModalContent = styled.div`
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  padding: 40px 60px;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 
+    0 20px 50px -12px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0,0,0,0.02);
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 24px;
+  animation: scaleUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+
+  @keyframes scaleUp { 
+    from { opacity: 0; transform: scale(0.95) translateY(10px); } 
+    to { opacity: 1; transform: scale(1) translateY(0); } 
+  }
+
+  .icon-wrapper {
+    position: relative;
+    width: 96px; height: 96px;
+    background: #f1f5f9;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 8px;
+    
+    .pulse-ring {
+      position: absolute; inset: -12px; border-radius: 50%;
+      border: 2px solid #e2e8f0;
+      animation: ripple 2s infinite;
+    }
+    
+    .status-badge {
+      position: absolute; bottom: 0; right: 0;
+      width: 32px; height: 32px;
+      background: #94a3b8;
+      border-radius: 50%;
+      border: 4px solid #fff;
+      display: flex; align-items: center; justify-content: center;
+    }
+  }
+
+  .text-content {
+    display: flex; flex-direction: column; gap: 8px;
+    .title { font-size: 22px; font-weight: 800; color: #1e293b; letter-spacing: -0.5px; margin: 0; }
+    .desc { font-size: 15px; color: #64748b; line-height: 1.5; font-weight: 500; margin: 0; }
+  }
+
+  .status-pill {
+    margin-top: 8px;
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    padding: 8px 16px; border-radius: 99px;
+    font-size: 13px; font-weight: 700; color: #64748b;
+    display: flex; align-items: center; gap: 8px;
+    
+    .dot {
+      width: 8px; height: 8px; background: #10b981; border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+      animation: blink 2s infinite ease-in-out;
+    }
+  }
+
+  @keyframes ripple {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(1.2); opacity: 0; }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+`;
