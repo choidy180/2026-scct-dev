@@ -60,9 +60,10 @@ const GR2_DATA = [
 
 // -----------------------------------------------------------------------------
 // [설정]
-const JIG_MODEL_PATH = "/models/final_final.glb";
-const FLOOR_MODEL_PATH = "/models/floor.glb";
-const FACTORY_BG_IMAGE = "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2670&auto=format&fit=crop";
+const JIG_MODEL_PATH = "/models/final_final_final.glb";
+const FLOOR_MODEL_PATH = "/models/final_final_final_final.glb";
+// [변경] 배경 이미지를 로컬 경로로 변경 (public/images 폴더 안에 bg_main.png를 넣어주세요)
+const FACTORY_BG_IMAGE = "/images/gmt_back.png"; 
 
 // [기본 이미지 - API 데이터 없을 시 사용]
 const DEFAULT_CART_IMAGE = "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
@@ -214,13 +215,13 @@ const GlassPanel = styled.div`
 `;
 
 const TopRightPanel = styled(GlassPanel)`
-  top: 5rem; right: 1.5rem; /* 위치 약간 올림 */
-  width: 320px; height: 280px; /* 높이도 내용에 맞춰 줄임 */
+  top: 5rem; right: 1.5rem; 
+  width: 320px; height: 280px; 
   animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 `;
 
 const DefectStatusPanel = styled(GlassPanel)`
-  top: calc(5rem + 280px + 15px); right: 1.5rem; /* 간격 20px -> 15px */
+  top: calc(5rem + 280px + 15px); right: 1.5rem; 
   width: 320px; min-height: 160px;
   animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
   border-left: 4px solid ${THEME.danger};
@@ -229,24 +230,24 @@ const DefectStatusPanel = styled(GlassPanel)`
 const BottomLeftPanel = styled(GlassPanel)`
   bottom: 1.5rem; left: 1.5rem;
   width: 320px; 
-  height: 260px; /* 높이 축소 */
+  height: 260px; 
   animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
   opacity: 0; animation-fill-mode: forwards;
 `;
 
 const VisionAnalysisPanel = styled(GlassPanel)`
   bottom: 1.5rem;
-  left: calc(1.5rem + 320px + 15px); /* 간격 축소 */
+  left: calc(1.5rem + 320px + 15px); 
   width: 240px;
   animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards;
   opacity: 0; animation-fill-mode: forwards;
-  padding: 0; /* 내부에서 개별 패딩 적용 */
+  padding: 0; 
   overflow: hidden;
 `;
 
 const HoverInfoPanel = styled(GlassPanel)`
-  top: 5rem; left: 1.5rem; width: 260px; /* 너비 약간 축소 */
-  padding: 14px; /* 호버 패널은 더 컴팩트하게 */
+  top: 5rem; left: 1.5rem; width: 260px; 
+  padding: 14px; 
   animation: ${slideDown} 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   border-left: 4px solid transparent;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
@@ -255,7 +256,7 @@ const HoverInfoPanel = styled(GlassPanel)`
 
 const AIAdvisorPanel = styled.div`
   position: fixed;
-  bottom: calc(1.5rem + 260px + 15px); /* 위치 조정 */
+  bottom: calc(1.5rem + 260px + 15px); 
   left: 1.5rem;
   width: 320px;
   background: rgba(255, 255, 255, 0.9);
@@ -274,13 +275,13 @@ const AIAdvisorPanel = styled.div`
 
 const AIHeader = styled.div`
   background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%);
-  padding: 12px 16px; /* 패딩 축소 */
+  padding: 12px 16px; 
   display: flex; align-items: center; gap: 10px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.03);
 `;
 
 const AIBody = styled.div`
-  padding: 16px; position: relative; /* 패딩 축소 */
+  padding: 16px; position: relative; 
 `;
 
 const AIMessage = styled.div`
@@ -299,7 +300,7 @@ const BlinkingCursor = styled.span`
 
 const InfoRow = styled.div`
   display: flex; justify-content: space-between; align-items: center; 
-  padding: 8px 0; /* 12px -> 8px 로 축소 */
+  padding: 8px 0; 
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   &:last-child { border-bottom: none; }
   .label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: ${THEME.textSub}; font-weight: 500; }
@@ -313,7 +314,7 @@ const ChartHeader = styled.div`
 `;
 
 const ChartTitle = styled.div`
-  font-size: 15px; /* 폰트 사이즈 미세 축소 */
+  font-size: 15px; 
   font-weight: 800; color: ${THEME.textMain};
   display: flex; align-items: center; gap: 6px; transition: color 0.3s;
 `;
@@ -336,7 +337,7 @@ const ChartWrapper = styled.div`
 
 const DefectItem = styled.div`
   display: flex; justify-content: space-between; align-items: center;
-  padding: 8px; /* 패딩 축소 */
+  padding: 8px; 
   margin-bottom: 6px;
   background: rgba(239, 68, 68, 0.05);
   border: 1px solid rgba(239, 68, 68, 0.2);
@@ -525,53 +526,114 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
   const errorColor = useMemo(() => new THREE.Color("#ff0000"), []);
   const [sortedLabels, setSortedLabels] = useState<{ id: string, name: string, position: THREE.Vector3 }[]>([]);
 
+  // [중요] 시작점 위치 보정 변수
+  // 반시계로 정렬된 상태에서, 이 숫자만큼 배열을 앞당깁니다.
+  // GR19번 위치가 GR01이 안 되면 이 숫자를 1씩 조절해보세요. (예: 4, 5, 6 ...)
+  const OFFSET_START_INDEX = 6; 
+
   useEffect(() => {
     const meshes: { mesh: THREE.Mesh, position: THREE.Vector3 }[] = [];
     errorMeshesRef.current = []; 
+    
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         mesh.castShadow = true; mesh.receiveShadow = true;
-        if (mesh.geometry) mesh.geometry.computeVertexNormals();
+        
+        // 재질 설정 (기존과 동일)
         if (mesh.material) {
           const oldMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
           const standardMat = oldMat as THREE.MeshStandardMaterial;
           const originalColor = standardMat.color ? standardMat.color : new THREE.Color(0xffffff);
           const newMat = new THREE.MeshPhysicalMaterial({
-            color: originalColor, metalness: 0.1, roughness: 0.2, clearcoat: 1.0, clearcoatRoughness: 0.1, flatShading: false, side: THREE.DoubleSide, shadowSide: THREE.BackSide 
+            color: originalColor, metalness: 0.1, roughness: 0.2, 
+            clearcoat: 1.0, clearcoatRoughness: 0.1, side: THREE.DoubleSide
           });
           mesh.material = newMat;
         }
+        
         const worldPos = new THREE.Vector3();
         mesh.getWorldPosition(worldPos);
         meshes.push({ mesh, position: worldPos });
       }
     });
 
+    // -------------------------------------------------------------------------
+    // [수정된 정렬 로직] 반시계 방향 + 시작점 지정
+    // -------------------------------------------------------------------------
+    
+    // 1. 중심점 계산
+    let centerX = 0;
+    let centerZ = 0;
+    meshes.forEach(m => {
+        centerX += m.position.x;
+        centerZ += m.position.z;
+    });
+    centerX /= meshes.length;
+    centerZ /= meshes.length;
+
+    // 2. 각도 기준 정렬 (반시계 방향 흐름 만들기)
+    // Three.js Top View에서: 
+    // 우측(0도) -> 상단(90도/270도) -> 좌측(180도) -> 하단 순서로 가려면
+    // 각도를 0~2PI로 정규화한 뒤 내림차순 정렬하면 반시계(CCW) 흐름이 됩니다.
     meshes.sort((a, b) => {
-      const zDiff = a.position.z - b.position.z;
-      if (Math.abs(zDiff) > 1.0) return zDiff;
-      return a.position.x - b.position.x;
+        let angleA = Math.atan2(a.position.z - centerZ, a.position.x - centerX);
+        let angleB = Math.atan2(b.position.z - centerZ, b.position.x - centerX);
+        
+        // -PI ~ +PI 범위를 0 ~ 2PI로 변환
+        if (angleA < 0) angleA += Math.PI * 2;
+        if (angleB < 0) angleB += Math.PI * 2;
+
+        // 내림차순 정렬 = 반시계 방향 (Top View 기준)
+        return angleB - angleA; 
     });
 
+    // 3. 배열 회전 (Shift) - 특정 위치를 1번으로 만들기 위함
+    // OFFSET_START_INDEX 만큼 배열을 잘라서 뒤로 붙임
+    const sliceIndex = OFFSET_START_INDEX % meshes.length;
+    const sortedMeshes = [
+        ...meshes.slice(sliceIndex),
+        ...meshes.slice(0, sliceIndex)
+    ];
+
+    // -------------------------------------------------------------------------
+
+    // 에러 시뮬레이션 및 데이터 할당
     const errorCount = Math.floor(Math.random() * 4) + 2;
+    // 인덱스 기반으로 랜덤 에러 생성
     const shuffledIndices = Array.from({ length: meshes.length }, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, errorCount);
     const errorIndicesSet = new Set(shuffledIndices);
     const errorUnitsData: UnitData[] = [];
 
-    const labelsData = meshes.map((item, index) => {
+    const labelsData = sortedMeshes.map((item, index) => {
+      // 정렬된 순서대로 1번부터 번호 부여
       const count = index + 1;
       const labelText = `GR${count.toString().padStart(2, '0')}`;
+      
       const isError = errorIndicesSet.has(index);
       const temp = isError ? Math.floor(Math.random() * 20) + 80 : Math.floor(Math.random() * 30) + 40;
       const load = isError ? Math.floor(Math.random() * 10) + 90 : Math.floor(Math.random() * 40) + 20;
-      const unitData: UnitData = { name: labelText, temp, load, status: isError ? 'error' : 'normal', uuid: item.mesh.uuid };
+      
+      const unitData: UnitData = { 
+          name: labelText, 
+          temp, 
+          load, 
+          status: isError ? 'error' : 'normal', 
+          uuid: item.mesh.uuid 
+      };
+      
       item.mesh.userData = unitData;
+      
       if (isError) {
         errorUnitsData.push(unitData);
         errorMeshesRef.current.push(item.mesh);
       }
-      return { id: item.mesh.uuid, name: labelText, position: item.position.clone().add(new THREE.Vector3(0, 1.5, 0)) };
+      
+      return { 
+          id: item.mesh.uuid, 
+          name: labelText, 
+          position: item.position.clone().add(new THREE.Vector3(0, 1.5, 0)) 
+      };
     });
 
     setSortedLabels(labelsData);
@@ -833,8 +895,8 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
       </BottomLeftPanel>
 
       <VisionAnalysisPanel>
-         {/* [수정] 상단 패딩 축소 (16px 20px -> 12px 16px) */}
-         <div style={{ 
+          {/* [수정] 상단 패딩 축소 (16px 20px -> 12px 16px) */}
+          <div style={{ 
             padding: '12px 16px', 
             borderBottom: `1px solid ${THEME.border}`, 
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -900,7 +962,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
                     <span style={{ fontSize: '11px', fontWeight: 600, color: THEME.textSub }}>상반기 평균값</span>
                 </div>
                 <span style={{ fontSize: '14px', fontWeight: 800, color: THEME.textMain, fontVariantNumeric: 'tabular-nums' }}>
-                   {displayValue1}
+                    {displayValue1}
                 </span>
             </div>
 
@@ -916,7 +978,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
                     <span style={{ fontSize: '11px', fontWeight: 600, color: THEME.textSub }}>하반기 평균값</span>
                 </div>
                 <span style={{ fontSize: '14px', fontWeight: 800, color: THEME.textMain, fontVariantNumeric: 'tabular-nums' }}>
-                   {displayValue2}
+                    {displayValue2}
                 </span>
             </div>
         </div>
@@ -929,7 +991,6 @@ Panels.displayName = "Panels";
 // -----------------------------------------------------------------------------
 // [Main Page]
 export default function GlbViewerPage() {
-  // [수정 3] 로딩 이벤트 제거 - 초기값을 true로 설정
   const [initialLoaded, setInitialLoaded] = useState(true);
   const [activeTab, setActiveTab] = useState("GR2");
   const [targetTab, setTargetTab] = useState<string | null>(null);
@@ -938,11 +999,8 @@ export default function GlbViewerPage() {
 
   const [hoveredInfo, setHoveredInfo] = useState<UnitData | null>(null);
   const [errorUnits, setErrorUnits] = useState<UnitData[]>([]);
-
-  // [수정 2] API 데이터를 저장할 State 추가
   const [apiData, setApiData] = useState<ApiDataItem[]>([]);
 
-  // [수정 2] 컴포넌트 마운트 시 API 호출
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -983,7 +1041,6 @@ export default function GlbViewerPage() {
   return (
     <PageContainer>
       <MainContent>
-        {/* [수정 3] CyberLoader 제거됨 */}
         {isNavigating && <TransitionLoader onFinished={handleTransitionComplete} />}
         <PreparingModal target={modalTarget} onClose={() => setModalTarget(null)} />
 
