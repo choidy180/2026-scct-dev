@@ -803,12 +803,20 @@ export const InfoRow = styled.div`
 `;
 
 export const DwellTimeBadge = styled.span<{ $isWarning: boolean }>`
+  min-width: 120px;
   font-weight: 800;
   color: ${(props) => (props.$isWarning ? '#fff' : '#0f172a')};
   background: ${(props) => (props.$isWarning ? 'rgba(239, 68, 68, 0.9)' : 'transparent')};
   padding: ${(props) => (props.$isWarning ? '4px 10px' : '0')};
   border-radius: 4px;
   width: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  svg {
+    width: 16px;
+    height: 16px;
+  }
 `;
 
 export const CompactScoreRow = styled.div`
