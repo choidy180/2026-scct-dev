@@ -808,6 +808,7 @@ export const DwellTimeBadge = styled.span<{ $isWarning: boolean }>`
   background: ${(props) => (props.$isWarning ? 'rgba(239, 68, 68, 0.9)' : 'transparent')};
   padding: ${(props) => (props.$isWarning ? '4px 10px' : '0')};
   border-radius: 4px;
+  width: auto;
 `;
 
 export const CompactScoreRow = styled.div`

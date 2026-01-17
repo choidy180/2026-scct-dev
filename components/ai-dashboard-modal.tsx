@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
-import { ref, onValue, query, limitToLast } from "firebase/database"; // Firebase Import 복구
-import { db } from '@/lib/firebase'; // Firebase DB Import 복구
+import { ref, onValue, query, limitToLast } from "firebase/database";
+import { db } from '@/lib/firebase';
 import { 
   OverlayContainer, HeaderBar, MainGridInternal, RPAProcessView, 
   StepItem, CameraFrame, CompletionPopup, FailurePopup, 
@@ -17,7 +17,6 @@ import {
 import { LuX, LuClipboardCheck, LuFileText } from "react-icons/lu";
 import styled from 'styled-components';
 
-// Props 인터페이스 정의
 interface AIDashboardModalProps {
   onClose: () => void;
   streamUrl?: string | null;
@@ -25,7 +24,6 @@ interface AIDashboardModalProps {
   externalData?: WearableApiEntry[];
 }
 
-// --- Styled Component for Empty State inside Modal ---
 const EmptyDataPlaceholder = styled.div`
   flex: 1;
   display: flex;
@@ -78,29 +76,6 @@ const FAILURE_REASONS = [
   "네트워크 연결 불안정 (Packet Loss)"
 ];
 
-const generateDummyItems = (): WearableItemData[] => {
-  const count = 3;
-  const items: WearableItemData[] = [];
-  for(let i=0; i<count; i++) {
-    items.push({
-      id: i,
-      project: "TEST-PRJ",
-      code: `TEST-ITEM-${i}`,
-      name: "테스트 품목",
-      type: "육안검사",
-      date: "2026-01-17",
-      vendor: "테스트업체",
-      qty: 100,
-      quality: "Y",
-      dwellTime: "5분",
-      invoiceNo: "TEST-INV",
-      totalQty: 300,
-      qmConf: "Y"
-    });
-  }
-  return items;
-};
-
 const MemoizedItemCard = React.memo(({ item, selectedId, onClick }: { item: WearableItemData, selectedId: number, onClick: (id: number) => void }) => ( 
   <ItemCardStyled $active={selectedId === item.id} onClick={() => onClick(item.id)} > 
     <div className="c">{item.code}</div> 
@@ -110,7 +85,6 @@ const MemoizedItemCard = React.memo(({ item, selectedId, onClick }: { item: Wear
 )); 
 MemoizedItemCard.displayName = 'MemoizedItemCard';
 
-// RPA 진행 상태 뷰
 const RPAStatusView = React.memo(({ step, isWearableConnected, streamUrl }: { step: number, isWearableConnected?: boolean, streamUrl?: string | null }) => {
   return (
     <RPAProcessView initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.3 }} >
@@ -130,6 +104,7 @@ const RPAStatusView = React.memo(({ step, isWearableConnected, streamUrl }: { st
         ))} 
       </div>
       
+      {/* RPA 모드일 때 하단 PIP로 작게 카메라 표시 */}
       <div className="pip-container">
         <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%' }}>
           <CameraFrame>
@@ -148,12 +123,13 @@ const RPAStatusView = React.memo(({ step, isWearableConnected, streamUrl }: { st
 });
 RPAStatusView.displayName = 'RPAStatusView';
 
-// 메인 컴포넌트
 export default function AIDashboardModal({ onClose, streamUrl, streamStatus, externalData }: AIDashboardModalProps) {
+  // [핵심] viewMode: 'camera' (기본값, 스트리밍) <-> 'rpa' (프로세스 진행)
+  const [viewMode, setViewMode] = useState<'camera' | 'rpa'>('camera');
+  
   const [items, setItems] = useState<WearableItemData[]>([]);
   const [selectedId, setSelectedId] = useState<number>(0);
   
-  // Logic States
   const [rpaStep, setRpaStep] = useState(0);
   const [showComplete, setShowComplete] = useState(false);
   const [showFailure, setShowFailure] = useState(false);
@@ -167,9 +143,10 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
   
   const isWearableConnected = streamStatus === 'ok' && !!streamUrl;
 
-  // 1. 외부 데이터 매핑 (API 응답 시 UI 채움)
+  // 1. [vuzix_log 변경 대응] 데이터만 채우고, 뷰 모드는 변경하지 않음
   useEffect(() => {
     if (externalData && externalData.length > 0) {
+        console.log("🛠️ Data Updated (vuzix_log triggered):", externalData);
         const mappedItems: WearableItemData[] = externalData.map((item, index) => ({
             id: index,
             project: item.PrjName || "-",
@@ -188,23 +165,21 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
         setItems(mappedItems);
         if(mappedItems.length > 0) setSelectedId(mappedItems[0].id);
         
-        // [수정] 데이터가 들어왔다고 바로 RPA 시작하지 않음 (simulateRPA 제거)
-        // 오직 Firebase logs 변화에 따라서만 움직임
+        // 중요: 여기서 setViewMode('rpa')를 하지 않습니다. 
+        // 데이터만 우측에 표시하고, 왼쪽은 여전히 카메라('camera') 상태를 유지합니다.
     } else {
         setItems([]);
     }
   }, [externalData]);
 
-  // 2. Firebase Logs 감지 (RPA 스텝 진행 로직 복구)
+  // 2. [logs 변경 대응] 여기서만 RPA 모드로 전환
   useEffect(() => {
     if (!db) return;
     const logRef = ref(db, 'logs');
-    const q = query(logRef, limitToLast(1)); // 마지막 1개만 감지
+    const q = query(logRef, limitToLast(1));
     
     const unsubscribe = onValue(q, (snapshot) => {
         const dataWrapper = snapshot.val();
-        
-        // 최초 마운트 시에는 기존 데이터 무시
         if (initialMount.current) {
             initialMount.current = false;
             return;
@@ -214,11 +189,13 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
             const key = Object.keys(dataWrapper)[0];
             const data = dataWrapper[key];
             
-            // Status 필드 감지
+            // Status 변경 감지
             if (data && data.Status) {
                 const newStatus = parseInt(data.Status, 10);
                 if (!isNaN(newStatus)) {
-                    // Queue에 추가 (중복 방지: 마지막 스텝과 같으면 무시)
+                    // [핵심] logs가 변경되었으므로 RPA 모드로 전환
+                    setViewMode('rpa'); 
+                    
                     setStepQueue(prev => {
                         if (prev.length > 0 && prev[prev.length - 1] === newStatus) return prev;
                         return [...prev, newStatus];
@@ -231,7 +208,7 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
     return () => unsubscribe();
   }, []);
 
-  // 3. Queue 처리기 (순차 실행 및 딜레이)
+  // 3. Queue 처리기 (RPA 단계 진행)
   useEffect(() => {
     const processQueue = async () => {
         if (stepQueue.length === 0 || isProcessingRef.current || showFailure || showComplete) return;
@@ -239,21 +216,16 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
         isProcessingRef.current = true;
         const nextStatus = stepQueue[0];
 
-        // 에러 코드 처리 (-1)
         if (nextStatus === -1) {
             triggerFailure("ERP 서버로부터 오류 코드가 수신되었습니다.");
             return;
         }
 
-        // 순서 역행 방지 (단, 5 완료 후 1 재시작은 허용해야 하므로 예외 처리 필요하나, 기본적으론 오름차순 가정)
-        // 여기서는 단순하게 진행
-        
         const now = Date.now();
         const timeSinceLastUpdate = now - lastStepTimeRef.current;
-        const minDelay = 1500; // 스텝 간 최소 1.5초 딜레이
+        const minDelay = 1500; 
         
         let waitTime = 0;
-        // 1번 스텝은 즉시 시작, 그 외에는 딜레이 적용
         if (nextStatus > 1 && timeSinceLastUpdate < minDelay) {
             waitTime = minDelay - timeSinceLastUpdate;
         }
@@ -262,11 +234,9 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
             await new Promise(resolve => setTimeout(resolve, waitTime));
         }
 
-        // 상태 업데이트
         setRpaStep(nextStatus);
         lastStepTimeRef.current = Date.now();
 
-        // 5번(저장완료) 도달 시 완료 팝업
         if (nextStatus === 5) {
             setTimeout(() => {
                 setShowComplete(true);
@@ -274,7 +244,6 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
             }, 2000); 
         }
 
-        // 큐에서 제거
         setStepQueue(prev => prev.slice(1));
         isProcessingRef.current = false;
     };
@@ -282,7 +251,6 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
     processQueue();
   }, [stepQueue, rpaStep, showFailure, showComplete]);
 
-  // 실패 처리
   const triggerFailure = (specificReason?: string) => {
       const reason = specificReason || FAILURE_REASONS[Math.floor(Math.random() * FAILURE_REASONS.length)];
       setFailureReason(reason);
@@ -291,7 +259,6 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
       isProcessingRef.current = false;
   };
 
-  // 실패 시 카운트다운 및 종료
   useEffect(() => {
       let timer: NodeJS.Timeout;
       if (showFailure && closeCountdown > 0) {
@@ -306,6 +273,12 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
 
   const handleItemClick = useCallback((id: number) => {
     setSelectedId(id);
+  }, []);
+
+  // 뷰 모드를 수동으로 카메라로 돌리는 기능 (필요시 사용)
+  const handleCameraClick = useCallback(() => {
+    // 이미 카메라 모드면 아무것도 안함, RPA 모드면 끄는 등 확장 가능
+    // 현재는 왼쪽 패널 클릭 시 동작 없음
   }, []);
 
   const activeItem = useMemo(() => items.find(i => i.id === selectedId) || (items.length > 0 ? items[0] : null), [items, selectedId]);
@@ -335,10 +308,26 @@ export default function AIDashboardModal({ onClose, streamUrl, streamStatus, ext
           )}
         </AnimatePresence> 
         
-        {/* Left Pane: RPA View */}
-        <div className="left-pane"> 
+        {/* Left Pane: Conditional Rendering based on viewMode */}
+        <div className="left-pane" onClick={handleCameraClick}> 
           <LayoutGroup> 
-            <RPAStatusView step={rpaStep} isWearableConnected={isWearableConnected} streamUrl={streamUrl} />
+            {viewMode === 'camera' ? (
+                // [기본 상태] 스트리밍 화면 (가이드라인/태그 제거됨, 순수 영상만)
+                <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 20 }}>
+                    <CameraFrame>
+                        {isWearableConnected && streamUrl ? (
+                            <iframe src={streamUrl} style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} />
+                        ) : (
+                            <div className="simulated-barcode-view" style={{background: '#000'}}>
+                                <div style={{opacity: 0.3}}><ScanBarcode size={40} /></div>
+                            </div>
+                        )}
+                    </CameraFrame>
+                </motion.div>
+            ) : (
+                // [RPA 모드] logs 변경 시에만 전환됨
+                <RPAStatusView step={rpaStep} isWearableConnected={isWearableConnected} streamUrl={streamUrl} />
+            )}
           </LayoutGroup> 
         </div> 
         
