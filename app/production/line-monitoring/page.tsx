@@ -62,10 +62,9 @@ const GR2_DATA = [
 // [설정]
 const JIG_MODEL_PATH = "/models/final_final_final.glb";
 const FLOOR_MODEL_PATH = "/models/final_final_final_final.glb";
-// [변경] 배경 이미지를 로컬 경로로 변경 (public/images 폴더 안에 bg_main.png를 넣어주세요)
 const FACTORY_BG_IMAGE = "/images/gmt_back.png"; 
 
-// [기본 이미지 - API 데이터 없을 시 사용]
+// [기본 이미지]
 const DEFAULT_CART_IMAGE = "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
 
 const THEME = {
@@ -496,9 +495,10 @@ function PreparingModal({ target, onClose }: { target: string | null, onClose: (
 
 // -----------------------------------------------------------------------------
 // [3D Logic]
+// [수정됨] 바닥 모델: 상호작용 차단
 const FloorModel = React.memo(() => {
   const { scene } = useGLTF(FLOOR_MODEL_PATH);
-  return <primitive object={scene} />;
+  return <primitive object={scene} raycast={() => null} />;
 });
 FloorModel.displayName = "FloorModel";
 
@@ -526,9 +526,7 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
   const errorColor = useMemo(() => new THREE.Color("#ff0000"), []);
   const [sortedLabels, setSortedLabels] = useState<{ id: string, name: string, position: THREE.Vector3 }[]>([]);
 
-  // [중요] 시작점 위치 보정 변수
-  // 반시계로 정렬된 상태에서, 이 숫자만큼 배열을 앞당깁니다.
-  // GR19번 위치가 GR01이 안 되면 이 숫자를 1씩 조절해보세요. (예: 4, 5, 6 ...)
+  // 시작점 위치 보정 변수
   const OFFSET_START_INDEX = 6; 
 
   useEffect(() => {
@@ -538,9 +536,21 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
+        const name = mesh.name.toLowerCase();
+
+        // 기존 필터 유지 (혹시 모를 다른 바닥들 제거)
+        if (
+          name.includes('floor') || name.includes('ground') || name.includes('plane') || 
+          name.includes('base') || name.includes('plate') || name.includes('bottom') || 
+          name.includes('stand') || name.includes('support') || name.includes('frame') || 
+          name.includes('line') || name.includes('rail')
+        ) {
+          return;
+        }
+
         mesh.castShadow = true; mesh.receiveShadow = true;
         
-        // 재질 설정 (기존과 동일)
+        // 재질 설정 (기존 동일)
         if (mesh.material) {
           const oldMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
           const standardMat = oldMat as THREE.MeshStandardMaterial;
@@ -558,55 +568,43 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
       }
     });
 
-    // -------------------------------------------------------------------------
-    // [수정된 정렬 로직] 반시계 방향 + 시작점 지정
-    // -------------------------------------------------------------------------
-    
-    // 1. 중심점 계산
-    let centerX = 0;
-    let centerZ = 0;
-    meshes.forEach(m => {
-        centerX += m.position.x;
-        centerZ += m.position.z;
-    });
-    centerX /= meshes.length;
-    centerZ /= meshes.length;
+    // 정렬 로직 (기존 동일)
+    let centerX = 0; let centerZ = 0;
+    meshes.forEach(m => { centerX += m.position.x; centerZ += m.position.z; });
+    centerX /= meshes.length; centerZ /= meshes.length;
 
-    // 2. 각도 기준 정렬 (반시계 방향 흐름 만들기)
-    // Three.js Top View에서: 
-    // 우측(0도) -> 상단(90도/270도) -> 좌측(180도) -> 하단 순서로 가려면
-    // 각도를 0~2PI로 정규화한 뒤 내림차순 정렬하면 반시계(CCW) 흐름이 됩니다.
     meshes.sort((a, b) => {
         let angleA = Math.atan2(a.position.z - centerZ, a.position.x - centerX);
         let angleB = Math.atan2(b.position.z - centerZ, b.position.x - centerX);
-        
-        // -PI ~ +PI 범위를 0 ~ 2PI로 변환
         if (angleA < 0) angleA += Math.PI * 2;
         if (angleB < 0) angleB += Math.PI * 2;
-
-        // 내림차순 정렬 = 반시계 방향 (Top View 기준)
         return angleB - angleA; 
     });
 
-    // 3. 배열 회전 (Shift) - 특정 위치를 1번으로 만들기 위함
-    // OFFSET_START_INDEX 만큼 배열을 잘라서 뒤로 붙임
     const sliceIndex = OFFSET_START_INDEX % meshes.length;
+    
+    // 1. 일단 정렬된 리스트를 만듭니다.
     const sortedMeshes = [
         ...meshes.slice(sliceIndex),
         ...meshes.slice(0, sliceIndex)
     ];
 
-    // -------------------------------------------------------------------------
+    // [수정된 부분] 13번째 오브젝트(Index 12) 강제 삭제 로직
+    // 이미지에서 GR13으로 잡힌 녀석을 배열에서 물리적으로 빼버립니다.
+    if (sortedMeshes.length > 12) {
+       // splice(시작인덱스, 개수): 12번 인덱스부터 1개를 제거
+       sortedMeshes.splice(12, 1);
+    }
 
-    // 에러 시뮬레이션 및 데이터 할당
+    // 에러 시뮬레이션 (기존 동일)
     const errorCount = Math.floor(Math.random() * 4) + 2;
-    // 인덱스 기반으로 랜덤 에러 생성
-    const shuffledIndices = Array.from({ length: meshes.length }, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, errorCount);
+    // 배열 길이가 줄었으므로 sortedMeshes.length를 기준으로 다시 계산
+    const shuffledIndices = Array.from({ length: sortedMeshes.length }, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, errorCount);
     const errorIndicesSet = new Set(shuffledIndices);
     const errorUnitsData: UnitData[] = [];
 
+    // 라벨 생성 (이제 GR13이 빠졌으므로, 뒤에 있던 녀석들이 당겨져서 1~24번이 됩니다)
     const labelsData = sortedMeshes.map((item, index) => {
-      // 정렬된 순서대로 1번부터 번호 부여
       const count = index + 1;
       const labelText = `GR${count.toString().padStart(2, '0')}`;
       
@@ -632,13 +630,15 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
       return { 
           id: item.mesh.uuid, 
           name: labelText, 
-          position: item.position.clone().add(new THREE.Vector3(0, 1.5, 0)) 
+          position: item.position.clone().add(new THREE.Vector3(0, 0.8, -0.5)) 
       };
     });
 
     setSortedLabels(labelsData);
     onStatusUpdate(errorUnitsData);
   }, [scene, onStatusUpdate]);
+
+  // ... (나머지 useFrame, 이벤트 핸들러 등은 기존과 동일) ...
 
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
@@ -672,7 +672,7 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
       activeIdRef.current = null;
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
       if (mesh.userData.status !== 'error') {
-         mat.emissiveIntensity = 0;
+        mat.emissiveIntensity = 0;
       }
       onHoverChange(null);
     }
@@ -682,11 +682,19 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
     <group>
       <primitive object={scene} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} />
       {sortedLabels.map((label) => (
-        <Html key={label.id} position={label.position} center distanceFactor={15} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+        <Html 
+            key={label.id} 
+            position={label.position} 
+            center 
+            distanceFactor={15} 
+            style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
           <div style={{
             background: 'rgba(0, 0, 0, 0.6)', padding: '2px 6px', borderRadius: '4px',
             border: '1px solid rgba(255, 255, 255, 0.3)', color: 'white', fontSize: '10px',
-            fontWeight: 'bold', whiteSpace: 'nowrap', fontFamily: 'Pretendard, sans-serif', backdropFilter: 'blur(2px)'
+            fontWeight: 'bold', whiteSpace: 'nowrap', fontFamily: 'Pretendard, sans-serif', 
+            backdropFilter: 'blur(2px)',
+            marginTop: '20px' 
           }}>
             {label.name}
           </div>
@@ -758,7 +766,6 @@ const AIAdvisor = React.memo(({ errors }: { errors: UnitData[] }) => {
 AIAdvisor.displayName = "AIAdvisor";
 
 const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: UnitData | null, errorUnits: UnitData[], apiData: ApiDataItem[] }) => {
-  // ... (로직 부분은 동일) ...
   const activeUnit = hoveredInfo || (errorUnits.length > 0 ? errorUnits[0] : null) || { name: 'GR01', status: 'normal' };
   const isError = activeUnit.status === 'error';
   const statusColor = isError ? THEME.danger : THEME.success;
@@ -895,7 +902,6 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
       </BottomLeftPanel>
 
       <VisionAnalysisPanel>
-          {/* [수정] 상단 패딩 축소 (16px 20px -> 12px 16px) */}
           <div style={{ 
             padding: '12px 16px', 
             borderBottom: `1px solid ${THEME.border}`, 
@@ -920,10 +926,9 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
             <ScanLine size={16} color={THEME.textSub} />
         </div>
 
-        {/* [수정] 이미지 영역 패딩 축소 */}
         <div style={{ padding: '12px 16px 0 16px' }}>
             <div style={{ 
-                position: 'relative', width: '100%', height: '120px', /* 높이도 살짝 줄임 */
+                position: 'relative', width: '100%', height: '120px',
                 borderRadius: '12px', overflow: 'hidden', backgroundColor: '#000',
                 border: `1px solid ${THEME.border}`, boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)'
             }}>
@@ -948,7 +953,6 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
             </div>
         </div>
 
-        {/* [수정] 하단 통계 패딩 및 간격 축소 */}
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ 
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1064,7 +1068,8 @@ export default function GlbViewerPage() {
 
           <Canvas
             dpr={[1, 1.5]}
-            camera={{ position: [22, 18, 20], fov: 14 }}
+            // [수정] 카메라 위치 반전 (-22, 18, -20) -> 180도 회전
+            camera={{ position: [-22, 18, -20], fov: 14 }}
             shadows="soft"
             gl={{
               logarithmicDepthBuffer: true,
@@ -1073,8 +1078,9 @@ export default function GlbViewerPage() {
             }}
           >
             <ambientLight intensity={0.5} />
+            {/* [수정] 조명 위치도 반전된 카메라에 맞춰 이동 */}
             <directionalLight
-              position={[20, 30, 20]}
+              position={[-20, 30, -20]}
               intensity={1.5}
               castShadow
               shadow-mapSize={[4096, 4096]}
@@ -1086,7 +1092,7 @@ export default function GlbViewerPage() {
 
             <Suspense fallback={null}>
               <Stage environment="city" intensity={2.0} adjustCamera={false} shadows={false}>
-                <Center>
+                <Center position={[5, 0, 4]}>
                   <group position={[0, 0, 0]}>
                     <ModelErrorBoundary fallback={null}>
                       <FloorModel />
@@ -1104,7 +1110,7 @@ export default function GlbViewerPage() {
               <Environment preset="city" blur={1} background={false} />
             </Suspense>
             <OrbitControls
-              target={[0, 0, 0]}
+              target={[-1, 0, 0]}
               makeDefault
               minPolarAngle={0}
               maxPolarAngle={Math.PI / 2.1}
