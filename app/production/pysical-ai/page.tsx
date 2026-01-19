@@ -5,7 +5,8 @@ import styled, { keyframes, ThemeProvider, createGlobalStyle } from 'styled-comp
 import { 
   Activity, User, Cpu, FileText, 
   CheckCircle2, AlertTriangle, XCircle, 
-  BarChart3, Users, Layers
+  BarChart3, Users, Layers,
+  Clock, Thermometer, Droplets // 아이콘 추가
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -81,13 +82,16 @@ export default function PhysicalAIDashboard() {
     totalLogs: 1420, uniqueWorkers: 3,
     statusCounts: { 정상: 1200, 주의: 150, 위험: 70 }
   });
+  
+  // 날씨 및 시간 상태 추가
+  const [currentTime, setCurrentTime] = useState<string>('');
+  const [weather, setWeather] = useState<{temp: number, humidity: number} | null>(null);
+
   const workerSetRef = useRef<Set<string>>(new Set(WORKERS.slice(0, 3)));
   const scrollRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  // isLoading 및 progress 관련 상태 제거됨
-
-  // [수정] 컴포넌트 마운트 시 즉시 영상 재생
+  // 영상 자동 재생
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.muted = true;
@@ -95,12 +99,49 @@ export default function PhysicalAIDashboard() {
     }
   }, []);
 
-  // [수정] 컴포넌트 마운트 시 즉시 데이터 생성 시작
+  // 시간 및 날씨 데이터 로직
   useEffect(() => {
-    // 초기 데이터 생성
+    // 1. 시간 업데이트 (1초마다)
+    const updateTime = () => {
+      const now = new Date();
+      // 오후 02:30 형식
+      setCurrentTime(now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })); 
+    };
+    updateTime();
+    const timeInterval = setInterval(updateTime, 1000);
+
+    // 2. 부산 날씨 가져오기 (Open-Meteo API 사용)
+    const fetchWeather = async () => {
+      try {
+        // 부산 좌표: 위도 35.1796, 경도 129.0756
+        const response = await fetch(
+          'https://api.open-meteo.com/v1/forecast?latitude=35.1796&longitude=129.0756&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FSeoul'
+        );
+        const data = await response.json();
+        if (data.current) {
+          setWeather({
+            temp: data.current.temperature_2m,
+            humidity: data.current.relative_humidity_2m
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch weather:", error);
+      }
+    };
+    fetchWeather();
+    // 날씨는 자주 바뀔 필요 없으므로 10분(600000ms)마다 갱신하거나 한 번만 호출
+    const weatherInterval = setInterval(fetchWeather, 600000);
+
+    return () => {
+      clearInterval(timeInterval);
+      clearInterval(weatherInterval);
+    };
+  }, []);
+
+  // 데이터 생성 로직
+  useEffect(() => {
     setLogs(Array.from({ length: 12 }).map(generateLog));
     
-    // 실시간 로그 생성 인터벌
     const interval = setInterval(() => {
       const newLog = generateLog();
       setLogs(prev => {
@@ -128,8 +169,6 @@ export default function PhysicalAIDashboard() {
     <ThemeProvider theme={theme}>
       <GlobalStyle />
       
-      {/* LoadingScreen 제거됨 */}
-
       <Container>
         <Header>
           <Brand>
@@ -160,13 +199,34 @@ export default function PhysicalAIDashboard() {
               />
               <Overlay>
                 <Grid />
-                <CamTag><span className="dot" /> CAM-01 (대차 창고) • Live</CamTag>
+                
+                {/* 상단 오버레이 그룹 (좌: Live태그, 우: 날씨/시간) */}
+                <TopOverlayRow>
+                  <CamTag>
+                    <span className="dot" /> CAM-01 (대차 창고) • Live
+                  </CamTag>
 
-                {/* 화이트 테마 현황판 (Modal) */}
+                  <WeatherWidget>
+                    <div className="item">
+                      <Clock size={14} /> {currentTime}
+                    </div>
+                    <div className="bar" />
+                    <div className="item">
+                      <Thermometer size={14} /> {weather ? `${weather.temp}°C` : '--'}
+                    </div>
+                    <div className="bar" />
+                    <div className="item">
+                      <Droplets size={14} /> {weather ? `${weather.humidity}%` : '--'}
+                    </div>
+                    <div className="loc">Busan</div>
+                  </WeatherWidget>
+                </TopOverlayRow>
+
+                {/* 하단 현황판 (Modal) */}
                 <StatsHud
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }} // 딜레이를 줄여서 더 빠르게 뜨도록 수정
+                  transition={{ delay: 0.2 }}
                 >
                   <HudItem>
                     <div className="icon-box"><FileText size={18} /></div>
@@ -245,8 +305,6 @@ export default function PhysicalAIDashboard() {
 // Styled Components
 // -------------------------------------------------------------------------
 
-// Loading 관련 스타일 컴포넌트 제거됨
-
 // --- Layout ---
 const Container = styled.div` width: 100vw; height: calc(100vh - 64px); background: ${p=>p.theme.bg}; color: ${p=>p.theme.text}; display: flex; flex-direction: column; `;
 const Header = styled.header` height: 64px; flex-shrink: 0; background: ${p=>p.theme.cardBg}; border-bottom: 1px solid ${p=>p.theme.border}; display: flex; justify-content: space-between; align-items: center; padding: 0 24px; box-shadow: ${p=>p.theme.shadow}; z-index: 10; `;
@@ -264,12 +322,51 @@ const Main = styled.main` flex: 1; padding: 20px; display: flex; gap: 20px; over
 
 // --- Video & HUD ---
 const VideoCard = styled.div` flex: 2; background: #000; border-radius: 16px; overflow: hidden; position: relative; border: 1px solid ${p=>p.theme.videoBorder}; box-shadow: ${p=>p.theme.shadow}; `;
-const VideoWrapper = styled.div` width: 100%; height: 100%; position: relative; background: #000; `;
-const LocalVideo = styled.video` width: 100%; height: 100%; object-fit: cover; opacity: 1; `;
+const VideoWrapper = styled.div` width: 100%; height: 100%; position: relative; background: #000; overflow: hidden; /* 중요: 확대된 비디오 잘리도록 설정 */ `;
+
+// [수정] 비디오 1.1배 확대
+const LocalVideo = styled.video` 
+  width: 100%; height: 100%; object-fit: cover; opacity: 1; 
+  transform: scale(1.15); 
+`;
+
 const Overlay = styled.div` position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 24px; `;
 const Grid = styled.div` position: absolute; inset: 0; opacity: 0.15; background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 60px 60px; pointer-events: none; `;
 const pulse = keyframes` 0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1} `;
-const CamTag = styled.div` align-self: flex-end; background: rgba(0,0,0,0.7); color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; gap: 8px; .dot { width: 8px; height: 8px; background: #EF4444; border-radius: 50%; animation: ${pulse} 2s infinite; } `;
+
+// [신규] 상단 오버레이 가로 정렬용 컨테이너
+const TopOverlayRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+`;
+
+// [수정] align-self 제거 (부모 Flex 제어로 변경)
+const CamTag = styled.div` 
+  background: rgba(0,0,0,0.7); color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; gap: 8px; 
+  .dot { width: 8px; height: 8px; background: #EF4444; border-radius: 50%; animation: ${pulse} 2s infinite; } 
+`;
+
+// [신규] 우측 상단 날씨 위젯
+const WeatherWidget = styled.div`
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  font-feature-settings: "tnum";
+
+  .item { display: flex; align-items: center; gap: 6px; }
+  .bar { width: 1px; height: 10px; background: rgba(255,255,255,0.3); }
+  .loc { font-size: 11px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-left: 4px; }
+`;
 
 // 화이트 테마 모달 (Stats HUD)
 const StatsHud = styled(motion.div)`
