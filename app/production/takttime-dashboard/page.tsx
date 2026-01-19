@@ -171,7 +171,6 @@ const VideoBox = styled.div<{ $isLarge?: boolean }>`
     background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); 
     color: white; font-size: 0.85rem; padding: 12px 16px 8px; font-weight: 600; 
   }
-  .live-badge { position: absolute; top: 10px; left: 10px; background: rgba(239,68,68,0.9); color: white; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
 `;
 
 const ChartWrapper = styled.div`flex: 1; height: 100%; position: relative; min-width: 0; display: flex; flex-direction: column;`;
@@ -376,9 +375,6 @@ const VideoPlayer = memo(({ src }: { src: string }) => {
     return (
         <>
             <video src={src} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            <div style={{ position: 'absolute', top: 20, left: 20, background: 'rgba(239,68,68,0.9)', color: 'white', padding: '4px 10px', borderRadius: 6, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 8, height: 8, background: 'white', borderRadius: '50%' }} />LIVE
-            </div>
         </>
     )
 }, (prev, next) => prev.src === next.src);
