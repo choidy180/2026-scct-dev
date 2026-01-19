@@ -29,9 +29,12 @@ import {
   BarChart3,
   ScanLine,
   Droplets,
+  Siren, 
+  Octagon,
+  Wrench,
+  AlertOctagon
 } from "lucide-react";
 import * as THREE from "three";
-import { GLTF } from "three-stdlib";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -47,7 +50,7 @@ import {
 } from 'recharts';
 
 // -----------------------------------------------------------------------------
-// [데이터 목업]
+// [데이터 목업 & 설정]
 const GR2_DATA = [
   { name: '09:00', inspection: 400, error: 24, rate: 0.5 },
   { name: '10:00', inspection: 300, error: 13, rate: 0.8 },
@@ -58,14 +61,20 @@ const GR2_DATA = [
   { name: '15:00', inspection: 349, error: 43, rate: 0.9 },
 ];
 
-// -----------------------------------------------------------------------------
-// [설정]
+const MOTOR_DATA = [
+  { time: '1s', load: 45 },
+  { time: '2s', load: 52 },
+  { time: '3s', load: 48 },
+  { time: '4s', load: 70 },
+  { time: '5s', load: 65 },
+  { time: '6s', load: 58 },
+  { time: '7s', load: 42 },
+  { time: '8s', load: 45 },
+];
+
 const JIG_MODEL_PATH = "/models/final_final_final.glb";
 const FLOOR_MODEL_PATH = "/models/final_final_final_final.glb";
 const FACTORY_BG_IMAGE = "/images/gmt_back.png"; 
-
-// [기본 이미지]
-const DEFAULT_CART_IMAGE = "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
 
 const THEME = {
   primary: "#10b981",
@@ -83,6 +92,17 @@ const THEME = {
   dangerBg: '#FEE2E2',
 };
 
+const ERROR_REASONS = [
+    { problem: "냉각수 압력 저하", solution: "밸브 #3 개방 및 유량 체크" },
+    { problem: "서보 모터 과부하", solution: "베어링 오일 보충" },
+    { problem: "광학 센서 오작동", solution: "렌즈 이물질 제거" },
+    { problem: "입력 전압 불안정", solution: "PSU 모듈 교체" },
+    { problem: "PLC 응답 지연", solution: "통신 케이블 점검" },
+    { problem: "유압 실린더 누유", solution: "실린더 패킹 교체" },
+    { problem: "코어 온도 과열", solution: "냉각 팬 RPM 증가" },
+    { problem: "위치 제어 편차", solution: "서보 모터 영점 조정" }
+];
+
 // -----------------------------------------------------------------------------
 // [Types]
 interface UnitData {
@@ -91,6 +111,8 @@ interface UnitData {
   load: number;
   status: 'normal' | 'error';
   uuid?: string;
+  problem?: string;
+  solution?: string;
 }
 
 interface ApiDataItem {
@@ -116,301 +138,88 @@ interface CustomTooltipProps {
 }
 
 // -----------------------------------------------------------------------------
-// [Animations]
-const slideInRight = keyframes`
-  from { opacity: 0; transform: translateX(30px); }
-  to { opacity: 1; transform: translateX(0); }
+// [Animations & Styles]
+const slideInRight = keyframes` from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } `;
+const slideInLeft = keyframes` from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } `;
+const slideUp = keyframes` from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } `;
+const slideDown = keyframes` from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } `;
+const float = keyframes` 0% { transform: translateY(0px) translateX(-50%); } 50% { transform: translateY(-5px) translateX(-50%); } 100% { transform: translateY(0px) translateX(-50%); } `;
+const blink = keyframes` 50% { opacity: 0; } `;
+const emergencyBlink = keyframes` 
+  0%, 100% { box-shadow: inset 0 0 50px rgba(239, 68, 68, 0.2); background-color: rgba(50, 0, 0, 0.3); } 
+  50% { box-shadow: inset 0 0 150px rgba(239, 68, 68, 0.6); background-color: rgba(50, 0, 0, 0.6); } 
 `;
+const textGlow = keyframes` 0%, 100% { text-shadow: 0 0 10px rgba(255, 0, 0, 0.5); } 50% { text-shadow: 0 0 20px rgba(255, 0, 0, 1), 0 0 40px rgba(255, 0, 0, 0.8); } `;
+const soundWave = keyframes` 0% { height: 10%; } 50% { height: 100%; } 100% { height: 10%; } `;
+const modalPop = keyframes` from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } `;
 
-const slideInLeft = keyframes`
-  from { opacity: 0; transform: translateX(-30px); }
-  to { opacity: 1; transform: translateX(0); }
-`;
+const PageContainer = styled.div` display: flex; flex-direction: column; width: 100%; height: calc(100vh - 64px); background-image: url('${FACTORY_BG_IMAGE}'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: #0f172a; color: #f8fafc; font-family: 'Pretendard', sans-serif; overflow: hidden; position: relative; &::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 15, 30, 0.85); z-index: 0; pointer-events: none; } `;
+const MainContent = styled.main` flex: 1; width: 100%; height: 100%; position: relative; z-index: 10; `;
+const ViewerContainer = styled.div` width: 100%; height: 100%; padding-top: 4rem; position: relative; isolation: isolate; `;
+const GlassPanel = styled.div` position: fixed; background: ${THEME.whiteCard}; backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; z-index: 20; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events: auto; color: ${THEME.textMain}; font-family: 'Pretendard', sans-serif; will-change: transform; `;
+const TopRightPanel = styled(GlassPanel)` top: 5rem; right: 1.5rem; width: 320px; height: 280px; animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; `;
+const DefectStatusPanel = styled(GlassPanel)` top: calc(5rem + 280px + 15px); right: 1.5rem; width: 320px; min-height: 160px; animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards; border-left: 4px solid ${THEME.danger}; `;
+const BottomLeftPanel = styled(GlassPanel)` bottom: 1.5rem; left: 1.5rem; width: 320px; height: 260px; animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards; opacity: 0; animation-fill-mode: forwards; `;
+const VisionAnalysisPanel = styled(GlassPanel)` bottom: 1.5rem; left: calc(1.5rem + 320px + 15px); width: 240px; animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards; opacity: 0; animation-fill-mode: forwards; padding: 0; overflow: hidden; `;
+const HoverInfoPanel = styled(GlassPanel)` top: 5rem; left: 1.5rem; width: 260px; padding: 14px; animation: ${slideDown} 0.3s cubic-bezier(0.16, 1, 0.3, 1); border-left: 4px solid transparent; transition: border-color 0.3s ease, box-shadow 0.3s ease; will-change: transform, border-color; `;
+const AIAdvisorPanel = styled.div` position: fixed; bottom: calc(1.5rem + 260px + 15px); left: 1.5rem; width: 320px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(24px); border-radius: 20px; box-shadow: 0 20px 50px rgba(99, 102, 241, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05); border: 1px solid rgba(255, 255, 255, 0.8); padding: 0; overflow: hidden; z-index: 25; animation: ${slideUp} 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); display: flex; flex-direction: column; font-family: 'Pretendard', sans-serif; will-change: transform; `;
+const AIHeader = styled.div` background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%); padding: 12px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(0, 0, 0, 0.03); `;
+const AIBody = styled.div` padding: 16px; position: relative; `;
+const AIMessage = styled.div` font-size: 14px; line-height: 1.6; color: ${THEME.textMain}; font-weight: 500; `;
+const WaveBar = styled.div<{ $delay: number }>` width: 4px; height: 100%; background: ${THEME.accent}; border-radius: 2px; animation: ${soundWave} 1s ease-in-out infinite; animation-delay: ${(p) => p.$delay}s; `;
+const BlinkingCursor = styled.span` display: inline-block; width: 2px; height: 14px; background-color: ${THEME.accent}; margin-left: 4px; vertical-align: middle; animation: ${blink} 1s step-end infinite; `;
+const InfoRow = styled.div` display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(0, 0, 0, 0.05); &:last-child { border-bottom: none; } .label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: ${THEME.textSub}; font-weight: 500; } .value { font-family: 'Pretendard', sans-serif; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: ${THEME.textMain}; } .status { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; } `;
+const ChartHeader = styled.div` display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; `;
+const ChartTitle = styled.div` font-size: 15px; font-weight: 800; color: ${THEME.textMain}; display: flex; align-items: center; gap: 6px; transition: color 0.3s; `;
+const ChartSubtitle = styled.div` font-size: 11px; color: ${THEME.textSub}; font-weight: 500; margin-top: 2px; `;
+const BigNumber = styled.div` font-size: 32px; font-weight: 800; color: ${THEME.textMain}; letter-spacing: -1px; font-family: 'Pretendard', sans-serif; font-variant-numeric: tabular-nums; `;
+const TrendBadge = styled.div<{ $isUp: boolean }>` font-size: 12px; font-weight: 700; color: ${(p) => (p.$isUp ? THEME.primary : THEME.danger)}; display: flex; align-items: center; gap: 4px; `;
+const ChartWrapper = styled.div` flex: 1; width: 100%; min-height: 0; position: relative; `;
+const DefectItem = styled.div` display: flex; justify-content: space-between; align-items: center; padding: 8px; margin-bottom: 6px; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; &:last-child { margin-bottom: 0; } `;
+const DefectName = styled.div` font-weight: 700; color: ${THEME.textMain}; display: flex; align-items: center; gap: 6px; font-size: 14px; `;
+const DefectTag = styled.div` font-size: 11px; font-weight: 700; color: #fff; background: ${THEME.danger}; padding: 2px 8px; border-radius: 99px; display: flex; align-items: center; gap: 4px; animation: ${blink} 2s infinite; `;
+const NavContainer = styled.div` position: absolute; top: 1.5rem; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 20; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(12px); padding: 6px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); `;
+const NavButton = styled.button<{ $active: boolean }>` background: ${(props) => (props.$active ? 'rgba(255, 255, 255, 0.9)' : 'transparent')}; color: ${(props) => (props.$active ? '#0f172a' : '#cbd5e1')}; border: 1px solid ${(props) => (props.$active ? '#fff' : 'transparent')}; padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; font-family: 'Pretendard', sans-serif; &:hover { color: ${(props) => (props.$active ? '#0f172a' : '#fff')}; background: ${(props) => (props.$active ? '#fff' : 'rgba(255, 255, 255, 0.1)')}; } `;
+const InstructionBadge = styled.div` position: absolute; bottom: 2rem; left: 50%; transform: translateX(-50%); padding: 0.8rem 1.6rem; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 9999px; font-size: 0.85rem; font-weight: 500; color: #cbd5e1; display: flex; align-items: center; gap: 8px; pointer-events: none; z-index: 90; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); animation: ${float} 4s ease-in-out infinite; span.highlight { color: #38bdf8; font-weight: 700; } `;
 
-const slideUp = keyframes`
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+const CriticalAlertOverlay = styled.div` 
+  position: fixed; inset: 0; z-index: 9999; 
+  display: flex; flex-direction: column; align-items: center; justify-content: center; 
+  animation: ${emergencyBlink} 1.5s infinite ease-in-out; 
+  pointer-events: all; 
+  backdrop-filter: blur(4px);
 `;
+const AlertBox = styled.div` background: #000; border: 2px solid #ff0000; padding: 40px 80px; text-align: center; border-radius: 20px; box-shadow: 0 0 100px rgba(255, 0, 0, 0.6); transform: scale(1.2); `;
+const AlertTitle = styled.h1` font-size: 80px; color: #ff0000; margin: 0; line-height: 1; font-weight: 900; letter-spacing: -2px; text-transform: uppercase; animation: ${textGlow} 1s infinite alternate; display: flex; align-items: center; gap: 20px; `;
+const AlertSub = styled.p` color: #fff; font-size: 24px; margin-top: 20px; font-weight: bold; `;
+const LoaderOverlay = styled.div` position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000000; z-index: 9999; flex-direction: column; `;
+const LoadingBarContainer = styled.div` width: 300px; text-align: center; `;
+const LoadingText = styled.div` font-size: 15px; color: #cbd5e1; margin-bottom: 12px; display: flex; justify-content: space-between; font-family: 'Pretendard', sans-serif; strong { color: #38bdf8; } `;
+const Track = styled.div` width: 100%; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; `;
+const Fill = styled.div<{ $p: number }>` height: 100%; width: ${(props) => props.$p}%; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.1s linear; box-shadow: 0 0 10px #38bdf8; `;
 
-const slideDown = keyframes`
-  from { opacity: 0; transform: translateY(-20px); }
-  to { opacity: 1; transform: translateY(0); }
-`;
-
-const float = keyframes`
-  0% { transform: translateY(0px) translateX(-50%); }
-  50% { transform: translateY(-5px) translateX(-50%); }
-  100% { transform: translateY(0px) translateX(-50%); }
-`;
-
-const modalPop = keyframes`
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-`;
-
-const blink = keyframes`
-  50% { opacity: 0; }
-`;
-
-const soundWave = keyframes`
-  0% { height: 10%; }
-  50% { height: 100%; }
-  100% { height: 10%; }
-`;
-
-// -----------------------------------------------------------------------------
-// [Styled Components]
-
-const PageContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: calc(100vh - 64px);
-  background-image: url('${FACTORY_BG_IMAGE}');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-color: #0f172a;
-  color: #f8fafc;
-  font-family: 'Pretendard', sans-serif;
-  overflow: hidden;
-  position: relative;
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(10, 15, 30, 0.85);
-    z-index: 0; pointer-events: none;
-  }
-`;
-
-const MainContent = styled.main`
-  flex: 1; width: 100%; height: 100%;
-  position: relative; z-index: 10;
-`;
-
-const ViewerContainer = styled.div`
-  width: 100%; height: 100%;
-  padding-top: 4rem;
-  position: relative;
-  isolation: isolate;
-`;
-
-const GlassPanel = styled.div`
-  position: fixed;
-  background: ${THEME.whiteCard};
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 20px;
-  padding: 16px;
-  display: flex; flex-direction: column;
-  z-index: 20;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  pointer-events: auto;
-  color: ${THEME.textMain};
-  font-family: 'Pretendard', sans-serif;
-  will-change: transform;
-`;
-
-const TopRightPanel = styled(GlassPanel)`
-  top: 5rem; right: 1.5rem; 
-  width: 320px; height: 280px; 
-  animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-`;
-
-const DefectStatusPanel = styled(GlassPanel)`
-  top: calc(5rem + 280px + 15px); right: 1.5rem; 
-  width: 320px; min-height: 160px;
-  animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
-  border-left: 4px solid ${THEME.danger};
-`;
-
-const BottomLeftPanel = styled(GlassPanel)`
-  bottom: 1.5rem; left: 1.5rem;
-  width: 320px; 
-  height: 260px; 
-  animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
-  opacity: 0; animation-fill-mode: forwards;
-`;
-
-const VisionAnalysisPanel = styled(GlassPanel)`
-  bottom: 1.5rem;
-  left: calc(1.5rem + 320px + 15px); 
-  width: 240px;
-  animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards;
-  opacity: 0; animation-fill-mode: forwards;
-  padding: 0; 
-  overflow: hidden;
-`;
-
-const HoverInfoPanel = styled(GlassPanel)`
-  top: 5rem; left: 1.5rem; width: 260px; 
-  padding: 14px; 
-  animation: ${slideDown} 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  border-left: 4px solid transparent;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
-  will-change: transform, border-color;
-`;
-
-const AIAdvisorPanel = styled.div`
-  position: fixed;
-  bottom: calc(1.5rem + 260px + 15px); 
-  left: 1.5rem;
-  width: 320px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(24px);
-  border-radius: 20px;
-  box-shadow: 0 20px 50px rgba(99, 102, 241, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  padding: 0;
-  overflow: hidden;
-  z-index: 25;
-  animation: ${slideUp} 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-  display: flex; flex-direction: column;
-  font-family: 'Pretendard', sans-serif;
-  will-change: transform;
-`;
-
-const AIHeader = styled.div`
-  background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%);
-  padding: 12px 16px; 
-  display: flex; align-items: center; gap: 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
-`;
-
-const AIBody = styled.div`
-  padding: 16px; position: relative; 
-`;
-
-const AIMessage = styled.div`
-  font-size: 14px; line-height: 1.6; color: ${THEME.textMain}; font-weight: 500;
-`;
-
-const WaveBar = styled.div<{ $delay: number }>`
-  width: 4px; height: 100%; background: ${THEME.accent}; border-radius: 2px;
-  animation: ${soundWave} 1s ease-in-out infinite; animation-delay: ${(p) => p.$delay}s;
-`;
-
-const BlinkingCursor = styled.span`
-  display: inline-block; width: 2px; height: 14px; background-color: ${THEME.accent};
-  margin-left: 4px; vertical-align: middle; animation: ${blink} 1s step-end infinite;
-`;
-
-const InfoRow = styled.div`
-  display: flex; justify-content: space-between; align-items: center; 
-  padding: 8px 0; 
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  &:last-child { border-bottom: none; }
-  .label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: ${THEME.textSub}; font-weight: 500; }
-  .value { font-family: 'Pretendard', sans-serif; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: ${THEME.textMain}; }
-  .status { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
-`;
-
-const ChartHeader = styled.div`
-  display: flex; justify-content: space-between; align-items: flex-start; 
-  margin-bottom: 10px;
-`;
-
-const ChartTitle = styled.div`
-  font-size: 15px; 
-  font-weight: 800; color: ${THEME.textMain};
-  display: flex; align-items: center; gap: 6px; transition: color 0.3s;
-`;
-const ChartSubtitle = styled.div`
-  font-size: 11px; color: ${THEME.textSub}; font-weight: 500; margin-top: 2px;
-`;
-const BigNumber = styled.div`
-  font-size: 32px; font-weight: 800; color: ${THEME.textMain};
-  letter-spacing: -1px; font-family: 'Pretendard', sans-serif; font-variant-numeric: tabular-nums;
-`;
-
-const TrendBadge = styled.div<{ $isUp: boolean }>`
-  font-size: 12px; font-weight: 700; color: ${(p) => (p.$isUp ? THEME.primary : THEME.danger)};
-  display: flex; align-items: center; gap: 4px;
-`;
-
-const ChartWrapper = styled.div`
-  flex: 1; width: 100%; min-height: 0; position: relative;
-`;
-
-const DefectItem = styled.div`
-  display: flex; justify-content: space-between; align-items: center;
+const ErrorBubble = styled.div` 
+  width: 140px; 
+  background: rgba(0, 0, 0, 0.85); 
+  backdrop-filter: blur(8px); 
+  border: 1px solid ${THEME.danger}; 
+  border-radius: 8px; 
   padding: 8px; 
-  margin-bottom: 6px;
-  background: rgba(239, 68, 68, 0.05);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 8px;
-  &:last-child { margin-bottom: 0; }
+  color: white; 
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4); 
+  animation: ${modalPop} 0.3s ease-out; 
+  position: relative; 
+  
+  &::after { 
+    content: ''; position: absolute; left: -6px; top: 12px;
+    width: 0; height: 0; 
+    border-top: 6px solid transparent; 
+    border-bottom: 6px solid transparent; 
+    border-right: 6px solid ${THEME.danger}; 
+  } 
 `;
-
-const DefectName = styled.div`
-  font-weight: 700; color: ${THEME.textMain};
-  display: flex; align-items: center; gap: 6px; font-size: 14px;
-`;
-
-const DefectTag = styled.div`
-  font-size: 11px; font-weight: 700; color: #fff; background: ${THEME.danger};
-  padding: 2px 8px; border-radius: 99px;
-  display: flex; align-items: center; gap: 4px; animation: ${blink} 2s infinite;
-`;
-
-const NavContainer = styled.div`
-  position: absolute; top: 1.5rem; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 8px; z-index: 20;
-  background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(12px);
-  padding: 6px; border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-`;
-
-const NavButton = styled.button<{ $active: boolean }>`
-  background: ${(props) => (props.$active ? 'rgba(255, 255, 255, 0.9)' : 'transparent')};
-  color: ${(props) => (props.$active ? '#0f172a' : '#cbd5e1')};
-  border: 1px solid ${(props) => (props.$active ? '#fff' : 'transparent')};
-  padding: 8px 16px; border-radius: 8px;
-  font-size: 14px; font-weight: 700; cursor: pointer;
-  transition: all 0.2s ease; font-family: 'Pretendard', sans-serif;
-  &:hover {
-    color: ${(props) => (props.$active ? '#0f172a' : '#fff')};
-    background: ${(props) => (props.$active ? '#fff' : 'rgba(255, 255, 255, 0.1)')};
-  }
-`;
-
-const InstructionBadge = styled.div`
-  position: absolute; bottom: 2rem; left: 50%; transform: translateX(-50%);
-  padding: 0.8rem 1.6rem;
-  background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 9999px;
-  font-size: 0.85rem; font-weight: 500; color: #cbd5e1;
-  display: flex; align-items: center; gap: 8px; pointer-events: none; z-index: 90;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); animation: ${float} 4s ease-in-out infinite;
-  span.highlight { color: #38bdf8; font-weight: 700; }
-`;
-
-const LoaderOverlay = styled.div`
-  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: #000000; z-index: 9999; flex-direction: column;
-`;
-
-const LoadingBarContainer = styled.div`
-  width: 300px; text-align: center;
-`;
-
-const LoadingText = styled.div`
-  font-size: 15px; color: #cbd5e1; margin-bottom: 12px; display: flex;
-  justify-content: space-between; font-family: 'Pretendard', sans-serif;
-  strong { color: #38bdf8; }
-`;
-
-const Track = styled.div`
-  width: 100%; height: 6px; background: #334155; border-radius: 3px; overflow: hidden;
-`;
-
-const Fill = styled.div<{ $p: number }>`
-  height: 100%; width: ${(props) => props.$p}%;
-  background: linear-gradient(90deg, #38bdf8, #818cf8);
-  transition: width 0.1s linear; box-shadow: 0 0 10px #38bdf8;
-`;
+const BubbleTitle = styled.div` font-size: 11px; font-weight: 800; color: ${THEME.danger}; display: flex; align-items: center; gap: 4px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; `;
+const BubbleText = styled.div` font-size: 10px; color: #e2e8f0; margin-bottom: 3px; line-height: 1.3; span.label { color: #94a3b8; font-weight: 600; display: block; font-size: 9px; margin-bottom: 1px; } `;
 
 // -----------------------------------------------------------------------------
 // [Helpers]
@@ -495,7 +304,6 @@ function PreparingModal({ target, onClose }: { target: string | null, onClose: (
 
 // -----------------------------------------------------------------------------
 // [3D Logic]
-// [수정됨] 바닥 모델: 상호작용 차단
 const FloorModel = React.memo(() => {
   const { scene } = useGLTF(FLOOR_MODEL_PATH);
   return <primitive object={scene} raycast={() => null} />;
@@ -518,39 +326,142 @@ interface JigModelProps {
   onStatusUpdate: (units: UnitData[]) => void;
 }
 
+// [최적화 & 수정된 MovingLabel]
+// 1. Ref 기반 애니메이션
+// 2. 번호표 위치 고정 (relative)
+// 3. 에러창 Absolute Position (번호표 기준 우측 배치)
+const MovingLabel = ({ labelIndex, locations, errorIndices }: { labelIndex: number, locations: any[], errorIndices: number[] }) => {
+    const groupRef = useRef<THREE.Group>(null);
+    const CYCLE_DURATION = 15;
+    const WAIT_DURATION = 10;
+    const MOVE_DURATION = 5;
+
+    useFrame((state) => {
+        if (!groupRef.current || locations.length === 0) return;
+
+        const time = state.clock.getElapsedTime();
+        const cycleIndex = Math.floor(time / CYCLE_DURATION);
+        const timeInCycle = time % CYCLE_DURATION;
+
+        // 현재 사이클에서의 논리적 위치 인덱스
+        const currentIndex = (labelIndex + cycleIndex) % locations.length;
+        const nextIndex = (currentIndex + 1) % locations.length;
+
+        const currentPos = locations[currentIndex].position;
+        const nextPos = locations[nextIndex].position;
+
+        if (timeInCycle < WAIT_DURATION) {
+            // 대기 상태: 현재 위치 고정
+            groupRef.current.position.copy(currentPos);
+        } else {
+            // 이동 상태: Lerp
+            const moveTime = timeInCycle - WAIT_DURATION;
+            const progress = Math.min(moveTime / MOVE_DURATION, 1);
+            groupRef.current.position.lerpVectors(currentPos, nextPos, progress);
+        }
+    });
+
+    const isError = errorIndices.includes(labelIndex);
+    const labelText = `M-${(labelIndex + 1).toString().padStart(2, '0')}`;
+    
+    // 에러 정보 (랜덤 매핑)
+    const errorInfo = useMemo(() => {
+        return ERROR_REASONS[(labelIndex * 3) % ERROR_REASONS.length];
+    }, [labelIndex]);
+
+    return (
+        <group ref={groupRef}>
+            <Html 
+                center 
+                distanceFactor={15} 
+                style={{ pointerEvents: 'none' }}
+                // 에러가 있으면 Z-index를 무조건 최상위로
+                zIndexRange={isError ? [99999999, 99999990] : [100, 0]}
+            >
+                {/* [중요] position: relative wrapper 
+                   width: fit-content로 번호표 크기만큼만 차지
+                */}
+                <div style={{ position: 'relative', width: 'fit-content' }}>
+                    
+                    {/* 1. 번호표 (기존 UI 유지) */}
+                    <div style={{
+                        background: 'rgba(0, 0, 0, 0.6)', padding: '2px 6px', borderRadius: '4px',
+                        border: isError ? `1px solid ${THEME.danger}` : '1px solid rgba(255, 255, 255, 0.3)', 
+                        color: isError ? THEME.danger : 'white', fontSize: '10px',
+                        fontWeight: 'bold', whiteSpace: 'nowrap', fontFamily: 'Pretendard', 
+                        backdropFilter: 'blur(2px)',
+                        boxShadow: isError ? `0 0 10px ${THEME.danger}` : 'none',
+                        marginTop: '4px' 
+                    }}>
+                        {labelText}
+                    </div>
+
+                    {/* 2. 에러창 (Absolute Position으로 번호표 오른쪽에 매달기) */}
+                    {isError && (
+                        <div style={{ 
+                            position: 'absolute', 
+                            left: '100%', // 번호표의 오른쪽 끝
+                            top: '50%',   // 번호표의 중간 높이
+                            transform: 'translate(12px, -20%)', // 오른쪽으로 12px 이동, 상하 위치 조정
+                            width: 'max-content' // 내용물만큼 너비
+                        }}>
+                            <ErrorBubble>
+                                <BubbleTitle>
+                                    <AlertOctagon size={12} /> Error Detected
+                                </BubbleTitle>
+                                <BubbleText>
+                                    <span className="label">PROBLEM</span>
+                                    {errorInfo.problem}
+                                </BubbleText>
+                                <BubbleText>
+                                    <span className="label">SOLUTION</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <Wrench size={10} color={THEME.success} />
+                                        {errorInfo.solution}
+                                    </div>
+                                </BubbleText>
+                            </ErrorBubble>
+                        </div>
+                    )}
+                </div>
+            </Html>
+        </group>
+    );
+};
+
+// [수정됨] 인터랙션 로직 복구 및 현재 위치 역계산 추가
 function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelProps) {
   const { scene } = useGLTF(url);
   const activeIdRef = useRef<string | null>(null);
-  const errorMeshesRef = useRef<THREE.Mesh[]>([]); 
   const highlightColor = useMemo(() => new THREE.Color("#38bdf8"), []);
   const errorColor = useMemo(() => new THREE.Color("#ff0000"), []);
-  const [sortedLabels, setSortedLabels] = useState<{ id: string, name: string, position: THREE.Vector3 }[]>([]);
+  
+  const [meshLocations, setMeshLocations] = useState<{ id: string, position: THREE.Vector3, mesh: THREE.Mesh }[]>([]);
+  const [activeErrorIndices, setActiveErrorIndices] = useState<number[]>([]); 
+  
+  // 애니메이션 동기화를 위한 Ref들
+  const lastCycleRef = useRef<number>(-1);
+  const [currentCycleIndex, setCurrentCycleIndex] = useState(0); // 렌더링용 상태
 
-  // 시작점 위치 보정 변수
   const OFFSET_START_INDEX = 6; 
+  const CYCLE_DURATION = 15;
 
+  // 1. 메쉬 위치 초기화
   useEffect(() => {
     const meshes: { mesh: THREE.Mesh, position: THREE.Vector3 }[] = [];
-    errorMeshesRef.current = []; 
     
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         const name = mesh.name.toLowerCase();
-
-        // 기존 필터 유지 (혹시 모를 다른 바닥들 제거)
         if (
           name.includes('floor') || name.includes('ground') || name.includes('plane') || 
           name.includes('base') || name.includes('plate') || name.includes('bottom') || 
           name.includes('stand') || name.includes('support') || name.includes('frame') || 
           name.includes('line') || name.includes('rail')
-        ) {
-          return;
-        }
+        ) return;
 
         mesh.castShadow = true; mesh.receiveShadow = true;
-        
-        // 재질 설정 (기존 동일)
         if (mesh.material) {
           const oldMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
           const standardMat = oldMat as THREE.MeshStandardMaterial;
@@ -568,7 +479,6 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
       }
     });
 
-    // 정렬 로직 (기존 동일)
     let centerX = 0; let centerZ = 0;
     meshes.forEach(m => { centerX += m.position.x; centerZ += m.position.z; });
     centerX /= meshes.length; centerZ /= meshes.length;
@@ -582,98 +492,141 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
     });
 
     const sliceIndex = OFFSET_START_INDEX % meshes.length;
-    
-    // 1. 일단 정렬된 리스트를 만듭니다.
     const sortedMeshes = [
         ...meshes.slice(sliceIndex),
         ...meshes.slice(0, sliceIndex)
     ];
 
-    // [수정된 부분] 13번째 오브젝트(Index 12) 강제 삭제 로직
-    // 이미지에서 GR13으로 잡힌 녀석을 배열에서 물리적으로 빼버립니다.
-    if (sortedMeshes.length > 12) {
-       // splice(시작인덱스, 개수): 12번 인덱스부터 1개를 제거
-       sortedMeshes.splice(12, 1);
-    }
+    if (sortedMeshes.length > 12) sortedMeshes.splice(12, 1);
 
-    // 에러 시뮬레이션 (기존 동일)
-    const errorCount = Math.floor(Math.random() * 4) + 2;
-    // 배열 길이가 줄었으므로 sortedMeshes.length를 기준으로 다시 계산
-    const shuffledIndices = Array.from({ length: sortedMeshes.length }, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, errorCount);
-    const errorIndicesSet = new Set(shuffledIndices);
-    const errorUnitsData: UnitData[] = [];
+    const locations = sortedMeshes.map(item => ({
+       id: item.mesh.uuid,
+       position: item.position.clone().add(new THREE.Vector3(0, 0.8, -0.5)),
+       mesh: item.mesh
+    }));
+    setMeshLocations(locations);
+  }, [scene]);
 
-    // 라벨 생성 (이제 GR13이 빠졌으므로, 뒤에 있던 녀석들이 당겨져서 1~24번이 됩니다)
-    const labelsData = sortedMeshes.map((item, index) => {
-      const count = index + 1;
-      const labelText = `GR${count.toString().padStart(2, '0')}`;
-      
-      const isError = errorIndicesSet.has(index);
-      const temp = isError ? Math.floor(Math.random() * 20) + 80 : Math.floor(Math.random() * 30) + 40;
-      const load = isError ? Math.floor(Math.random() * 10) + 90 : Math.floor(Math.random() * 40) + 20;
-      
-      const unitData: UnitData = { 
-          name: labelText, 
-          temp, 
-          load, 
-          status: isError ? 'error' : 'normal', 
-          uuid: item.mesh.uuid 
-      };
-      
-      item.mesh.userData = unitData;
-      
-      if (isError) {
-        errorUnitsData.push(unitData);
-        errorMeshesRef.current.push(item.mesh);
+  // 2. 에러 업데이트
+  const updateErrors = useCallback(() => {
+      const total = 24; 
+      const newErrors: number[] = [];
+      while(newErrors.length < 2) {
+          const r = Math.floor(Math.random() * total);
+          if(!newErrors.includes(r)) newErrors.push(r);
       }
-      
-      return { 
-          id: item.mesh.uuid, 
-          name: labelText, 
-          position: item.position.clone().add(new THREE.Vector3(0, 0.8, -0.5)) 
-      };
-    });
+      setActiveErrorIndices(newErrors);
+  }, []);
 
-    setSortedLabels(labelsData);
-    onStatusUpdate(errorUnitsData);
-  }, [scene, onStatusUpdate]);
-
-  // ... (나머지 useFrame, 이벤트 핸들러 등은 기존과 동일) ...
-
+  // 3. 메인 루프
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
+    const cycleIndex = Math.floor(time / CYCLE_DURATION);
+
+    // 사이클 변경 감지 (State 업데이트를 통해 MovingLabel과 동기화)
+    if (cycleIndex !== lastCycleRef.current) {
+        lastCycleRef.current = cycleIndex;
+        setCurrentCycleIndex(cycleIndex); // React State 업데이트 -> 리렌더링 유발 -> 라벨 이동
+        if (meshLocations.length > 0) updateErrors();
+    }
+
+    // 메쉬 점멸 효과
     const flashIntensity = 1.5 + Math.sin(time * 12) * 1.0;
-    errorMeshesRef.current.forEach((mesh) => {
-      if (activeIdRef.current !== mesh.uuid) {
-        const mat = mesh.material as THREE.MeshPhysicalMaterial;
-        mat.emissive.set(errorColor);
-        mat.emissiveIntensity = flashIntensity;
-      }
-    });
+    
+    if (meshLocations.length > 0) {
+        // 리셋
+        meshLocations.forEach(loc => {
+            if (loc.mesh.uuid !== activeIdRef.current) {
+                (loc.mesh.material as THREE.MeshPhysicalMaterial).emissiveIntensity = 0;
+            }
+        });
+        
+        // 에러 메쉬 점멸
+        activeErrorIndices.forEach(labelIdx => {
+             const total = meshLocations.length;
+             const currentPosIndex = (labelIdx + cycleIndex) % total;
+             const mesh = meshLocations[currentPosIndex]?.mesh;
+             
+             if (mesh && mesh.uuid !== activeIdRef.current) {
+                 const mat = mesh.material as THREE.MeshPhysicalMaterial;
+                 mat.emissive.set(errorColor);
+                 mat.emissiveIntensity = flashIntensity;
+             }
+        });
+    }
   });
 
+  // 4. 데이터 전송
+  useEffect(() => {
+      if (meshLocations.length === 0) return;
+      const errorDataList = activeErrorIndices.map(labelIdx => {
+          const name = `M-${(labelIdx + 1).toString().padStart(2, '0')}`;
+          const reason = ERROR_REASONS[(labelIdx * 3) % ERROR_REASONS.length];
+          return {
+              name,
+              temp: Math.floor(Math.random() * 20) + 80,
+              load: Math.floor(Math.random() * 10) + 90,
+              status: 'error' as const,
+              problem: reason.problem,
+              solution: reason.solution
+          };
+      });
+      onStatusUpdate(errorDataList);
+  }, [activeErrorIndices, onStatusUpdate, meshLocations.length]);
+
+  // [복구됨] 마우스 오버 핸들러
   const handlePointerOver = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     document.body.style.cursor = "pointer";
     const mesh = e.object as THREE.Mesh;
+    
     if (mesh.isMesh) {
       activeIdRef.current = mesh.uuid;
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
       mat.emissive.copy(highlightColor);
       mat.emissiveIntensity = 2.0;
-      onHoverChange(mesh.userData as UnitData);
-    }
-  }, [highlightColor, onHoverChange]);
 
+      // [핵심 로직] 현재 마우스가 올라간 Mesh가 논리적으로 몇 번 라벨(M-xx)인지 계산
+      const meshIndex = meshLocations.findIndex(loc => loc.mesh.uuid === mesh.uuid);
+      
+      if (meshIndex !== -1) {
+          const total = meshLocations.length;
+          // 공식: (LabelIndex + Cycle) % Total = MeshIndex
+          // 따라서 LabelIndex를 찾으려면 루프를 돌거나 역산해야 함.
+          // 편의상 루프로 매칭되는 라벨을 찾습니다.
+          let foundLabelIdx = -1;
+          for(let l = 0; l < total; l++) {
+              if ((l + currentCycleIndex) % total === meshIndex) {
+                  foundLabelIdx = l;
+                  break;
+              }
+          }
+
+          if (foundLabelIdx !== -1) {
+              const name = `M-${(foundLabelIdx + 1).toString().padStart(2, '0')}`;
+              const isError = activeErrorIndices.includes(foundLabelIdx);
+              // 더미 데이터 매핑 (API 데이터와 연결될 부분)
+              const hoverData: UnitData = {
+                  name,
+                  status: isError ? 'error' : 'normal',
+                  temp: isError ? 85 : 45,
+                  load: isError ? 92 : 30,
+                  uuid: mesh.uuid
+              };
+              onHoverChange(hoverData);
+          }
+      }
+    }
+  }, [highlightColor, meshLocations, currentCycleIndex, activeErrorIndices, onHoverChange]);
+
+  // [복구됨] 마우스 아웃 핸들러
   const handlePointerOut = useCallback((e: ThreeEvent<PointerEvent>) => {
     const mesh = e.object as THREE.Mesh;
     if (activeIdRef.current === mesh.uuid) {
       document.body.style.cursor = "auto";
       activeIdRef.current = null;
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
-      if (mesh.userData.status !== 'error') {
-        mat.emissiveIntensity = 0;
-      }
+      mat.emissiveIntensity = 0; // 점멸 로직이 다시 덮어쓰겠지만 일단 끔
       onHoverChange(null);
     }
   }, [onHoverChange]);
@@ -681,24 +634,15 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
   return (
     <group>
       <primitive object={scene} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} />
-      {sortedLabels.map((label) => (
-        <Html 
-            key={label.id} 
-            position={label.position} 
-            center 
-            distanceFactor={15} 
-            style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          <div style={{
-            background: 'rgba(0, 0, 0, 0.6)', padding: '2px 6px', borderRadius: '4px',
-            border: '1px solid rgba(255, 255, 255, 0.3)', color: 'white', fontSize: '10px',
-            fontWeight: 'bold', whiteSpace: 'nowrap', fontFamily: 'Pretendard, sans-serif', 
-            backdropFilter: 'blur(2px)',
-            marginTop: '20px' 
-          }}>
-            {label.name}
-          </div>
-        </Html>
+      
+      {/* 라벨들 렌더링 */}
+      {meshLocations.length > 0 && Array.from({ length: meshLocations.length }).map((_, i) => (
+          <MovingLabel 
+            key={i} 
+            labelIndex={i} 
+            locations={meshLocations} 
+            errorIndices={activeErrorIndices} 
+          />
       ))}
     </group>
   );
@@ -715,14 +659,7 @@ const AIAdvisor = React.memo(({ errors }: { errors: UnitData[] }) => {
   useEffect(() => {
     if (errors.length > 0) {
       const target = errors[0];
-      let advice = "";
-      if (target.temp >= 90) {
-        advice = `${target.name} 코어 온도 ${target.temp}°C 감지. 냉각수 순환 펌프 3번 밸브 개방 및 유량 확인이 필요합니다. 즉시 조치바랍니다.`;
-      } else if (target.load >= 90) {
-        advice = `${target.name} 시스템 부하 ${target.load}% 도달. 입력 프로세스 속도를 20% 감속하고, 백그라운드 캐시를 정리하십시오.`;
-      } else {
-        advice = `${target.name} 비정상 신호 감지. 센서 교정 작업이 필요할 수 있습니다. 유지보수 팀을 호출하십시오.`;
-      }
+      const advice = `${target.name} 문제 발생: ${target.problem}. 조치사항: ${target.solution}`;
       setMessage(advice);
       setIndex(0);
       setDisplayMessage("");
@@ -766,12 +703,13 @@ const AIAdvisor = React.memo(({ errors }: { errors: UnitData[] }) => {
 AIAdvisor.displayName = "AIAdvisor";
 
 const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: UnitData | null, errorUnits: UnitData[], apiData: ApiDataItem[] }) => {
-  const activeUnit = hoveredInfo || (errorUnits.length > 0 ? errorUnits[0] : null) || { name: 'GR01', status: 'normal' };
+  const activeUnit = hoveredInfo || (errorUnits.length > 0 ? errorUnits[0] : null) || { name: 'M-01', status: 'normal' };
   const isError = activeUnit.status === 'error';
   const statusColor = isError ? THEME.danger : THEME.success;
   const statusBg = isError ? THEME.dangerBg : THEME.successBg;
 
-  const activeNumber = parseInt(activeUnit.name.replace("GR", ""), 10);
+  // activeUnit.name이 "M-01" 형식이라 가정하고 숫자 추출
+  const activeNumber = activeUnit && activeUnit.name ? parseInt(activeUnit.name.replace("M-", ""), 10) : 1;
   const matchedData = apiData.find(item => parseInt(item.대차번호) === activeNumber);
 
   const displayImage = matchedData?.FILEPATH1 || "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
@@ -779,7 +717,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
   const displayValue2 = matchedData?.AI_LABEL ? Number(matchedData.AI_LABEL).toFixed(4) : "0.0000";
 
   const hoverMatchedData = hoveredInfo 
-    ? apiData.find(item => parseInt(item.대차번호) === parseInt(hoveredInfo.name.replace("GR", ""), 10))
+    ? apiData.find(item => parseInt(item.대차번호) === parseInt(hoveredInfo.name.replace("M-", ""), 10))
     : null;
 
   const boxes = isError 
@@ -840,7 +778,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
             <ChartTitle style={{ color: THEME.danger }}>
               <AlertTriangle size={16} fill={THEME.danger} stroke="#fff" /> 불량 오브젝트
             </ChartTitle>
-            <ChartSubtitle>Overheating Units Alert</ChartSubtitle>
+            <ChartSubtitle>Active Errors (Max 2)</ChartSubtitle>
           </div>
           <div style={{ background: THEME.danger, color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold' }}>
             {errorUnits.length} 건
@@ -849,11 +787,14 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
         <div style={{ overflowY: 'auto', maxHeight: '120px', paddingRight: '4px' }}>
           {errorUnits.length > 0 ? (
             errorUnits.map((unit, idx) => (
-              <DefectItem key={unit.uuid || idx}>
+              <DefectItem key={idx}>
                 <DefectName><span>{unit.name}</span></DefectName>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: THEME.danger, fontFamily: 'Pretendard', fontVariantNumeric: 'tabular-nums' }}>{unit.temp}°C</span>
-                  <DefectTag>CRITICAL</DefectTag>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 'bold', color: THEME.danger, fontFamily: 'Pretendard', fontVariantNumeric: 'tabular-nums' }}>{unit.temp}°C</span>
+                      <DefectTag>CHECK</DefectTag>
+                   </div>
+                   <span style={{ fontSize: '10px', color: THEME.textSub, marginTop: '2px' }}>{unit.problem}</span>
                 </div>
               </DefectItem>
             ))
@@ -862,7 +803,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
           )}
         </div>
       </DefectStatusPanel>
-
+      
       <TopRightPanel>
         <ChartHeader>
           <div><ChartTitle><Activity size={16} color={THEME.primary} /> 실시간 검사 현황</ChartTitle><ChartSubtitle>Real-time Monitor</ChartSubtitle></div>
@@ -910,7 +851,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
         }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '16px', fontWeight: 800, color: THEME.textMain, letterSpacing: '-0.5px' }}>
-                    {activeUnit.name || 'GR-??'}
+                    {activeUnit.name || 'M-??'}
                 </span>
                 
                 <div style={{ 
@@ -954,36 +895,59 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
         </div>
 
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ 
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '8px 10px', borderRadius: '10px', backgroundColor: '#F3F4F6',
-                border: `1px solid ${THEME.border}`
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ padding: '4px', borderRadius: '6px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                        <Database size={12} color={THEME.accent} />
-                    </div>
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: THEME.textSub }}>상반기 평균값</span>
-                </div>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: THEME.textMain, fontVariantNumeric: 'tabular-nums' }}>
-                    {displayValue1}
-                </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ 
+                  flex: 1,
+                  display: 'flex', flexDirection: 'column',
+                  padding: '8px 10px', borderRadius: '10px', backgroundColor: '#F3F4F6',
+                  border: `1px solid ${THEME.border}`
+              }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <Database size={12} color={THEME.accent} />
+                      <span style={{ fontSize: '10px', fontWeight: 600, color: THEME.textSub }}>상반기</span>
+                  </div>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: THEME.textMain }}>
+                      {displayValue1}
+                  </span>
+              </div>
+
+              <div style={{ 
+                  flex: 1,
+                  display: 'flex', flexDirection: 'column',
+                  padding: '8px 10px', borderRadius: '10px', backgroundColor: '#F3F4F6',
+                  border: `1px solid ${THEME.border}`
+              }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <BarChart3 size={12} color={THEME.success} />
+                      <span style={{ fontSize: '10px', fontWeight: 600, color: THEME.textSub }}>하반기</span>
+                  </div>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: THEME.textMain }}>
+                      {displayValue2}
+                  </span>
+              </div>
             </div>
 
-            <div style={{ 
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '8px 10px', borderRadius: '10px', backgroundColor: '#F3F4F6',
-                border: `1px solid ${THEME.border}`
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ padding: '4px', borderRadius: '6px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                        <BarChart3 size={12} color={THEME.success} />
-                    </div>
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: THEME.textSub }}>하반기 평균값</span>
-                </div>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: THEME.textMain, fontVariantNumeric: 'tabular-nums' }}>
-                    {displayValue2}
-                </span>
+            <div style={{ marginTop: '4px' }}>
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                   <Activity size={10} color={THEME.warning} />
+                   <span style={{ fontSize: '10px', fontWeight: 700, color: THEME.textSub }}>모터 부하율</span>
+                 </div>
+                 <span style={{ fontSize: '10px', color: THEME.warning, fontWeight: 'bold' }}>Live</span>
+               </div>
+               <div style={{ height: '40px', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={MOTOR_DATA}>
+                      <defs>
+                        <linearGradient id="motorGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={THEME.warning} stopOpacity={0.4}/>
+                          <stop offset="95%" stopColor={THEME.warning} stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <Area type="monotone" dataKey="load" stroke={THEME.warning} strokeWidth={1.5} fill="url(#motorGradient)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+               </div>
             </div>
         </div>
       </VisionAnalysisPanel>
@@ -1005,16 +969,18 @@ export default function GlbViewerPage() {
   const [errorUnits, setErrorUnits] = useState<UnitData[]>([]);
   const [apiData, setApiData] = useState<ApiDataItem[]>([]);
 
+  // Critical Error Check (M-01 ~ M-04)
+  const criticalUnit = useMemo(() => {
+    const criticalTargets = ['M-01', 'M-02', 'M-03', 'M-04'];
+    return errorUnits.find(u => criticalTargets.includes(u.name));
+  }, [errorUnits]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await fetch("http://1.254.24.170:24828/api/DX_API000024");
         const json = await response.json();
-        if (json.success) {
-          setApiData(json.data);
-        } else {
-          console.warn("API returned success: false");
-        }
+        if (json.success) setApiData(json.data);
       } catch (error) {
         console.error("Failed to fetch DX_API000024:", error);
       }
@@ -1044,6 +1010,21 @@ export default function GlbViewerPage() {
 
   return (
     <PageContainer>
+      {criticalUnit && (
+        <CriticalAlertOverlay>
+          <Siren size={120} color="#ff0000" style={{ animation: 'pulse 1s infinite' }} />
+          <AlertBox>
+             <AlertTitle>
+               <Octagon size={80} strokeWidth={3} /> STOP
+             </AlertTitle>
+             <AlertSub>라인 긴급 정지 요망</AlertSub>
+             <div style={{ color: '#ffaaaa', marginTop: '10px', fontSize: '18px', fontWeight: 'bold' }}>
+               {criticalUnit.name} 초기 투입 구간 결함 감지
+             </div>
+          </AlertBox>
+        </CriticalAlertOverlay>
+      )}
+
       <MainContent>
         {isNavigating && <TransitionLoader onFinished={handleTransitionComplete} />}
         <PreparingModal target={modalTarget} onClose={() => setModalTarget(null)} />
@@ -1068,7 +1049,6 @@ export default function GlbViewerPage() {
 
           <Canvas
             dpr={[1, 1.5]}
-            // [수정] 카메라 위치 반전 (-22, 18, -20) -> 180도 회전
             camera={{ position: [-22, 18, -20], fov: 14 }}
             shadows="soft"
             gl={{
@@ -1078,7 +1058,6 @@ export default function GlbViewerPage() {
             }}
           >
             <ambientLight intensity={0.5} />
-            {/* [수정] 조명 위치도 반전된 카메라에 맞춰 이동 */}
             <directionalLight
               position={[-20, 30, -20]}
               intensity={1.5}
@@ -1127,7 +1106,5 @@ export default function GlbViewerPage() {
   );
 }
 
-// -----------------------------------------------------------------------------
-// [Preload Assets]
 useGLTF.preload(JIG_MODEL_PATH);
 useGLTF.preload(FLOOR_MODEL_PATH);

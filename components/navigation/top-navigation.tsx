@@ -47,7 +47,7 @@ const subMenuData: Record<string, MenuDataType> = {
     ]
   },
   "공정품질": {
-    description: "미세한 오차도 허용하지 않는\n실시간 공정 품질 모니터링 시스템입니다.",
+    description: "추적관리성을 높이는걸 목표로하며 미세한 오차도 허용하지 않는\n실시간 공정 품질 모니터링 시스템입니다.",
     items: [
       { label: "유리틈새검사", href: "/production/glass-gap-check", detail: "" },
       { label: "발포액누설 검사", href: "/production/leak-detection", detail: "" },
