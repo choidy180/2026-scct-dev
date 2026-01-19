@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Scan, CheckCircle, AlertCircle, Activity, Box, Layers, Monitor, Cpu, Eye, X, Volume2, VolumeX, AlertTriangle } from 'lucide-react';
+import { Scan, CheckCircle, AlertCircle, Activity, Box, Layers, Monitor, Cpu, Eye, X, Volume2, VolumeX, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw } from 'lucide-react';
 
 // --- 1. 상수 및 타입 ---
 const SCOPE_SIZE = 250;
@@ -37,195 +37,217 @@ interface ApiResponse {
         FILEPATH4: string; FILEPATH5: string; FILEPATH6: string;
         LABEL001: string; LABEL002: string; LABEL003: string; 
         LABEL004: string; LABEL005: string; LABEL006: string;
-        RESULT: string;
+        RESULT: string;     // 전체 결과
         COUNT_NUM: string;
     }>;
 }
 
-// [Sound] 비프음 재생 함수
+// --- 2. 테마 및 스타일 설정 ---
+const THEME = {
+  bg: '#F8FAFC', cardBg: '#FFFFFF', textPrimary: '#1E293B', textSecondary: '#64748B',
+  accent: '#3B82F6', border: '#E2E8F0',
+  status: {
+    ok: { bg: '#ECFDF5', text: '#059669', border: '#10B981' },
+    ng: { bg: '#FEF2F2', text: '#DC2626', border: '#EF4444' },
+    wait: { bg: '#F1F5F9', text: '#94A3B8', border: '#CBD5E1' }
+  }
+};
+
+const LAYOUT_CONFIGS = {
+  FHD: {
+    padding: '20px', gap: '12px', cardHeight: '220px', cardPadding: '16px', // 카드 높이 약간 축소
+    fontSize: { title: '16px', sub: '12px', badge: '11px' },
+    iconSize: 20, logoSize: 20, overlap: '-60px', 
+  },
+  QHD: {
+    padding: '32px', gap: '24px', cardHeight: '340px', cardPadding: '24px',
+    fontSize: { title: '22px', sub: '16px', badge: '14px' },
+    iconSize: 30, logoSize: 28, overlap: '-100px', 
+  }
+};
+
+const GlobalStyles = () => (
+    <style jsx global>{`
+        @keyframes pulse-green-soft {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.2); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        @keyframes pulse-red-soft {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .animate-ok { animation: pulse-green-soft 2s infinite; }
+        .animate-ng { animation: pulse-red-soft 2s infinite; }
+    `}</style>
+);
+
+// --- 3. 초기 데이터 ---
+const initialTopCards: CamData[] = [
+  { id: 'CAM 02', title: 'Surface Check', status: '정상', icon: <Layers />, position: 'top-left', highlight: { top: 10, left: 5, width: 32, height: 18 } },
+  { id: 'CAM 04', title: 'Dimension Check', status: '정상', icon: <Box />, position: 'top-center', highlight: { top: 5, left: 42, width: 16, height: 9 } },
+  { id: 'CAM 06', title: 'Scratch Check', status: '정상', icon: <Scan />, position: 'top-right', highlight: { top: 15, left: 65, width: 32, height: 18 } },
+];
+
+const initialBottomCards: CamData[] = [
+  { id: 'CAM 01', title: 'Edge Check L', status: '정상', icon: <Activity />, position: 'bottom-left', highlight: { top: 60, left: 5, width: 32, height: 18 } },
+  { id: 'CAM 03', title: 'Alignment', status: '정상', icon: <AlertCircle />, position: 'bottom-center', highlight: { top: 50, left: 42, width: 16, height: 9 } },
+  { id: 'CAM 05', title: 'Edge Check R', status: '정상', icon: <Activity />, position: 'bottom-right', highlight: { top: 65, left: 60, width: 32, height: 18 } },
+];
+
+// --- 4. 컴포넌트 구현 ---
+
+// [NEW] 상단 대시보드 헤더 (판정박스 + 정보테이블)
+const DashboardHeader = ({ apiData, layout }: { apiData: any, layout: any }) => {
+    // 판정 결과 로직
+    const resultStr = apiData?.RESULT || '';
+    const isPass = resultStr === '정상' || resultStr.toUpperCase() === 'OK';
+    const isFail = !isPass && !!resultStr;
+
+    let style = THEME.status.wait;
+    let Icon = Clock;
+    let label = "READY";
+    let subLabel = "SYSTEM STANDBY";
+    let animClass = "";
+
+    if (isPass) {
+        style = THEME.status.ok;
+        Icon = CheckCircle2;
+        label = "OK (정상)";
+        subLabel = "PASSED";
+        animClass = "animate-ok";
+    } else if (isFail) {
+        style = THEME.status.ng;
+        Icon = XCircle;
+        label = "NG (불량)";
+        subLabel = "FAILED";
+        animClass = "animate-ng";
+    }
+
+    return (
+        <div style={{ display: 'flex', gap: layout.gap, height: '100px', marginBottom: layout.gap, flexShrink: 0 }}>
+            {/* 1. 타이틀 & 로고 영역 */}
+            <div style={{ 
+                width: '240px', backgroundColor: THEME.cardBg, borderRadius: '16px', border: `1px solid ${THEME.border}`,
+                display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <Monitor size={24} color={THEME.accent} />
+                    <span style={{ fontSize: '20px', fontWeight: 800, color: THEME.textPrimary }}>Estify<span style={{color:THEME.accent}}>Vision</span></span>
+                </div>
+                <span style={{ fontSize: '12px', color: THEME.textSecondary, fontWeight: 600 }}>Multi-Cam Inspection System</span>
+            </div>
+
+            {/* 2. 판정 결과 박스 */}
+            <div className={animClass} style={{
+                width: '280px', backgroundColor: THEME.cardBg, borderRadius: '16px', border: `1px solid ${THEME.border}`,
+                display: 'flex', alignItems: 'center', padding: '0 24px', gap: '20px', position: 'relative', overflow: 'hidden',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+            }}>
+                <div style={{
+                    width: '56px', height: '56px', borderRadius: '50%', backgroundColor: style.bg,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: style.text, flexShrink: 0
+                }}>
+                    <Icon size={32} strokeWidth={2.5} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '12px', color: THEME.textSecondary, fontWeight: 600 }}>TOTAL RESULT</span>
+                    <span style={{ fontSize: '24px', color: style.text, fontWeight: 800, lineHeight: 1.1 }}>{label}</span>
+                    <span style={{ fontSize: '12px', color: '#94A3B8', fontWeight: 500 }}>{subLabel}</span>
+                </div>
+            </div>
+
+            {/* 3. 정보 테이블 */}
+            <div style={{ 
+                flex: 1, backgroundColor: THEME.cardBg, borderRadius: '16px', border: `1px solid ${THEME.border}`,
+                display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+            }}>
+                <div style={{ display: 'flex', width: '100%', height: '40%', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.border}` }}>
+                    <InfoHeaderCell text="검사 시간" />
+                    <InfoHeaderCell text="생산 수량" />
+                    <InfoHeaderCell text="현재 상태" isLast />
+                </div>
+                <div style={{ display: 'flex', width: '100%', height: '60%' }}>
+                    <InfoValueCell text={apiData?.TIMEVALUE || '00:00:00'} />
+                    <InfoValueCell text={`${apiData?.COUNT_NUM || 0} EA`} />
+                    <InfoValueCell text="RUNNING" isLast color={THEME.accent} />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const InfoHeaderCell = ({ text, isLast }: { text: string, isLast?: boolean }) => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: THEME.textSecondary, borderRight: isLast ? 'none' : `1px solid ${THEME.border}` }}>{text}</div>
+);
+const InfoValueCell = ({ text, isLast, color }: { text: string, isLast?: boolean, color?: string }) => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: color || THEME.textPrimary, borderRight: isLast ? 'none' : `1px solid ${THEME.border}` }}>{text}</div>
+);
+
+// 비프음 재생 함수
 const playBeep = () => {
     try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (!AudioContext) return;
-        
         const ctx = new AudioContext();
         if (ctx.state === 'suspended') ctx.resume();
-
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        
         osc.connect(gain);
         gain.connect(ctx.destination);
-        
         osc.type = 'square';
         osc.frequency.setValueAtTime(880, ctx.currentTime); 
         osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15);
-        
         gain.gain.setValueAtTime(0.3, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-        
         osc.start();
         osc.stop(ctx.currentTime + 0.2);
-        
-        setTimeout(() => {
-            if(ctx.state !== 'closed') ctx.close();
-        }, 300);
-
-    } catch (e) {
-        console.error("Audio play failed", e);
-    }
+        setTimeout(() => { if(ctx.state !== 'closed') ctx.close(); }, 300);
+    } catch (e) { console.error(e); }
 };
 
-// --- 2. 해상도별 레이아웃 설정 ---
-const LAYOUT_CONFIGS = {
-  FHD: {
-    padding: '20px',
-    gap: '12px',
-    cardHeight: '250px',
-    cardPadding: '16px',
-    fontSize: { title: '16px', sub: '12px', badge: '11px' },
-    iconSize: 20,
-    logoSize: 20,
-    overlap: '-90px', 
-  },
-  QHD: {
-    padding: '32px',
-    gap: '24px',
-    cardHeight: '380px',
-    cardPadding: '24px',
-    fontSize: { title: '22px', sub: '16px', badge: '14px' },
-    iconSize: 30,
-    logoSize: 28,
-    overlap: '-120px', 
-  }
-};
-
-const theme = {
-  bg: '#F8FAFC', cardBg: '#FFFFFF', textPrimary: '#1E293B', textSecondary: '#64748B',
-  accent: '#3B82F6', success: '#10B981', warning: '#F59E0B', danger: '#EF4444',
-  border: '#E2E8F0', shadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
-};
-
-const initialTopCards: CamData[] = [
-  { id: 'F2', title: 'Surface Check A', status: '정상', icon: <Layers />, position: 'top-left', highlight: { top: 10, left: 5, width: 32, height: 18 } },
-  { id: 'F4', title: 'Dimension Check', status: '정상', icon: <Box />, position: 'top-center', highlight: { top: 5, left: 42, width: 16, height: 9 } },
-  { id: 'F6', title: 'Scratch Check', status: '정상', icon: <Scan />, position: 'top-right', highlight: { top: 15, left: 65, width: 32, height: 18 } },
-];
-
-const initialBottomCards: CamData[] = [
-  { id: 'F1', title: 'Edge Check L', status: '정상', icon: <Activity />, position: 'bottom-left', highlight: { top: 60, left: 5, width: 32, height: 18 } },
-  { id: 'F3', title: 'Center Alignment', status: '정상', icon: <AlertCircle />, position: 'bottom-center', highlight: { top: 50, left: 42, width: 16, height: 9 } },
-  { id: 'F5', title: 'Edge Check R', status: '정상', icon: <Activity />, position: 'bottom-right', highlight: { top: 65, left: 60, width: 32, height: 18 } },
-];
-
-// --- 3. 컴포넌트들 ---
-
-const SoundPermissionModal = ({ onConfirm }: { onConfirm: () => void }) => {
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 20000, 
-            backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            animation: 'fadeIn 0.2s ease-out'
-        }}>
-            <div style={{
-                backgroundColor: '#fff', padding: '32px', borderRadius: '16px',
-                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                maxWidth: '400px', width: '90%', textAlign: 'center',
-                border: `1px solid ${theme.danger}`
-            }}>
-                <div style={{ 
-                    width: '60px', height: '60px', backgroundColor: '#FEF2F2', borderRadius: '50%', 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
-                }}>
-                    <AlertTriangle size={32} color={theme.danger} />
-                </div>
-                <h3 style={{ fontSize: '20px', fontWeight: 800, color: theme.textPrimary, marginBottom: '8px' }}>시스템 경고 알림</h3>
-                <p style={{ color: theme.textSecondary, marginBottom: '24px', lineHeight: '1.5' }}>
-                    현재 공정 라인에 <strong style={{color: theme.danger}}>이상 징후</strong>가 감지되었습니다.<br/>
-                    알림음을 재생하기 위해 확인 버튼을 눌러주세요.
-                </p>
-                <button onClick={onConfirm} style={{
-                    backgroundColor: theme.danger, color: '#fff', border: 'none',
-                    padding: '12px 24px', borderRadius: '8px', fontSize: '16px', fontWeight: 700,
-                    cursor: 'pointer', width: '100%', boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.3)'
-                }}>확인 및 소리 켜기</button>
-            </div>
-             <style jsx>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+const SoundPermissionModal = ({ onConfirm }: { onConfirm: () => void }) => (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 20000, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ backgroundColor: '#fff', padding: '32px', borderRadius: '16px', width: '400px', textAlign: 'center', border: '1px solid #EF4444' }}>
+            <div style={{ width: '60px', height: '60px', backgroundColor: '#FEF2F2', borderRadius: '50%', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><AlertTriangle size={32} color="#EF4444" /></div>
+            <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#1E293B', marginBottom: '8px' }}>시스템 경고 알림</h3>
+            <p style={{ color: '#64748B', marginBottom: '24px' }}>이상 징후가 감지되었습니다.<br/>소리 알림을 켜시겠습니까?</p>
+            <button onClick={onConfirm} style={{ backgroundColor: '#EF4444', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 700, width: '100%', cursor: 'pointer' }}>확인</button>
         </div>
-    );
-};
+    </div>
+);
 
 const ImageModal = ({ data, onClose }: { data: CamData, onClose: () => void }) => {
-    useEffect(() => {
-        const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-        window.addEventListener('keydown', handleEsc);
-        return () => window.removeEventListener('keydown', handleEsc);
-    }, [onClose]);
-
     const displayImage = data.specificImageUrl || GUIDE_IMAGE_URL;
-    const isFullImage = !!data.specificImageUrl;
-
-    const bgStyle: React.CSSProperties = isFullImage ? {
-        backgroundImage: `url(${displayImage})`,
-        backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat'
-    } : {
-        backgroundImage: `url(${GUIDE_IMAGE_URL})`,
-        backgroundSize: '300%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat'
-    };
-
     return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 10000, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.2s ease-out'
-        }} onClick={onClose}>
-            <button style={{
-                position: 'absolute', top: '32px', right: '32px',
-                background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%',
-                width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: '#fff', transition: 'background 0.2s'
-            }} onClick={onClose}><X size={28} /></button>
-            <div style={{
-                width: '85vw', height: '85vh', maxWidth: '1600px', maxHeight: '1000px',
-                backgroundColor: '#000', borderRadius: '16px', overflow: 'hidden',
-                position: 'relative', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                display: 'flex', flexDirection: 'column', margin: 'auto'
-            }} onClick={(e) => e.stopPropagation()}>
-                <div style={{
-                    padding: '20px 32px', backgroundColor: '#1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    borderBottom: '1px solid #334155'
-                }}>
-                    <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
-                        <div style={{ color: theme.accent, padding: '8px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px' }}>
-                             {React.cloneElement(data.icon as React.ReactElement<any>, { size: 24 })}
-                        </div>
-                        <div>
-                            <h3 style={{ margin: 0, color: '#fff', fontSize: '20px', fontWeight: 700 }}>{data.id} - Detail View</h3>
-                            <p style={{ margin: '4px 0 0', color: '#94A3B8', fontSize: '14px' }}>{data.title} • {data.position.toUpperCase()}</p>
-                        </div>
-                    </div>
-                    <Badge status={data.status} fontSize="14px" />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+            <div style={{ width: '85vw', height: '85vh', backgroundColor: '#000', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+                <div style={{ padding: '20px 32px', backgroundColor: '#1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <h3 style={{ color: '#fff', margin: 0 }}>{data.id} - Detail View</h3>
+                     <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={28} /></button>
                 </div>
-                <div style={{ flex: 1, position: 'relative', overflow: 'hidden', backgroundColor: '#0f172a' }}>
-                    <div style={{ width: '100%', height: '100%', ...bgStyle }} />
+                <div style={{ flex: 1, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img src={displayImage} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                 </div>
             </div>
-            <style jsx>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
         </div>
     );
 };
 
+// 메인 대시보드
 const VisionDashboard = () => {
   const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
   const [selectedCam, setSelectedCam] = useState<CamData | null>(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+  
+  // API 데이터 상태
+  const [rawApiData, setRawApiData] = useState<any>(null);
   const [topCards, setTopCards] = useState<CamData[]>(initialTopCards);
   const [bottomCards, setBottomCards] = useState<CamData[]>(initialBottomCards);
-  const [totalCount, setTotalCount] = useState("0");
-  const [apiError, setApiError] = useState(false);
-
-  // API 데이터 Fetch (mount 즉시 실행)
+  
   const fetchData = useCallback(async () => {
     try {
         const response = await fetch(API_URL);
@@ -233,8 +255,7 @@ const VisionDashboard = () => {
 
         if (json.success && json.data.length > 0) {
             const d = json.data[0];
-            setTotalCount(d.COUNT_NUM);
-            setApiError(false);
+            setRawApiData(d); // 전체 데이터 저장 (헤더용)
 
             const getStatus = (label: string): InspectionStatus => label === '정상' ? '정상' : '점검필요';
 
@@ -252,50 +273,25 @@ const VisionDashboard = () => {
         }
     } catch (error) {
         console.error("API Fetch Error:", error);
-        setApiError(true);
     }
   }, []);
 
-  useEffect(() => {
-    fetchData(); // 로딩 대기 없이 바로 실행
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // 불량 체크 및 반복 알림
+  // 불량 감지 및 알림 로직
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     if (isSoundEnabled && !showPermissionModal) {
         const allCards = [...topCards, ...bottomCards];
         const hasDefect = allCards.some(card => card.status === '점검필요' || card.status === '에러');
-        if (hasDefect) {
-            intervalId = setInterval(() => playBeep(), 1000); 
-        }
+        if (hasDefect) intervalId = setInterval(() => playBeep(), 1000); 
     }
     return () => { if (intervalId) clearInterval(intervalId); };
-  }, [isSoundEnabled, showPermissionModal, topCards, bottomCards]); 
-
-  // 권한 모달 체크
-  useEffect(() => {
-    const allCards = [...topCards, ...bottomCards];
-    const hasDefect = allCards.some(card => card.status === '점검필요' || card.status === '에러');
-    if (hasDefect && isSoundEnabled && !showPermissionModal) {
-          // 필요시 모달 트리거
-    }
-  }, [topCards, bottomCards, isSoundEnabled, showPermissionModal]);
-
-  const handlePermissionConfirm = () => {
-      setShowPermissionModal(false);
-      setIsSoundEnabled(true);
-      playBeep(); 
-  };
-
-  const handleCardClick = (data: CamData) => {
-    setSelectedCam(data);
-  };
+  }, [isSoundEnabled, showPermissionModal, topCards, bottomCards]);
 
   useEffect(() => {
     const handleResize = () => setScreenMode(window.innerWidth > 2200 ? 'QHD' : 'FHD');
-    handleResize();
-    window.addEventListener('resize', handleResize);
+    handleResize(); window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -307,81 +303,52 @@ const VisionDashboard = () => {
   const requestRef = useRef<number | null>(null);
   const [imageMetrics, setImageMetrics] = useState({ width: 0, height: 0, left: 0, top: 0 });
 
-  const mainImageUrl = GUIDE_IMAGE_URL; 
-
+  // 돋보기 로직 (기존 유지)
   const updateImageMetrics = useCallback(() => {
     if (!imageRef.current || !containerRef.current) return;
     const img = imageRef.current;
     const container = containerRef.current;
     if (img.naturalWidth === 0) return;
-
     const imageAspect = img.naturalWidth / img.naturalHeight;
     const containerRect = container.getBoundingClientRect();
     const containerAspect = containerRect.width / containerRect.height;
-
     let displayedWidth, displayedHeight, offsetLeft, offsetTop;
     if (imageAspect > containerAspect) {
-      displayedWidth = containerRect.width;
-      displayedHeight = containerRect.width / imageAspect;
-      offsetLeft = 0;
-      offsetTop = (containerRect.height - displayedHeight) / 2;
+      displayedWidth = containerRect.width; displayedHeight = containerRect.width / imageAspect; offsetLeft = 0; offsetTop = (containerRect.height - displayedHeight) / 2;
     } else {
-      displayedWidth = containerRect.height * imageAspect;
-      displayedHeight = containerRect.height;
-      offsetLeft = (containerRect.width - displayedWidth) / 2;
-      offsetTop = 0;
+      displayedWidth = containerRect.height * imageAspect; displayedHeight = containerRect.height; offsetLeft = (containerRect.width - displayedWidth) / 2; offsetTop = 0;
     }
     setImageMetrics({ width: displayedWidth, height: displayedHeight, left: offsetLeft, top: offsetTop });
   }, []);
 
-  useEffect(() => {
-    updateImageMetrics();
-    const timer = setTimeout(updateImageMetrics, 300);
-    return () => clearTimeout(timer);
-  }, [screenMode, updateImageMetrics]);
-
-  useEffect(() => {
-    window.addEventListener('resize', updateImageMetrics);
-    if (imageRef.current?.complete) updateImageMetrics();
-    return () => window.removeEventListener('resize', updateImageMetrics);
-  }, [updateImageMetrics]);
+  useEffect(() => { updateImageMetrics(); const t = setTimeout(updateImageMetrics, 300); return () => clearTimeout(t); }, [screenMode, updateImageMetrics]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current || !imageRef.current || !scopeRef.current || !targetBoxRef.current) return;
     const clientX = e.clientX; const clientY = e.clientY;
     if (requestRef.current) cancelAnimationFrame(requestRef.current);
-
     requestRef.current = requestAnimationFrame(() => {
       if (!containerRef.current || !imageRef.current || !scopeRef.current || !targetBoxRef.current) return;
-      
       const imageRect = imageRef.current.getBoundingClientRect();
       const containerRect = containerRef.current.getBoundingClientRect();
       const isInsideImage = clientX >= imageRect.left && clientX <= imageRect.right && clientY >= imageRect.top && clientY <= imageRect.bottom;
-
       if (!isInsideImage) {
-        scopeRef.current.style.opacity = '0';
-        scopeRef.current.style.transform = 'scale(0.8)';
-        targetBoxRef.current.style.opacity = '0';
-        return;
+        scopeRef.current.style.opacity = '0'; scopeRef.current.style.transform = 'scale(0.8)'; targetBoxRef.current.style.opacity = '0'; return;
       }
-
       const halfScope = SCOPE_SIZE / 2;
       const scopeLeft = clientX - containerRect.left - halfScope;
       const scopeTop = clientY - containerRect.top - halfScope;
       scopeRef.current.style.opacity = '1';
       scopeRef.current.style.transform = `translate3d(${scopeLeft}px, ${scopeTop}px, 0) scale(1)`;
-
       const relativeX = clientX - imageRect.left;
       const relativeY = clientY - imageRect.top;
       const bgX = (relativeX / imageRect.width) * 100;
       const bgY = (relativeY / imageRect.height) * 100;
       scopeRef.current.style.backgroundPosition = `${bgX}% ${bgY}%`;
-
       const targetSize = SCOPE_SIZE / ZOOM_LEVEL;
       const halfTarget = targetSize / 2;
       const targetLeft = clientX - containerRect.left - halfTarget;
       const targetTop = clientY - containerRect.top - halfTarget;
-
       targetBoxRef.current.style.opacity = '1';
       targetBoxRef.current.style.width = `${targetSize}px`;
       targetBoxRef.current.style.height = `${targetSize}px`;
@@ -395,184 +362,96 @@ const VisionDashboard = () => {
     if (requestRef.current) cancelAnimationFrame(requestRef.current);
   };
 
-  const dynamicStyles = {
-    container: {
-      position: 'relative' as const, backgroundColor: theme.bg, height: 'calc(100vh - 64px)', width: '100vw', padding: layout.padding,
-      fontFamily: '"Inter", -apple-system, sans-serif', color: theme.textPrimary, display: 'flex', flexDirection: 'column' as const, boxSizing: 'border-box' as const, overflow: 'hidden',
-    },
-    mainGrid: {
-      display: 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0, position: 'relative' as const,
-    },
-    cardRow: {
-      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: layout.gap, height: layout.cardHeight, flexShrink: 0, position: 'relative' as const, zIndex: 5, 
-    },
-    mainViewContainer: {
-      position: 'relative' as const, flex: 1.3, width: '100%', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'default', zIndex: 1, marginTop: layout.overlap, marginBottom: layout.overlap,
-    },
-    floatingWidget: {
-      position: 'absolute' as const, bottom: '32px', right: '32px', backgroundColor: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(12px)',
-      padding: '12px 24px', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)', border: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '24px', zIndex: 100, 
-    },
-    logoText: { fontWeight: 800, fontSize: layout.fontSize.title, color: theme.textPrimary },
-    soundButton: {
-        position: 'absolute' as const,
-        top: '50%',
-        right: '24px',
-        transform: 'translateY(-50%)',
-        zIndex: 200,
-        backgroundColor: '#FFFFFF', // White Theme
-        color: '#1E293B',
-        border: `1px solid ${theme.border}`,
-        borderRadius: '12px',
-        padding: '16px',
-        display: 'flex',
-        flexDirection: 'column' as const,
-        alignItems: 'center',
-        gap: '8px',
-        fontWeight: 700,
-        fontSize: '12px',
-        cursor: 'pointer',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-        transition: 'all 0.2s ease',
-    }
-  };
-
   return (
-    <div style={dynamicStyles.container}>
-      {showPermissionModal && <SoundPermissionModal onConfirm={handlePermissionConfirm} />}
+    <div style={{ 
+        position: 'relative', backgroundColor: THEME.bg, height: 'calc(100vh - 64px)', width: '100vw', padding: layout.padding,
+        fontFamily: '"Inter", -apple-system, sans-serif', color: THEME.textPrimary, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' 
+    }}>
+      <GlobalStyles />
+      {showPermissionModal && <SoundPermissionModal onConfirm={() => { setShowPermissionModal(false); setIsSoundEnabled(true); playBeep(); }} />}
       {selectedCam && <ImageModal data={selectedCam} onClose={() => setSelectedCam(null)} />}
 
-      <button 
-        style={dynamicStyles.soundButton} 
-        onClick={() => setIsSoundEnabled(!isSoundEnabled)}
-        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'}
-        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(-50%) scale(1)'}
-      >
-          <div style={{
-              width: '40px', height: '40px', borderRadius: '50%', 
-              backgroundColor: isSoundEnabled ? theme.accent : '#F1F5F9',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: isSoundEnabled ? '#FFF' : '#94A3B8'
-          }}>
-             {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-          </div>
-          <span style={{color: isSoundEnabled ? theme.textPrimary : '#94A3B8'}}>SOUND</span>
-      </button>
+      {/* [NEW] 1. 상단 현황판 */}
+      <DashboardHeader apiData={rawApiData} layout={layout} />
 
-      <div style={dynamicStyles.floatingWidget}>
-        <div style={styles.logoGroup}>
-          <Monitor size={layout.logoSize} color={theme.accent} />
-          <span style={dynamicStyles.logoText}>Estify<span style={{color: theme.accent}}>Vision</span></span>
-        </div>
-        <div style={styles.vDivider} />
-        <div style={styles.headerStats}>
-          <HeaderItem 
-            label="System" 
-            value={apiError ? "Error" : "OK"} 
-            valueColor={apiError ? theme.danger : theme.success} 
-            icon={apiError ? <AlertTriangle size={16} color={theme.danger} /> : <CheckCircle size={16} color={theme.success} />} 
-            layout={layout} 
-          />
-          <HeaderItem label="Count" value={totalCount} layout={layout} />
-        </div>
-        <div style={styles.vDivider} />
-        <div style={styles.headerItem}>
-            <span style={{ fontSize: '10px', fontWeight: 600, color: theme.textSecondary, textTransform: 'uppercase' }}>Mode</span>
-            <span style={{ fontSize: layout.fontSize.sub, fontWeight: 700, display: 'flex', alignItems: 'center', color: theme.textPrimary }}>
-                <Eye size={16} style={{marginRight: '6px'}} /> Live (x{ZOOM_LEVEL})
-            </span>
-        </div>
-      </div>
-
-      <div style={dynamicStyles.mainGrid}>
-        <div style={dynamicStyles.cardRow}>
-          {topCards.map((card) => (
-            <StatusCard key={card.id} data={card} guideImageUrl={mainImageUrl} layout={layout} onClick={() => handleCardClick(card)} />
-          ))}
+      {/* 2. 메인 그리드 */}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
+        
+        {/* 상단 카드 Row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: layout.gap, height: layout.cardHeight, flexShrink: 0, position: 'relative', zIndex: 5 }}>
+          {topCards.map((card) => <StatusCard key={card.id} data={card} layout={layout} onClick={() => setSelectedCam(card)} />)}
         </div>
 
-        <div ref={containerRef} style={dynamicStyles.mainViewContainer} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-          <img ref={imageRef} src={mainImageUrl} alt="Local Guide" style={styles.mainImage} onLoad={updateImageMetrics} onError={(e) => e.currentTarget.style.display = 'none'} />
-          
+        {/* 중앙 이미지 및 렌즈 영역 */}
+        <div ref={containerRef} style={{ position: 'relative', flex: 1.3, width: '100%', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'default', zIndex: 1, marginTop: layout.overlap, marginBottom: layout.overlap }} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
+          <img ref={imageRef} src={GUIDE_IMAGE_URL} alt="Guide" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', display: 'block', cursor: 'none' }} onLoad={updateImageMetrics} onError={(e) => e.currentTarget.style.display = 'none'} />
           <div ref={targetBoxRef} style={styles.targetBox} />
-          <div ref={scopeRef} style={{...styles.scopeLens, backgroundImage: `url(${mainImageUrl})`}}>
+          <div ref={scopeRef} style={{...styles.scopeLens, backgroundImage: `url(${GUIDE_IMAGE_URL})`}}>
             <div style={styles.reticleH} /><div style={styles.reticleV} />
           </div>
         </div>
 
-        <div style={dynamicStyles.cardRow}>
-          {bottomCards.map((card) => (
-            <StatusCard key={card.id} data={card} guideImageUrl={mainImageUrl} layout={layout} onClick={() => handleCardClick(card)} />
-          ))}
+        {/* 하단 카드 Row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: layout.gap, height: layout.cardHeight, flexShrink: 0, position: 'relative', zIndex: 5 }}>
+          {bottomCards.map((card) => <StatusCard key={card.id} data={card} layout={layout} onClick={() => setSelectedCam(card)} />)}
         </div>
+      </div>
+
+      {/* 우측 하단 소리 버튼 및 심플 위젯 */}
+      <div style={{ position: 'absolute', bottom: '32px', right: '32px', display: 'flex', gap: '12px', zIndex: 100 }}>
+           <div style={{ backgroundColor: 'rgba(255,255,255,0.9)', padding: '12px 20px', borderRadius: '12px', border: `1px solid ${THEME.border}`, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+               <Eye size={16} /> <span style={{fontSize: '14px', fontWeight: 600}}>Live Mode (x{ZOOM_LEVEL})</span>
+           </div>
+           <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} style={{ 
+               backgroundColor: isSoundEnabled ? THEME.accent : '#fff', color: isSoundEnabled ? '#fff' : '#64748B', 
+               border: `1px solid ${THEME.border}`, borderRadius: '12px', width: '46px', height: '46px', 
+               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' 
+           }}>
+               {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+           </button>
       </div>
     </div>
   );
 };
 
-// --- Sub Components ---
-const HeaderItem = ({ label, value, valueColor, icon, layout }: any) => (
-  <div style={styles.headerItem}>
-    <span style={{ fontSize: '10px', fontWeight: 600, color: theme.textSecondary, textTransform: 'uppercase' }}>{label}</span>
-    <span style={{ fontSize: layout.fontSize.sub, fontWeight: 700, display: 'flex', alignItems: 'center', color: valueColor || theme.textPrimary }}>
-      {icon && <span style={{ marginRight: '4px', display: 'flex' }}>{icon}</span>}{value}
-    </span>
-  </div>
-);
-
-const StatusCard = ({ data, guideImageUrl, layout, onClick }: { data: CamData, guideImageUrl: string, layout: any, onClick?: () => void }) => {
+// 개별 카메라 카드
+const StatusCard = ({ data, layout, onClick }: { data: CamData, layout: any, onClick?: () => void }) => {
   const hasSpecificImage = !!data.specificImageUrl;
-  const finalImageStyle: React.CSSProperties = hasSpecificImage ? {
+  const imageStyle: React.CSSProperties = hasSpecificImage ? {
       backgroundImage: `url(${data.specificImageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
   } : {
-    backgroundImage: `url(${guideImageUrl})`,
-    backgroundSize: '300%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
+    backgroundImage: `url(${GUIDE_IMAGE_URL})`, backgroundSize: '300%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
   };
-
   const IconComponent = React.cloneElement(data.icon as React.ReactElement<any>, { size: layout.iconSize });
-
   return (
-    <div style={{...styles.card, padding: layout.cardPadding}} onClick={onClick}>
-      <div style={styles.cardHeader}>
+    <div style={{ backgroundColor: THEME.cardBg, borderRadius: '12px', border: `1px solid ${THEME.border}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: layout.cardPadding, height: '100%', boxSizing: 'border-box', cursor: 'pointer' }} onClick={onClick}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: theme.accent }}>{IconComponent}</span>
+          <span style={{ color: THEME.accent }}>{IconComponent}</span>
           <span style={{ fontWeight: 700, fontSize: layout.fontSize.title }}>{data.id}</span>
         </div>
         <Badge status={data.status} fontSize={layout.fontSize.badge} />
       </div>
-      <div style={{...styles.cropContainer, cursor: 'zoom-in' }}>
-        <div style={{ ...styles.cropImage, ...finalImageStyle }} />
-        <div style={styles.cropOverlay}>{data.position.replace('-', ' ').toUpperCase()} Area</div>
+      <div style={{ width: '100%', flex: 1, minHeight: 0, borderRadius: '6px', overflow: 'hidden', position: 'relative', border: `1px solid ${THEME.border}`, backgroundColor: '#f1f5f9' }}>
+        <div style={{ width: '100%', height: '100%', ...imageStyle, transition: 'transform 0.5s ease' }} />
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '3px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)', color: 'white', fontSize: '10px', fontWeight: 600, textAlign: 'center' }}>{data.position.replace('-', ' ').toUpperCase()}</div>
       </div>
-      <div style={{ fontSize: layout.fontSize.sub, color: theme.textSecondary, fontWeight: 500, marginTop: '8px' }}>{data.title}</div>
+      <div style={{ fontSize: layout.fontSize.sub, color: THEME.textSecondary, fontWeight: 500, marginTop: '8px' }}>{data.title}</div>
     </div>
   );
 };
 
 const Badge = ({ status, fontSize }: { status: InspectionStatus, fontSize: string }) => {
-  const colors = status === '정상' ? { bg: theme.success + '20', text: theme.success } : { bg: theme.warning + '20', text: theme.warning };
-  return <span style={{ ...styles.badge, backgroundColor: colors.bg, color: colors.text, fontSize: fontSize }}>{status}</span>;
+  const colors = status === '정상' ? { bg: THEME.status.ok.bg, text: THEME.status.ok.text } : { bg: THEME.status.ng.bg, text: THEME.status.ng.text };
+  return <span style={{ padding: '2px 8px', borderRadius: '10px', fontWeight: 700, backgroundColor: colors.bg, color: colors.text, fontSize }}>{status}</span>;
 };
 
-// --- Styles ---
+// Styles for zoom lens
 const styles: { [key: string]: React.CSSProperties } = {
-  logoGroup: { display: 'flex', alignItems: 'center', gap: '8px' },
-  headerStats: { display: 'flex', alignItems: 'center', gap: '16px' },
-  headerItem: { display: 'flex', flexDirection: 'column', gap: '0px' },
-  vDivider: { width: '1px', height: '16px', backgroundColor: theme.border },
-  mainImage: { maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', display: 'block', cursor: 'none' },
-  scopeLens: { position: 'absolute', top: 0, left: 0, width: `${SCOPE_SIZE}px`, height: `${SCOPE_SIZE}px`, borderRadius: '50%', border: `2px solid ${theme.accent}`, backgroundColor: '#fff', backgroundRepeat: 'no-repeat', backgroundSize: `${ZOOM_LEVEL * 100}%`, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', pointerEvents: 'none', zIndex: 50, opacity: 0, transform: 'scale(0.8)', transition: 'opacity 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1)', willChange: 'transform, opacity' },
-  reticleH: { position: 'absolute', top: '50%', left: '15%', width: '70%', height: '1px', backgroundColor: theme.accent, opacity: 0.5 },
-  reticleV: { position: 'absolute', left: '50%', top: '15%', height: '70%', width: '1px', backgroundColor: theme.accent, opacity: 0.5 },
-  card: { backgroundColor: theme.cardBg, borderRadius: '12px', border: `1px solid ${theme.border}`, boxShadow: theme.shadow, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', transition: 'transform 0.2s', height: '100%', boxSizing: 'border-box' },
-  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' },
-  cropContainer: { width: '100%', flex: 1, minHeight: 0, borderRadius: '6px', overflow: 'hidden', position: 'relative', border: `1px solid ${theme.border}`, backgroundColor: '#f1f5f9', transition: 'opacity 0.2s' },
-  cropImage: { width: '100%', height: '100%', backgroundRepeat: 'no-repeat', transition: 'transform 0.5s ease' },
-  cropOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: '3px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)', color: 'white', fontSize: '10px', fontWeight: 600, textAlign: 'center', letterSpacing: '0.5px' },
-  badge: { padding: '2px 8px', borderRadius: '10px', fontWeight: 700 },
-  targetBox: {
-    position: 'absolute', top: 0, left: 0, width: '0px', height: '0px', border: `2px solid ${theme.accent}`, boxShadow: `0 0 10px ${theme.accent}`, backgroundColor: 'transparent', zIndex: 40, pointerEvents: 'none', opacity: 0, willChange: 'transform, width, height',
-  }
+  scopeLens: { position: 'absolute', top: 0, left: 0, width: `${SCOPE_SIZE}px`, height: `${SCOPE_SIZE}px`, borderRadius: '50%', border: `2px solid ${THEME.accent}`, backgroundColor: '#fff', backgroundRepeat: 'no-repeat', backgroundSize: `${ZOOM_LEVEL * 100}%`, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', pointerEvents: 'none', zIndex: 50, opacity: 0, transform: 'scale(0.8)', transition: 'opacity 0.25s, transform 0.25s', willChange: 'transform, opacity' },
+  reticleH: { position: 'absolute', top: '50%', left: '15%', width: '70%', height: '1px', backgroundColor: THEME.accent, opacity: 0.5 },
+  reticleV: { position: 'absolute', left: '50%', top: '15%', height: '70%', width: '1px', backgroundColor: THEME.accent, opacity: 0.5 },
+  targetBox: { position: 'absolute', top: 0, left: 0, width: '0px', height: '0px', border: `2px solid ${THEME.accent}`, boxShadow: `0 0 10px ${THEME.accent}`, backgroundColor: 'transparent', zIndex: 40, pointerEvents: 'none', opacity: 0 }
 };
 
 export default VisionDashboard;
