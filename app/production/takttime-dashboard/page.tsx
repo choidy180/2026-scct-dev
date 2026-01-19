@@ -375,9 +375,6 @@ const VideoPlayer = memo(({ src }: { src: string }) => {
     return (
         <>
             <video src={src} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            <div style={{ position: 'absolute', top: 20, left: 20, background: 'rgba(239,68,68,0.9)', color: 'white', padding: '4px 10px', borderRadius: 6, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 8, height: 8, background: 'white', borderRadius: '50%' }} />LIVE
-            </div>
         </>
     )
 }, (prev, next) => prev.src === next.src);
