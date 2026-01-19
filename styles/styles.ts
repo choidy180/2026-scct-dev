@@ -812,6 +812,7 @@ export const DwellTimeBadge = styled.span<{ $isWarning: boolean }>`
   width: auto;
   display: flex;
   align-items: center;
+  justify-content: end;
   gap: 4px;
   svg {
     width: 16px;
@@ -1752,8 +1753,8 @@ export const LogSection = styled.div`
 `;
 
 export const ItemCardStyled = styled.div<{ $active: boolean }>`
-  min-width: 110px;
-  height: 90px;
+  min-width: 130px;
+  height: 90px; 
   background: ${(props) => (props.$active ? 'rgba(59, 130, 246, 0.2)' : 'rgba(30, 41, 59, 0.5)')};
   border: 1px solid ${(props) => (props.$active ? '#60a5fa' : 'rgba(255, 255, 255, 0.1)')};
   border-radius: 8px;

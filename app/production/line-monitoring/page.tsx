@@ -1022,7 +1022,7 @@ export default function GlbViewerPage() {
     fetchData();
   }, []);
 
-  const tabs = ["GR1", "GR2", "GR3", "GR4", "GR5"];
+  const tabs = ["GR2", "GR3", "GR5", "GR9"];
 
   const handleTabClick = (tab: string) => {
     if (tab === activeTab || isNavigating) return;

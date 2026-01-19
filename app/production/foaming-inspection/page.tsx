@@ -964,7 +964,7 @@ export default function ProcessMonitorPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch('https://1.254.24.170:24830/api/DX_API000022');
+        const res = await fetch('http://1.254.24.170:24830/api/DX_API000022');
         if (!res.ok) throw new Error('API Failed');
         const json: ApiResponse = await res.json();
         processApiResponse(json);
