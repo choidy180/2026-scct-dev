@@ -46,7 +46,8 @@ const TARGET_QUANTITY = 2500;
 
 const VIDEO_PATHS = {
   A: "http://1.254.24.170:24828/api/DX_API000031?videoName=223.mp4",
-  B: "http://1.254.24.170:24828/api/DX_API000031?videoName=224.mp4",
+  // [EDIT] 와인셀러 비디오 링크 교체 (225_2.mp4)
+  B: "http://1.254.24.170:24828/api/DX_API000031?videoName=225_2.mp4",
   C: "http://1.254.24.170:24828/api/DX_API000031?videoName=225.mp4",
 };
 
@@ -375,6 +376,9 @@ const VideoPlayer = memo(({ src }: { src: string }) => {
     return (
         <>
             <video src={src} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', top: 20, left: 20, background: 'rgba(239,68,68,0.9)', color: 'white', padding: '4px 10px', borderRadius: 6, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 8, height: 8, background: 'white', borderRadius: '50%' }} />LIVE
+            </div>
         </>
     )
 }, (prev, next) => prev.src === next.src);
@@ -471,7 +475,7 @@ export default function ProcessDashboard() {
   }, []);
 
   const getSlicedData = (lineData: CycleData[]) => {
-      // [EDIT] 기존 0.7(70%) -> 0.5(50%)로 변경하여 그래프 바 개수를 20% 가량 줄임
+      // 이미 20% 정도 덜 보이게 수정된 상태 (0.5로 슬라이스)
       const sliceCount = Math.floor(lineData.length * 0.5); 
       return lineData.slice(-sliceCount); 
   };
@@ -544,6 +548,7 @@ export default function ProcessDashboard() {
             <ChartSection>
                 {viewMode === 1 && (
                   <ViewContainer key="view-1">
+                      {/* [EDIT] View 1: 와인셀러(B) + 얼음정수기(C) */}
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
                           <VideoPlayer src={VIDEO_PATHS.B} />
@@ -569,16 +574,7 @@ export default function ProcessDashboard() {
 
                 {viewMode === 2 && (
                   <ViewContainer key="view-2">
-                      <MultiChartCard>
-                        <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.A} />
-                          <div className="label">꼬모냉장고 (라인 A)</div>
-                        </VideoBox>
-                        <ChartWrapper>
-                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                           <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.A} /></div>
-                        </ChartWrapper>
-                      </MultiChartCard>
+                      {/* [EDIT] View 2: 와인셀러(B) + 얼음정수기(C) [View 1과 동일] */}
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
                           <VideoPlayer src={VIDEO_PATHS.B} />
@@ -587,6 +583,16 @@ export default function ProcessDashboard() {
                         <ChartWrapper>
                            <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
                            <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
+                        </ChartWrapper>
+                      </MultiChartCard>
+                      <MultiChartCard>
+                        <VideoBox $isLarge={true}>
+                          <VideoPlayer src={VIDEO_PATHS.C} />
+                          <div className="label">얼음정수기 (라인 C)</div>
+                        </VideoBox>
+                        <ChartWrapper>
+                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
+                           <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.C} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                   </ViewContainer>
@@ -656,6 +662,7 @@ export default function ProcessDashboard() {
               <WideKpiCard $height={viewMode === 1 ? 160 : viewMode === 2 ? 160 : 200}>
                 {viewMode === 1 ? (
                   <TaktGrid $rows={2}>
+                    {/* [EDIT] View 1 KPI: B & C */}
                     <TaktBox $isSingle={false}>
                       <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
                       <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
@@ -667,19 +674,34 @@ export default function ProcessDashboard() {
                   </TaktGrid>
                 ) : (
                   <TaktGrid $rows={viewMode}>
-                    <TaktBox $isSingle={false}>
-                      <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.primary}}/> 꼬모냉장고</span>
-                      <div className="val-group"><span className="takt-val">{avgTakts.A}s</span></div>
-                    </TaktBox>
-                    <TaktBox $isSingle={false}>
-                      <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
-                      <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
-                    </TaktBox>
-                    {viewMode === 3 && (
-                      <TaktBox $isSingle={false}>
-                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
-                        <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
-                      </TaktBox>
+                    {viewMode === 2 ? (
+                        <>
+                        {/* [EDIT] View 2 KPI: B & C (View 1과 동일하게 수정) */}
+                        <TaktBox $isSingle={false}>
+                          <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
+                          <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
+                        </TaktBox>
+                        <TaktBox $isSingle={false}>
+                          <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
+                          <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
+                        </TaktBox>
+                        </>
+                    ) : (
+                        <>
+                        {/* View 3 (All 3) */}
+                        <TaktBox $isSingle={false}>
+                          <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.primary}}/> 꼬모냉장고</span>
+                          <div className="val-group"><span className="takt-val">{avgTakts.A}s</span></div>
+                        </TaktBox>
+                        <TaktBox $isSingle={false}>
+                          <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
+                          <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
+                        </TaktBox>
+                        <TaktBox $isSingle={false}>
+                            <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
+                            <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
+                        </TaktBox>
+                        </>
                     )}
                   </TaktGrid>
                 )}
