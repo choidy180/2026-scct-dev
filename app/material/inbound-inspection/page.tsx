@@ -15,13 +15,12 @@ import { WearableApiEntry, WearableHistoryItemData } from '@/types/types';
 import AIDashboardModal from '@/components/ai-dashboard-modal';
 import WarehouseBoard from '@/components/wearable-warehouse-board';
 import { 
-  Loader2, History, RefreshCw, Signal, ScanBarcode, AlertTriangle, Search 
+  Loader2, History, RefreshCw, Signal, AlertTriangle, Search 
 } from "lucide-react";
 import { LuMaximize, LuMinimize } from "react-icons/lu";
 
 // --- Constants ---
 const PORT = 8080;
-const API_URL_LIST = "http://1.254.24.170:24828/api/DX_API000028";
 const API_URL_VEHICLE = "http://1.254.24.170:24828/api/DX_API000020";
 const API_URL_INVOICE = "http://1.254.24.170:24828/api/V_PurchaseIn";
 
@@ -42,15 +41,15 @@ interface VehicleApiResponse {
   };
 }
 
-// 상태 타입 정의 (참고 코드 반영)
 type StreamStatus = "idle" | "checking" | "ok" | "error";
 
 export default function DashboardPage() {
-  // [수정] 스트림 관련 상태 관리 강화
+  // [상태] 스트림 호스트 및 상태
   const [streamHost, setStreamHost] = useState("192.168.0.53");
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("idle");
-  const [retryKey, setRetryKey] = useState(0); // 재시도 트리거용 키
+  const [retryKey, setRetryKey] = useState(0); 
   
+  // Vuzix URL 포맷
   const streamUrl = streamHost ? `http://${streamHost}:${PORT}/` : null;
 
   const [showDashboard, setShowDashboard] = useState(false);
@@ -78,48 +77,64 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // [수정] 스트림 상태 체크 로직 (참고 코드 이식)
+  // [수정] fetch 제거 -> new Image() 방식으로 변경
+  // fetch는 로컬 IP 접근 시 CORS/Network 에러로 앱을 터뜨리지만,
+  // Image 객체는 조용히 onload/onerror 이벤트만 발생시킵니다.
   useEffect(() => {
     if (!streamUrl) {
       setStreamStatus("idle");
       return;
     }
 
-    let cancelled = false;
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
 
-    async function checkStream() {
+    const checkStream = () => {
       setStreamStatus("checking");
-      try {
-        // HEAD 요청으로 서버가 살아있는지 먼저 찌러봄 (no-cors 모드)
-        await fetch(streamUrl!, {
-          method: "HEAD",
-          mode: "no-cors",
-        });
-        if (!cancelled) setStreamStatus("ok");
-      } catch (e) {
-        console.error("Stream check failed:", e);
-        if (!cancelled) setStreamStatus("error");
-      }
-    }
+
+      const img = new Image();
+      
+      // 5초 타임아웃 설정
+      timeoutId = setTimeout(() => {
+        if (isMounted) {
+          setStreamStatus("error");
+          img.src = ""; // 연결 중단 시도
+        }
+      }, 5000);
+
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        if (isMounted) setStreamStatus("ok");
+      };
+
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        if (isMounted) setStreamStatus("error");
+      };
+
+      // 타임스탬프로 캐시 방지하여 요청
+      img.src = `${streamUrl}?t=${Date.now()}`;
+    };
 
     checkStream();
 
     return () => {
-      cancelled = true;
+      isMounted = false;
+      clearTimeout(timeoutId);
     };
-  }, [streamUrl, retryKey]); // host가 바뀌거나 retryKey가 바뀌면 재실행
+  }, [streamUrl, retryKey]);
 
-  // [수정] 재시도 핸들러
+  // 재시도 핸들러
   const handleRetry = useCallback(() => {
     setRetryKey((prev) => prev + 1);
   }, []);
 
   const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setStreamHost(e.target.value.trim());
-    setStreamStatus("idle");
+    if(streamStatus !== 'idle') setStreamStatus('idle');
   };
 
-  // Fetch Vehicle Info
+  // --- 기존 로직 유지 (차량 데이터 조회 등) ---
   const fetchVehicleData = async () => {
     try {
       setIsVehicleLoading(true);
@@ -149,7 +164,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Dwell Time Calculation
   useEffect(() => {
     if (!now || !vehicleInfo || !vehicleInfo.entry_time) {
       setDwellString("-");
@@ -169,28 +183,23 @@ export default function DashboardPage() {
     }
   }, [now, vehicleInfo]);
 
-  // Fetch History (생략 - 기존 동일)
   useEffect(() => {
-    const fetchHistoryData = async () => {
-        const loadDummyHistory = () => {
-            const dummy: WearableHistoryItemData[] = Array.from({length: 10}).map((_, i) => ({
-                id: `dummy-${i}`,
-                company: i % 2 === 0 ? "세진공업(주)" : "LG에너지솔루션",
-                purInNo: `PO-2026-${1000+i}`,
-                status: i % 5 === 0 ? "검수필요" : "정상",
-                time: `${10 + i}:30`,
-                fullDate: "2026-01-17"
-            }));
-            setHistoryList(dummy);
-            setStats({ pass: 42, fail: 3, passRate: 93.3, failRate: 6.7 });
-        };
-        // ... (API Fetch 로직 기존 유지) ...
-        loadDummyHistory(); // API 에러 시 더미 로드
+    const loadDummyHistory = () => {
+        const dummy: WearableHistoryItemData[] = Array.from({length: 10}).map((_, i) => ({
+            id: `dummy-${i}`,
+            company: i % 2 === 0 ? "세진공업(주)" : "LG에너지솔루션",
+            purInNo: `PO-2026-${1000+i}`,
+            status: i % 5 === 0 ? "검수필요" : "정상",
+            time: `${10 + i}:30`,
+            fullDate: "2026-01-17"
+        }));
+        setHistoryList(dummy);
+        setStats({ pass: 42, fail: 3, passRate: 93.3, failRate: 6.7 });
     };
-    fetchHistoryData();
+    loadDummyHistory();
   }, []);
 
-  // Keyboard Handler
+  // Keyboard
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -203,7 +212,7 @@ export default function DashboardPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullScreen, showDashboard, showMapBoard]);
 
-  // Firebase Listener
+  // Firebase
   useEffect(() => {
     if (!db) return;
     const logsRef = ref(db, 'vuzix_log');
@@ -212,7 +221,6 @@ export default function DashboardPage() {
     const unsubscribe = onValue(q, async (snapshot) => {
       const dataWrapper = snapshot.val();
       if (!dataWrapper) return;
-
       const key = Object.keys(dataWrapper)[0];
       const data = dataWrapper[key];
       const barcode = data.barcode || data.Barcode; 
@@ -222,12 +230,9 @@ export default function DashboardPage() {
           setTimeout(() => { isInitialLoadRef.current = false; }, 500);
           return;
       }
-
       if (lastProcessedKeyRef.current === key) return;
-
       lastProcessedKeyRef.current = key;
       fetchVehicleData();
-
       if (barcode) {
         try {
             const apiUrl = `${API_URL_INVOICE}?InvoiceNo=${barcode}`;
@@ -239,9 +244,7 @@ export default function DashboardPage() {
                     setShowDashboard(true);
                 }
             }
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (err) { console.error(err); }
       }
     });
     return () => unsubscribe();
@@ -257,7 +260,7 @@ export default function DashboardPage() {
     <LayoutGroup>      
       <DashboardContainer $show={true}>
             <Column>
-                {/* 1. Vehicle Info Card */}
+                {/* 1. Vehicle Info */}
                 <TopCard>
                     <CardTitle>입고 차량 정보</CardTitle>
                     {isVehicleDataLoaded && vehicleInfo ? (
@@ -296,7 +299,7 @@ export default function DashboardPage() {
                     )}
                 </TopCard>
 
-                {/* 2. Stats & History Card */}
+                {/* 2. Stats & History */}
                 <FullHeightCard>
                     <CardTitle>통계 및 이력</CardTitle>
                     <CompactScoreRow>
@@ -340,12 +343,11 @@ export default function DashboardPage() {
                             <h3>자재검수 화면</h3>
                             <IpInputWrapper>
                                 <span className="label">CAM IP</span>
-                                {/* [수정] 핸들러 변경 */}
                                 <input value={streamHost} onChange={handleHostChange} placeholder="192.168.xx.xx" />
                             </IpInputWrapper>
                         </div>
                         <div className="btn-group">
-                            {/* <PinkButton onClick={manualTrigger}>TEST &gt;</PinkButton> */}
+                            <PinkButton onClick={manualTrigger}>TEST &gt;</PinkButton>
                             <PinkButton onClick={toggleMapBoard}>D동 현황</PinkButton>
                         </div>
                     </VideoHeader>
@@ -353,29 +355,25 @@ export default function DashboardPage() {
                     <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
                       <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 1 }}>
                         
-                        {/* [수정] 참고 코드의 상태 분기 로직 적용 */}
-                        
-                        {/* 1. 연결 성공 시: iframe 렌더링 */}
+                        {/* 상태에 따른 화면 렌더링 */}
                         {streamStatus === "ok" && streamUrl && (
-                             <iframe 
-                                src={streamUrl} 
-                                style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} 
-                                title="Stream" 
-                                allow="fullscreen"
-                             />
-                             // 만약 영상이 다운로드된다면 아래 img 태그로 교체해서 시도해보세요.
-                             // <img src={streamUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Live" onError={() => setStreamStatus('error')} />
+                          <iframe 
+                            src={streamUrl} 
+                            style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} 
+                            title="Stream" 
+                            allow="fullscreen"
+                            // iframe 로드 실패 시 에러 처리
+                            onError={() => setStreamStatus('error')}
+                          />
                         )}
 
-                        {/* 2. 확인 중 (로딩) */}
                         {streamStatus === "checking" && (
-                             <StyledErrorState>
-                                <RefreshCw className="spin" size={40} color="#3b82f6" />
-                                <h2 style={{marginTop: 16, color: '#93c5fd'}}>CHECKING SIGNAL...</h2>
-                             </StyledErrorState>
+                          <StyledErrorState>
+                              <RefreshCw className="spin" size={40} color="#3b82f6" />
+                              <h2 style={{marginTop: 16, color: '#93c5fd'}}>CONNECTING...</h2>
+                          </StyledErrorState>
                         )}
 
-                        {/* 3. 에러 발생 시: 재시도 버튼 노출 */}
                         {streamStatus === "error" && (
                             <StyledErrorState>
                                 <div className="grid-bg"></div>
@@ -383,22 +381,21 @@ export default function DashboardPage() {
                                     <div className="icon-wrapper">
                                         <AlertTriangle size={32} color="#ef4444" />
                                     </div>
-                                    <h2>SIGNAL LOST</h2>
-                                    <p>Connection failed. Check Server/Wifi.</p>
+                                    <h2>CONNECTION FAILED</h2>
+                                    <p>Check: IP / Power / Network</p>
                                     <div style={{marginTop: 10, display: 'flex', gap: 10, justifyContent: 'center'}}>
                                         <PinkButton onClick={handleRetry} style={{background: '#334155'}}>
-                                            <RefreshCw size={14} style={{marginRight: 6}}/> RETRY CONNECTION
+                                            <RefreshCw size={14} style={{marginRight: 6}}/> RETRY
                                         </PinkButton>
                                     </div>
                                 </div>
                             </StyledErrorState>
                         )}
 
-                        {/* 4. 초기 상태 (IP 없을 때) */}
                         {streamStatus === "idle" && (
                             <StyledErrorState>
                                 <Signal size={40} color="#64748b" />
-                                <p style={{marginTop:10}}>Please enter Camera IP</p>
+                                <p style={{marginTop:10}}>Enter Camera IP</p>
                             </StyledErrorState>
                         )}
 
@@ -415,7 +412,7 @@ export default function DashboardPage() {
                               <AIDashboardModal 
                                 onClose={closeDashboard} 
                                 streamUrl={streamUrl} 
-                                streamStatus={streamStatus} // 상태 전달
+                                streamStatus={streamStatus}
                                 externalData={scannedInvoiceData}
                               />
                           )}
