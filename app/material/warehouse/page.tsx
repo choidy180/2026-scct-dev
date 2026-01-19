@@ -47,7 +47,7 @@ interface InventoryItem {
 
 // ─── [2. SUB-COMPONENTS] ──────────────────────────
 
-// 2-1. Inventory Item
+// 2-1. Inventory Item -> Parts Item
 const MemoizedInventoryItem = React.memo(({ item }: { item: InventoryItem }) => (
   <InvItem>
     <div className="icon"><Layers size={14} /></div>
@@ -60,13 +60,13 @@ const MemoizedInventoryItem = React.memo(({ item }: { item: InventoryItem }) => 
 ));
 MemoizedInventoryItem.displayName = 'MemoizedInventoryItem';
 
-// 2-2. Slot Component (애니메이션 로직 제거됨)
+// 2-2. Slot Component
 const MemoizedSlot = React.memo(({ s }: { s: SlotData }) => (
   <Slot $active={s.active}>
     {s.active && (
       <div className="icon-box">
-        {/* Active Slot Icon - Green Point */}
-        <Box size={14} fill="#10b981" color="#065f46" />
+        {/* Active Slot Icon - Red Theme */}
+        <Box size={14} fill="#ef4444" color="#7f1d1d" />
       </div>
     )}
     <span className="no">{s.no}</span>
@@ -84,6 +84,7 @@ const ZoneColumn = React.memo(({ zone, index }: { zone: ZoneData, index: number 
     <div className="z-head">
       <div className="top">
         <span className="id">{zone.id}</span>
+        {/* 상태 뱃지는 의미론적 색상 유지 혹은 붉은 테마에 맞게 조정 가능. 여기선 기존 로직 유지하되 CSS에서 색상 제어 */}
         <span className={`st ${zone.status === '만차' ? 'r' : zone.status === '혼잡' ? 'o' : 'g'}`}>{zone.status}</span>
       </div>
       <div className="usage-text">
@@ -91,6 +92,7 @@ const ZoneColumn = React.memo(({ zone, index }: { zone: ZoneData, index: number 
         <b>{Math.round((zone.used / zone.total) * 100)}%</b>
       </div>
       <div className="bar">
+        {/* 진행 바 색상 Red */}
         <div className="fill" style={{ width: `${(zone.used / zone.total) * 100}%` }} />
       </div>
     </div>
@@ -123,7 +125,7 @@ export default function WarehouseDashboard() {
 
   const [mapData, setMapData] = useState<ZoneData[]>(initialMapData);
 
-  // 3초 뒤 적재 시뮬레이션 (애니메이션 없이 상태만 변경)
+  // 3초 뒤 적재 시뮬레이션
   useEffect(() => {
     const timer = setTimeout(() => {
       setMapData(prev => prev.map(zone => {
@@ -202,7 +204,8 @@ export default function WarehouseDashboard() {
 
             <InventorySection>
               <div className="sec-head">
-                <h3><Package size={16} /> 재고 리스트</h3>
+                {/* 용어 변경: 재고 -> 부품 */}
+                <h3><Package size={16} /> 부품 리스트</h3>
                 <div className="search-box">
                   <Search size={14} color="#94a3b8" />
                   <input
@@ -235,8 +238,10 @@ export default function WarehouseDashboard() {
               <div className="title">구역별 상세 배치도 (D101 ~ D105)</div>
               <div className="legend-bar">
                 <span className="badge empty"><div className="dot" style={{ background: '#cbd5e1' }} /> 여유</span>
-                <span className="badge active"><div className="dot" style={{ background: '#10b981' }} /> 사용</span>
-                <span className="badge full"><div className="dot" style={{ background: '#ef4444' }} /> 만차</span>
+                {/* Active 색상 Red 계열로 변경 */}
+                <span className="badge active"><div className="dot" style={{ background: '#ef4444' }} /> 사용</span>
+                {/* 만차 색상 더 진한 Red로 변경하여 구분 */}
+                <span className="badge full"><div className="dot" style={{ background: '#7f1d1d' }} /> 만차</span>
               </div>
             </MapHeader>
 
@@ -289,7 +294,7 @@ export default function WarehouseDashboard() {
                   </MenuItem>
                   <div className="menu-label">관리</div>
                   <MenuItem>
-                    <History size={18} /> 입출고 이력 조회
+                    <History size={18} /> 부품 입출고 이력 조회
                   </MenuItem>
                   <MenuItem>
                     <Settings size={18} /> 시스템 환경설정
@@ -328,7 +333,8 @@ const Header = styled.header`
   height: 60px; background: #fff; border-bottom: 1px solid #e2e8f0;
   display: flex; justify-content: space-between; align-items: center; padding: 0 24px; flex-shrink: 0;
   .brand { display: flex; align-items: center; gap: 10px; 
-    .icon { width: 32px; height: 32px; background: #10b981; border-radius: 8px; display: flex; align-items: center; justify-content: center; } 
+    /* Red Theme */
+    .icon { width: 32px; height: 32px; background: #ef4444; border-radius: 8px; display: flex; align-items: center; justify-content: center; } 
     h1 { font-size: 1.1rem; font-weight: 800; color: #1e293b; } 
   }
   .actions { display: flex; gap: 12px; align-items: center; 
@@ -338,14 +344,15 @@ const Header = styled.header`
 `;
 
 const IconBtn = styled.button<{ $active?: boolean }>` 
-  background: ${props => props.$active ? '#ecfdf5' : '#fff'}; 
-  border: 1px solid ${props => props.$active ? '#10b981' : '#e2e8f0'}; 
+  /* Red Theme Hover/Active */
+  background: ${props => props.$active ? '#fef2f2' : '#fff'}; 
+  border: 1px solid ${props => props.$active ? '#ef4444' : '#e2e8f0'}; 
   width: 32px; height: 32px; border-radius: 8px; 
   display: flex; align-items: center; justify-content: center; 
-  color: ${props => props.$active ? '#10b981' : '#64748b'}; 
+  color: ${props => props.$active ? '#ef4444' : '#64748b'}; 
   cursor: pointer; 
   transition: all 0.2s;
-  &:hover { background: ${props => props.$active ? '#dcfce7' : '#f8fafc'}; color: ${props => props.$active ? '#10b981' : '#1e293b'}; }
+  &:hover { background: ${props => props.$active ? '#fee2e2' : '#f8fafc'}; color: ${props => props.$active ? '#ef4444' : '#1e293b'}; }
 `;
 
 const Body = styled.div` 
@@ -365,16 +372,18 @@ const SummaryCard = styled.div`
       display: flex; align-items: center; gap: 20px;
       .pie-mock {
         width: 80px; height: 80px; border-radius: 50%;
-        border: 8px solid #f1f5f9; border-top-color: #10b981; border-right-color: #10b981;
+        border: 8px solid #f1f5f9; 
+        /* Red Theme */
+        border-top-color: #ef4444; border-right-color: #ef4444;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
-        .val { font-weight: 800; color: #10b981; font-size: 1.1rem; }
+        .val { font-weight: 800; color: #ef4444; font-size: 1.1rem; }
         .lbl { font-size: 0.7rem; color: #64748b; }
       }
       .legend {
           flex: 1; display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem; color: #64748b;
           b { color: #334155; }
           .dot { width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; display:inline-block; }
-          .primary { background: #10b981; }
+          .primary { background: #ef4444; }
           .secondary { background: #cbd5e1; }
           .line-top { border-top: 1px solid #f1f5f9; padding-top: 6px; margin-top: 4px; }
       }
@@ -408,7 +417,8 @@ const InvItem = styled.div`
   &:hover { background: #f8fafc; }
   .icon { width: 32px; height: 32px; background: #f1f5f9; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #64748b; }
   .info { flex: 1; .code { font-size: 0.85rem; font-weight: 600; color: #334155; } .loc { font-size: 0.75rem; color: #94a3b8; display: flex; gap: 2px; align-items: center; margin-top: 2px; } }
-  .qty { font-weight: 700; color: #10b981; font-family: monospace; }
+  /* Red Theme */
+  .qty { font-weight: 700; color: #ef4444; font-family: monospace; }
 `;
 
 const EmptyState = styled.div`
@@ -421,14 +431,65 @@ const MapArea = styled.main`
 `;
 
 const MapHeader = styled.div`
-  height: 50px; padding: 0 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+  height: 50px; 
+  padding: 0 20px; 
+  border-bottom: 1px solid #f1f5f9; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  flex-shrink: 0;
+
   .title { font-weight: 700; color: #334155; }
-  .legend-bar { display: flex; gap: 8px; 
-    .badge { font-size: 0.75rem; padding: 4px 12px; border-radius: 6px; font-weight: 700; display:flex; align-items:center; gap:6px; }
-    .empty { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
-    .active { background: #ecfdf5; color: #10b981; border: 1px solid #a7f3d0; }
-    .full { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; }
+  
+  .legend-bar { 
+    display: flex; 
+    gap: 8px; 
+
+    /* 공통 뱃지 스타일 */
+    .badge { 
+      font-size: 0.75rem; 
+      padding: 6px 12px; /* 패딩을 살짝 키워 터치감 개선 */
+      border-radius: 6px; 
+      font-weight: 700; 
+      display: flex; 
+      align-items: center; 
+      gap: 6px; 
+      transition: all 0.2s;
+    }
+
+    /* 1. 여유 (회색 톤) */
+    .empty { 
+      background: #f1f5f9; 
+      color: #64748b; 
+      border: 1px solid #e2e8f0; 
+      .dot { background: #cbd5e1; }
+    }
+
+    /* 2. 사용 (연한 빨강 - 기존 유지하되 테두리 색 조정) */
+    .active { 
+      background: #fef2f2; 
+      color: #ef4444; 
+      border: 1px solid #fecaca; 
+      .dot { background: #ef4444; }
+    }
+
+    /* 3. 만차 (진한 빨강 - 수정됨) 
+       - 기존의 어두운 배경(#7f1d1d)을 제거하고 선명한 Red(#ef4444) 적용
+       - 텍스트를 흰색으로 변경하여 가독성 확보
+    */
+    .full { 
+      background: #ef4444; 
+      color: #ffffff; 
+      border: 1px solid #ef4444; 
+      /* 만차는 배경이 진하므로 내부 점을 흰색으로 변경 */
+      .dot { background: #ffffff; } 
+    }
+
+    .dot { 
+      width: 6px; 
+      height: 6px; 
+      border-radius: 50%; 
+    }
   }
 `;
 
@@ -450,9 +511,10 @@ const ZoneColumnWrapper = styled(motion.div)`
     .o { background: #ffedd5; color: #9a3412; }
     .r { background: #fee2e2; color: #991b1b; }
 
-    .usage-text { font-size: 0.8rem; color: #64748b; margin-bottom: 6px; display: flex; justify-content: space-between; font-weight: 600; b { color: #10b981; } }
+    /* Red Theme */
+    .usage-text { font-size: 0.8rem; color: #64748b; margin-bottom: 6px; display: flex; justify-content: space-between; font-weight: 600; b { color: #ef4444; } }
     .bar { height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
-    .fill { height: 100%; background: #10b981; border-radius: 4px; transition: width 0.5s ease-out; }
+    .fill { height: 100%; background: #ef4444; border-radius: 4px; transition: width 0.5s ease-out; }
   }
 
   .slot-grid-container {
@@ -464,18 +526,17 @@ const ZoneColumnWrapper = styled(motion.div)`
   }
 `;
 
-// Slot - Animation Logic Removed
 const Slot = styled.div<{ $active: boolean }>`
-  background: ${props => props.$active ? '#ecfdf5' : '#fff'};
-  border: 1px solid ${props => props.$active ? '#86efac' : '#e2e8f0'};
+  /* Red Theme */
+  background: ${props => props.$active ? '#fef2f2' : '#fff'};
+  border: 1px solid ${props => props.$active ? '#fecaca' : '#e2e8f0'};
   border-radius: 8px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;
   font-size: 0.9rem; font-weight: 700; 
-  color: ${props => props.$active ? '#15803d' : '#cbd5e1'};
+  color: ${props => props.$active ? '#b91c1c' : '#cbd5e1'};
   transition: all 0.3s;
-  box-shadow: ${props => props.$active ? '0 2px 4px rgba(16, 185, 129, 0.1)' : '0 1px 2px rgba(0,0,0,0.03)'};
-  /* animation removed */
-
+  box-shadow: ${props => props.$active ? '0 2px 4px rgba(239, 68, 68, 0.1)' : '0 1px 2px rgba(0,0,0,0.03)'};
+  
   .icon-box { margin-bottom: 2px; }
 `;
 
@@ -512,9 +573,10 @@ const SideDrawer = styled(motion.div)`
 
 const MenuItem = styled.div<{ $active?: boolean }>`
   padding: 12px 16px; border-radius: 8px; display: flex; align-items: center; gap: 12px; font-size: 0.95rem; font-weight: 500;
-  color: ${props => props.$active ? '#10b981' : '#334155'};
-  background: ${props => props.$active ? '#ecfdf5' : 'transparent'};
+  /* Red Theme */
+  color: ${props => props.$active ? '#ef4444' : '#334155'};
+  background: ${props => props.$active ? '#fef2f2' : 'transparent'};
   cursor: pointer; transition: background 0.2s;
-  &:hover { background: ${props => props.$active ? '#ecfdf5' : '#f8fafc'}; }
+  &:hover { background: ${props => props.$active ? '#fef2f2' : '#f8fafc'}; }
   .arrow { margin-left: auto; color: #cbd5e1; }
 `;

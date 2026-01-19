@@ -571,12 +571,12 @@ export const ErrorBar = styled.div`
   padding: 10px 12px;
   border: 1px solid #fecaca;
   background: #fff1f2;
-  color: #7f1d1d;
+  color: #ff0000;
   border-radius: 8px;
   strong { font-weight: 800; }
   span { flex: 1; }
   button {
-    background: #fecaca; color:#7f1d1d; border:0; padding:6px 10px;
+    background: #fecaca; color:#ff0000; border:0; padding:6px 10px;
     border-radius:6px; cursor:pointer;
   }
 `;
@@ -1797,7 +1797,9 @@ export const ItemCardStyled = styled.div<{ $active: boolean }>`
 
 // --- Warehouse Board Styles ---
 
-export const GreenBoardContainer = styled.div`
+// ... 기존 위쪽 코드들은 생략 ...
+
+export const RedBoardContainer = styled.div`
   width: 100%;
   height: 100%;
   background: #f8fafc;
@@ -1837,7 +1839,7 @@ export const GreenBoardContainer = styled.div`
     }
 
     .close-btn:hover {
-      color: #10b981;
+      color: #ef4444; /* Green -> Red */
     }
   }
 
@@ -1880,13 +1882,13 @@ export const GreenBoardContainer = styled.div`
             height: 80px;
             border-radius: 50%;
             border: 8px solid #f1f5f9;
-            border-top-color: #10b981;
-            border-right-color: #10b981;
+            border-top-color: #ef4444; /* Green -> Red */
+            border-right-color: #ef4444; /* Green -> Red */
             display: flex;
             justify-content: center;
             align-items: center;
             font-weight: 800;
-            color: #10b981;
+            color: #ef4444; /* Green -> Red */
           }
 
           .legend {
@@ -1904,7 +1906,7 @@ export const GreenBoardContainer = styled.div`
             }
 
             .primary {
-              background: #10b981;
+              background: #ef4444; /* Green -> Red */
             }
             .secondary {
               background: #cbd5e1;
@@ -1991,7 +1993,7 @@ export const GreenBoardContainer = styled.div`
             transition: all 0.2s;
 
             &:hover {
-              background: #f0fdf4;
+              background: #fef2f2; /* Green(f0fdf4) -> Red(fef2f2) */
             }
 
             .icon {
@@ -2019,7 +2021,7 @@ export const GreenBoardContainer = styled.div`
             }
             .q {
               font-weight: 700;
-              color: #10b981;
+              color: #ef4444; /* Green -> Red */
               font-family: monospace;
             }
           }
@@ -2060,14 +2062,16 @@ export const GreenBoardContainer = styled.div`
           border: 1px solid #e2e8f0;
         }
         .active {
-          background: #ecfdf5;
-          color: #10b981;
-          border: 1px solid #a7f3d0;
+          /* Green Theme styles converted to Red Theme */
+          background: #fef2f2; /* Light Red */
+          color: #ef4444;      /* Red */
+          border: 1px solid #fecaca; /* Light Red Border */
         }
         .full {
-          background: #fef2f2;
-          color: #ef4444;
-          border: 1px solid #fecaca;
+          background: #ef4444; 
+          color: #ffffff; 
+          border: 1px solid #ef4444; 
+          /* 만차는 배경이 진하므로 내부 점을 흰색으로 변경 */
         }
 
         .dot {
@@ -2120,6 +2124,9 @@ export const GreenBoardContainer = styled.div`
               border-radius: 6px;
             }
 
+            /* Status Colors: Semantic meanings (Good=Green, Bad=Red) usually stay, 
+               but can be adjusted if everything must be red-themed. 
+               Here I kept them semantic but ensured 'active' elements below are red. */
             .g {
               background: #dcfce7;
               color: #166534;
@@ -2142,7 +2149,7 @@ export const GreenBoardContainer = styled.div`
               font-weight: 600;
 
               b {
-                color: #10b981;
+                color: #ef4444; /* Green -> Red */
               }
             }
 
@@ -2155,7 +2162,8 @@ export const GreenBoardContainer = styled.div`
 
             .fill {
               height: 100%;
-              background: linear-gradient(90deg, #10b981, #059669);
+              /* Green Gradient -> Red Gradient */
+              background: linear-gradient(90deg, #ef4444, #b91c1c); 
               border-radius: 4px;
               transition: width 0.5s ease-out;
             }
@@ -2195,10 +2203,11 @@ export const GreenBoardContainer = styled.div`
               }
 
               .on {
-                background: #ecfdf5;
-                border-color: #a7f3d0;
-                color: #10b981;
-                box-shadow: 0 2px 4px rgba(16, 185, 129, 0.1);
+                /* Active Slot: Green Theme -> Red Theme */
+                background: #fef2f2; 
+                border-color: #fecaca;
+                color: #ef4444;
+                box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1);
               }
 
               .icon-box {
