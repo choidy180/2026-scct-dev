@@ -55,6 +55,7 @@ const MOCK_CSV_DATA = `timestamp,message,type
 11:15:00,#2번 라인 자재 부족 알림,warning
 10:00:00,설비 정기 점검 완료,success`;
 
+// [수정됨] 누락된 border 색상 추가
 const COLORS = {
   bgPage: "#F8FAFC",
   bgCard: "#FFFFFF",
@@ -68,6 +69,9 @@ const COLORS = {
   grid: "#E2E8F0",
   videoBg: "#1E293B",
   hoverBg: "#F1F5F9",
+  borderBlue: "#3B82F6",
+  borderGreen: "#10B981",
+  borderYellow: "#F59E0B",
 };
 
 // --- [타입 정의] ---
