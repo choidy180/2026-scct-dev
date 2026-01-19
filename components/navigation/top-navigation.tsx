@@ -376,8 +376,8 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
                 <Image src="/logo/gmt_logo.png" alt="Company Logo" fill style={{ objectFit: 'contain' }} priority />
             </div>
             <h4>고모텍 AI 관제센터</h4>
-            <NavbarContextBot/>
           </LogoArea>
+          <NavbarContextBot/>
           
           <MenuArea ref={menuAreaRef}>
             <MenuGlider style={{ transform: `translate(${gliderStyle.x}px, -50%)`, width: gliderStyle.width }} />
