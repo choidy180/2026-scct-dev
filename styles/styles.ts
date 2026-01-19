@@ -983,7 +983,7 @@ export const VideoCard = styled(motion.div)<{ $isFullScreen: boolean }>`
 export const VideoHeader = styled.div`
   background: #fff;
   height: 60px;
-  padding: 0 24px;
+  padding: 0 14px 0 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;

@@ -56,9 +56,8 @@ interface MaterialListItem {
 
 type StreamStatus = "idle" | "checking" | "ok" | "error";
 
-// --- Styled Components (Optimized) ---
+// --- Styled Components ---
 
-// 모달 배경 및 컨테이너 (레이아웃 스래싱 방지를 위해 will-change 적용 가능하나, 여기선 기본 유지)
 const ModalBackdrop = styled(motion.div)`
   position: fixed;
   top: 0;
@@ -293,9 +292,8 @@ const ViewAllButton = styled.button`
   }
 `;
 
-// --- Components (Memoized for Performance) ---
+// --- Sub Components ---
 
-// 1. 대기 목록 아이템 (자재명 제거, PrjCode 파란색)
 const MemoizedHistoryItem = React.memo(({ item }: { item: MaterialListItem }) => {
   const truncatedName = item.NmCustm.length > 12 
     ? item.NmCustm.slice(0, 12) + "..." 
@@ -322,7 +320,6 @@ const MemoizedHistoryItem = React.memo(({ item }: { item: MaterialListItem }) =>
 });
 MemoizedHistoryItem.displayName = "MemoizedHistoryItem";
 
-// 2. 전체보기 모달
 const MaterialListModal = ({ 
   isOpen, 
   onClose, 
@@ -337,15 +334,12 @@ const MaterialListModal = ({
 
   const filteredData = useMemo(() => {
     return data.filter(item => {
-      // 상태 필터
       if (filterType === 'Y') {
          if (item.CHK_FLAG !== 'Y') return false;
       }
       if (filterType === 'N') {
          if (item.CHK_FLAG === 'Y') return false;
       }
-
-      // 검색 필터
       if (searchTerm) {
         const lowerTerm = searchTerm.toLowerCase();
         return (
@@ -394,15 +388,9 @@ const MaterialListModal = ({
           </SearchInput>
           
           <FilterGroup>
-            <FilterButton $active={filterType === 'ALL'} onClick={() => setFilterType('ALL')}>
-                전체보기
-            </FilterButton>
-            <FilterButton $active={filterType === 'N'} onClick={() => setFilterType('N')}>
-                대기중 (Pending)
-            </FilterButton>
-            <FilterButton $active={filterType === 'Y'} onClick={() => setFilterType('Y')}>
-                완료됨 (Done)
-            </FilterButton>
+            <FilterButton $active={filterType === 'ALL'} onClick={() => setFilterType('ALL')}>전체보기</FilterButton>
+            <FilterButton $active={filterType === 'N'} onClick={() => setFilterType('N')}>대기중 (Pending)</FilterButton>
+            <FilterButton $active={filterType === 'Y'} onClick={() => setFilterType('Y')}>완료됨 (Done)</FilterButton>
           </FilterGroup>
         </ControlBar>
 
@@ -430,11 +418,7 @@ const MaterialListModal = ({
                   <tr key={item.key_id || idx}>
                     <td>
                       <StatusBadge $status={item.CHK_FLAG === 'Y' ? 'Y' : 'N'}>
-                        {item.CHK_FLAG === 'Y' ? (
-                            <><span>●</span>완료</>
-                        ) : (
-                            <><span>●</span>대기</>
-                        )}
+                        {item.CHK_FLAG === 'Y' ? <><span>●</span>완료</> : <><span>●</span>대기</>}
                       </StatusBadge>
                     </td>
                     <td style={{fontFamily: 'monospace', fontWeight: 600, fontSize: '1rem'}}>{item.InvoiceNo}</td>
@@ -454,8 +438,7 @@ const MaterialListModal = ({
             </tbody>
           </StyledTable>
         </TableWrapper>
-        
-        <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, color: '#64748b', fontSize: '0.85rem' }}>
+        <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', color: '#64748b', fontSize: '0.85rem' }}>
           <span>총 <strong>{filteredData.length}</strong>건의 데이터가 조회되었습니다.</span>
         </div>
       </ModalContainer>
@@ -494,15 +477,12 @@ export default function DashboardPage() {
   const lastProcessedKeyRef = useRef<string | null>(null);
   const isInitialLoadRef = useRef<boolean>(true);
 
-  // Time ticker (Optimized: runs every second, but state isolation is hard in a single file component without memo)
-  // But this is required for the clock.
   useEffect(() => {
     setNow(new Date());
     const timer = setInterval(() => { setNow(new Date()); }, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Stream Checker
   useEffect(() => {
     if (!streamUrl) {
       setStreamStatus("idle");
@@ -527,14 +507,12 @@ export default function DashboardPage() {
     return () => { isMounted = false; clearTimeout(timeoutId); };
   }, [streamUrl, retryKey]);
 
-  // Handlers (Memoized)
   const handleRetry = useCallback(() => setRetryKey(prev => prev + 1), []);
   const handleHostChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setStreamHost(e.target.value.trim());
-    setStreamStatus(prev => prev !== 'idle' ? 'idle' : prev); // Only change if not idle
+    setStreamStatus(prev => prev !== 'idle' ? 'idle' : prev);
   }, []);
 
-  // Fetch Vehicle
   const fetchVehicleData = useCallback(async () => {
     try {
       setIsVehicleLoading(true);
@@ -542,60 +520,49 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error("Vehicle API Error");
       const data: VehicleApiResponse = await res.json();
       const allSlots = Object.values(data).flatMap(area => area.slots_detail);
+
+      // [중요] 여기서 이미지 확장자를 체크하고 필터링합니다.
       const validSlots = allSlots.filter(slot => 
         slot.FILEPATH && slot.FILENAME && (slot.FILENAME.toLowerCase().endsWith('.jpg') || slot.FILENAME.toLowerCase().endsWith('.png'))
       );
+
+      // 최신 입차 시간 순으로 정렬하여 첫 번째(가장 최신) 이미지를 선택합니다.
       validSlots.sort((a, b) => {
         if (!a.entry_time) return 1;
         if (!b.entry_time) return -1;
         return new Date(b.entry_time).getTime() - new Date(a.entry_time).getTime();
       });
+
       if (validSlots.length > 0) {
-        setVehicleInfo(validSlots[0]);
+        setVehicleInfo(validSlots[0]); // 필터링된 최신 이미지 정보를 상태에 저장
         setIsVehicleDataLoaded(true);
       } else {
         setIsVehicleDataLoaded(true); 
       }
-    } catch (err) {
-      console.error("Vehicle Fetch Failed:", err);
-    } finally {
-      setIsVehicleLoading(false);
-    }
+    } catch (err) { console.error(err); } finally { setIsVehicleLoading(false); }
   }, []);
 
-  // Fetch Materials
   const fetchMaterialData = useCallback(async () => {
     setMaterialError(null);
     setIsMaterialLoading(true);
     try {
       const res = await fetch(API_URL_MATERIAL_LIST);
       if (!res.ok) throw new Error(`API Error: ${res.status}`);
-      
       const json = await res.json();
       const data: MaterialListItem[] = Array.isArray(json) ? json : [];
-
       setMaterialList(data);
-
       const total = data.length;
       const done = data.filter(item => item.CHK_FLAG === 'Y').length;
-      const percent = total > 0 ? Math.round((done / total) * 100) : 0;
-      setMaterialStats({ total, done, percent });
-
-      const pendingItems = data.filter(item => item.CHK_FLAG !== 'Y');
-      setPendingList(pendingItems);
-
+      setMaterialStats({ total, done, percent: total > 0 ? Math.round((done / total) * 100) : 0 });
+      setPendingList(data.filter(item => item.CHK_FLAG !== 'Y'));
     } catch (err: any) {
-      console.error("Material Fetch Failed:", err);
       setMaterialError(err.message || "데이터 로드 실패");
       setMaterialList([]);
       setPendingList([]);
       setMaterialStats({ total: 0, done: 0, percent: 0 });
-    } finally {
-      setIsMaterialLoading(false);
-    }
+    } finally { setIsMaterialLoading(false); }
   }, []);
 
-  // Dwell time calculation
   useEffect(() => {
     if (!now || !vehicleInfo || !vehicleInfo.entry_time) {
       setDwellString("-");
@@ -604,9 +571,8 @@ export default function DashboardPage() {
     }
     const entryTime = new Date(vehicleInfo.entry_time);
     const diffMs = now.getTime() - entryTime.getTime();
-    if (diffMs < 0) {
-      setDwellString("0분"); setIsLongDwell(false);
-    } else {
+    if (diffMs < 0) { setDwellString("0분"); setIsLongDwell(false); }
+    else {
       const diffMins = Math.floor(diffMs / 60000);
       const hours = Math.floor(diffMins / 60);
       const minutes = diffMins % 60;
@@ -615,12 +581,15 @@ export default function DashboardPage() {
     }
   }, [now, vehicleInfo]);
 
-  // Initial Fetch
-  useEffect(() => {
-    fetchMaterialData(); 
-  }, [fetchMaterialData]);
+  useEffect(() => { fetchMaterialData(); }, [fetchMaterialData]);
 
-  // Keyboard
+  const manualTrigger = useCallback(() => { 
+    fetchVehicleData(); 
+    fetchMaterialData();
+    setShowDashboard(true); 
+  }, [fetchVehicleData, fetchMaterialData]);
+
+  // 🔴 [수정 부분 1] 키보드 이벤트 핸들러 - Escape뿐만 아니라 Enter 키 감지 추가
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -629,56 +598,52 @@ export default function DashboardPage() {
             else if (showDashboard) setShowDashboard(false);
             else if (isFullScreen) setIsFullScreen(false);
         }
+        // 엔터 키를 누르면 manualTrigger 실행
+        if (e.key === 'Enter') {
+            manualTrigger();
+        }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullScreen, showDashboard, showMapBoard, showListModal]);
+  }, [isFullScreen, showDashboard, showMapBoard, showListModal, manualTrigger]);
 
-  // Firebase
+  const lastProcessedContentRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!db) return;
     const logsRef = ref(db, 'vuzix_log');
     const q = query(logsRef, limitToLast(1));
-
     const unsubscribe = onValue(q, async (snapshot) => {
       const dataWrapper = snapshot.val();
       if (!dataWrapper) return;
       const key = Object.keys(dataWrapper)[0];
       const data = dataWrapper[key];
-      const barcode = data.barcode || data.Barcode; 
-
+      const currentContent = JSON.stringify(data);
       if (isInitialLoadRef.current) {
           lastProcessedKeyRef.current = key;
+          lastProcessedContentRef.current = currentContent;
           setTimeout(() => { isInitialLoadRef.current = false; }, 500);
           return;
       }
-      if (lastProcessedKeyRef.current === key) return;
+      if (lastProcessedKeyRef.current === key && lastProcessedContentRef.current === currentContent) return;
       lastProcessedKeyRef.current = key;
-      
+      lastProcessedContentRef.current = currentContent;
       fetchVehicleData();
-      fetchMaterialData(); 
-
+      fetchMaterialData();
+      setShowDashboard(true); 
+      const barcode = data.barcode || data.Barcode; 
       if (barcode) {
         try {
             const apiUrl = `${API_URL_INVOICE}?InvoiceNo=${barcode}`;
             const res = await fetch(apiUrl);
             if (res.ok) {
-                const json: WearableApiEntry[] = await res.json();
-                if (Array.isArray(json)) {
-                    setScannedInvoiceData(json);
-                    setShowDashboard(true);
-                }
+                const json = await res.json();
+                if (Array.isArray(json)) setScannedInvoiceData(json);
             }
         } catch (err) { console.error(err); }
       }
     });
     return () => unsubscribe();
-  }, [fetchVehicleData, fetchMaterialData]);
-
-  const manualTrigger = useCallback(() => { 
-    fetchVehicleData(); 
-    fetchMaterialData();
-    setShowDashboard(true); 
   }, [fetchVehicleData, fetchMaterialData]);
 
   const toggleMapBoard = useCallback(() => setShowMapBoard(true), []);
@@ -697,35 +662,29 @@ export default function DashboardPage() {
                     {isVehicleDataLoaded && vehicleInfo ? (
                       <>
                         <VehicleImagePlaceholder>
-                            <img src={vehicleInfo.FILEPATH} alt="Vehicle" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px 8px 0 0' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          <img 
+                            src={vehicleInfo.FILEPATH} 
+                            alt="Vehicle" 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px 8px 0 0' }} 
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                          />
                         </VehicleImagePlaceholder>
                         <PlateContainer>
                             <span className="label">차량 번호</span>
                             <div className="plate-badge">{vehicleInfo.PLATE || "번호미상"}</div>
                         </PlateContainer>
                         <div style={{ display: 'flex', flexDirection: 'column', padding: '0 8px' }}>
-                            <InfoRow>
-                                <span className="label">도착시간</span>
-                                <span className="value">{vehicleInfo.entry_time ? vehicleInfo.entry_time.split(' ')[1] : "-"}</span>
-                            </InfoRow>
+                            <InfoRow><span className="label">도착시간</span><span className="value">{vehicleInfo.entry_time ? vehicleInfo.entry_time.split(' ')[1] : "-"}</span></InfoRow>
                             <InfoRow>
                                 <span className="label">체류시간</span>
-                                <DwellTimeBadge $isWarning={isLongDwell}>
-                                    {isLongDwell && <AlertTriangle size={12} style={{marginRight:4}}/>}
-                                    {dwellString}
-                                </DwellTimeBadge>
+                                <DwellTimeBadge $isWarning={isLongDwell}>{isLongDwell && <AlertTriangle size={12} style={{marginRight:4}}/>}{dwellString}</DwellTimeBadge>
                             </InfoRow>
-                            <InfoRow>
-                                <span className="label">상태</span>
-                                <span className="value highlight-box">입고대기</span>
-                            </InfoRow>
+                            <InfoRow><span className="label">상태</span><span className="value highlight-box">입고대기</span></InfoRow>
                         </div>
                       </>
                     ) : (
                       <MiniEmptyState>
-                        <div className="icon-circle">
-                             {isVehicleLoading ? <Loader2 className="spin" size={28}/> : <Search size={28} />}
-                        </div>
+                        <div className="icon-circle">{isVehicleLoading ? <Loader2 className="spin" size={28}/> : <Search size={28} />}</div>
                         <h3>{isVehicleLoading ? "데이터 조회 중..." : "차량 데이터 대기"}</h3>
                         <p>{isVehicleLoading ? "잠시만 기다려주세요." : "바코드를 스캔하면 차량정보가 표시됩니다."}</p>
                       </MiniEmptyState>
@@ -734,71 +693,39 @@ export default function DashboardPage() {
 
                 <FullHeightCard>
                     <CardTitle>입고 대기 리스트</CardTitle>
-                    
                     <div style={{ padding: '0 16px 16px 16px', borderBottom: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>
                             <span>금일 입고 진행률</span>
                             <span>{materialStats.percent}% ({materialStats.done} / {materialStats.total})</span>
                         </div>
                         <div style={{ width: '100%', height: '12px', background: '#f1f5f9', borderRadius: '6px', overflow: 'hidden' }}>
-                            <motion.div 
-                                initial={{ width: 0 }}
-                                animate={{ width: `${materialStats.percent}%` }}
-                                transition={{ duration: 1, ease: "easeOut" }}
-                                style={{ height: '100%', background: 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '6px' }}
-                            />
+                            <motion.div initial={{ width: 0 }} animate={{ width: `${materialStats.percent}%` }} transition={{ duration: 1, ease: "easeOut" }} style={{ height: '100%', background: 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '6px' }} />
                         </div>
                     </div>
-
                     <HistoryListContainer>
                         <div className="h-title" style={{ justifyContent: 'space-between', paddingRight: '0px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {/* [수정] 부드러운 회전 애니메이션 적용 */}
-                                {isMaterialLoading ? (
-                                    <motion.div
-                                        animate={{ rotate: 360 }}
-                                        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                                        style={{ display: 'flex' }}
-                                    >
-                                        <Loader2 size={16} color="#3b82f6" />
-                                    </motion.div>
-                                ) : (
-                                    <ListChecks size={16} />
-                                )}
+                                {isMaterialLoading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} style={{ display: 'flex' }}><Loader2 size={16} color="#3b82f6" /></motion.div> : <ListChecks size={16} />}
                                 대기 목록 ({pendingList.length}건)
                             </div>
-                            
-                            <ViewAllButton onClick={toggleListModal}>
-                                <Maximize2 size={14}/> 전체보기
-                            </ViewAllButton>
+                            <ViewAllButton onClick={toggleListModal}><Maximize2 size={14}/> 전체보기</ViewAllButton>
                         </div>
-                        
                         <div className="h-scroll-area">
                             {isMaterialLoading ? (
                                 <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'#64748b', gap:'12px'}}>
-                                    {/* [수정] 데이터를 불러오는 중... 위의 로딩 아이콘 회전 */}
-                                    <motion.div
-                                        animate={{ rotate: 360 }}
-                                        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                                    >
-                                        <Loader2 size={32} color="#3b82f6"/>
-                                    </motion.div>
+                                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><Loader2 size={32} color="#3b82f6"/></motion.div>
                                     <span style={{fontSize:'0.9rem', fontWeight:500}}>데이터를 불러오는 중입니다...</span>
                                 </div>
                             ) : materialError ? (
                                 <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'#ef4444', gap:'10px'}}>
                                     <FileWarning size={32} />
-                                    <span style={{fontSize:'0.9rem', textAlign:'center'}}>데이터 로드 실패<br/><span style={{fontSize:'0.8rem', color:'#94a3b8'}}>{materialError}</span></span>
+                                    <span style={{fontSize:'0.9rem', textAlign:'center'}}>로드 실패<br/><span style={{fontSize:'0.8rem', color:'#94a3b8'}}>{materialError}</span></span>
                                     <PinkButton onClick={fetchMaterialData} style={{height:30, fontSize:'0.8rem', padding:'0 12px'}}>재시도</PinkButton>
                                 </div>
                             ) : pendingList.length > 0 ? (
-                                pendingList.map((item, idx) => (
-                                    <MemoizedHistoryItem key={item.key_id || `pend-${idx}`} item={item} />
-                                ))
+                                pendingList.map((item, idx) => <MemoizedHistoryItem key={item.key_id || `pend-${idx}`} item={item} />)
                             ) : (
-                                <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'#94a3b8', fontSize:'0.9rem'}}>
-                                    <span>처리 대기 중인 항목이 없습니다.</span>
-                                </div>
+                                <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'#94a3b8', fontSize:'0.9rem'}}>항목이 없습니다.</div>
                             )}
                         </div>
                     </HistoryListContainer>
@@ -806,11 +733,7 @@ export default function DashboardPage() {
             </Column>
 
             <Column>
-                <VideoCard 
-                    $isFullScreen={isFullScreen}
-                    layout
-                    transition={{ layout: { duration: 0.6, type: "spring", stiffness: 80, damping: 20 } }}
-                >
+                <VideoCard $isFullScreen={isFullScreen} layout transition={{ layout: { duration: 0.6, type: "spring", stiffness: 80, damping: 20 } }}>
                     <VideoHeader>
                         <div className="title-group">
                             <h3>자재검수 화면</h3>
@@ -820,97 +743,53 @@ export default function DashboardPage() {
                             </IpInputWrapper>
                         </div>
                         <div className="btn-group">
-                            <PinkButton onClick={manualTrigger}>TEST &gt;</PinkButton>
+                            {/* 🔴 [수정 부분 2] TEST 버튼 삭제 및 D동 현황 버튼만 유지 */}
                             <PinkButton onClick={toggleMapBoard}>D동 현황</PinkButton>
                         </div>
                     </VideoHeader>
 
                     <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
                       <motion.div layoutId="camera-view" style={{ width: '100%', height: '100%', zIndex: 1 }}>
-                        
                         {streamStatus === "ok" && streamUrl && (
-                          <iframe 
-                            src={streamUrl} 
-                            style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} 
-                            title="Stream" 
-                            allow="fullscreen"
-                            onError={() => setStreamStatus('error')}
-                          />
+                          <iframe src={streamUrl} style={{ width: '100%', height: '100%', border: 'none', objectFit: 'cover' }} title="Stream" allow="fullscreen" onError={() => setStreamStatus('error')} />
                         )}
-
                         {streamStatus === "checking" && (
-                          <StyledErrorState>
-                              <RefreshCw className="spin" size={40} color="#3b82f6" />
-                              <h2 style={{marginTop: 16, color: '#93c5fd'}}>CONNECTING...</h2>
-                          </StyledErrorState>
+                          <StyledErrorState><RefreshCw className="spin" size={40} color="#3b82f6" /><h2 style={{marginTop: 16, color: '#93c5fd'}}>CONNECTING...</h2></StyledErrorState>
                         )}
-
                         {streamStatus === "error" && (
                             <StyledErrorState>
                                 <div className="grid-bg"></div>
                                 <div className="content-box">
-                                    <div className="icon-wrapper">
-                                        <AlertTriangle size={32} color="#ef4444" />
-                                    </div>
+                                    <div className="icon-wrapper"><AlertTriangle size={32} color="#ef4444" /></div>
                                     <h2>CONNECTION FAILED</h2>
                                     <p>Check: IP / Power / Network</p>
-                                    <div style={{marginTop: 10, display: 'flex', gap: 10, justifyContent: 'center'}}>
-                                        <PinkButton onClick={handleRetry} style={{background: '#334155'}}>
-                                            <RefreshCw size={14} style={{marginRight: 6}}/> RETRY
-                                        </PinkButton>
-                                    </div>
+                                    <div style={{marginTop: 10}}><PinkButton onClick={handleRetry} style={{background: '#334155'}}><RefreshCw size={14} style={{marginRight: 6}}/> RETRY</PinkButton></div>
                                 </div>
                             </StyledErrorState>
                         )}
-
                         {streamStatus === "idle" && (
-                            <StyledErrorState>
-                                <Signal size={40} color="#64748b" />
-                                <p style={{marginTop:10}}>Enter Camera IP</p>
-                            </StyledErrorState>
+                            <StyledErrorState><Signal size={40} color="#64748b" /><p style={{marginTop:10}}>Enter Camera IP</p></StyledErrorState>
                         )}
-
                       </motion.div>
-
                       <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 50 }}>
                           <button onClick={toggleFullScreen} style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '8px', width: '40px', height: '40px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               {isFullScreen ? <LuMinimize size={20}/> : <LuMaximize size={20}/>}
                           </button>
                       </div>
-
                       <AnimatePresence>
-                          {showDashboard && (
-                              <AIDashboardModal 
-                                onClose={closeDashboard} 
-                                streamUrl={streamUrl} 
-                                streamStatus={streamStatus}
-                                externalData={scannedInvoiceData}
-                              />
-                          )}
+                          {showDashboard && <AIDashboardModal onClose={closeDashboard} streamUrl={streamUrl} streamStatus={streamStatus} externalData={scannedInvoiceData} />}
                       </AnimatePresence>
                     </div>
                 </VideoCard>
             </Column>
       </DashboardContainer>
 
-      {/* 전체보기 모달 (White Theme) */}
       <AnimatePresence>
-        {showListModal && (
-          <MaterialListModal 
-            isOpen={showListModal} 
-            onClose={closeListModal} 
-            data={materialList} 
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
+        {showListModal && <MaterialListModal isOpen={showListModal} onClose={closeListModal} data={materialList} />}
         {showMapBoard && (
             <>
                 <Backdrop initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeMapBoard} />
-                <SlidePanel initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 300, damping: 30 }}>
-                    <WarehouseBoard onClose={closeMapBoard} />
-                </SlidePanel>
+                <SlidePanel initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 300, damping: 30 }}><WarehouseBoard onClose={closeMapBoard} /></SlidePanel>
             </>
         )}
       </AnimatePresence>

@@ -139,8 +139,6 @@ const IconActions = styled.div`
   svg { cursor: pointer; transition: color 0.2s; &:hover { color: #111; } }
 `;
 
-// --- [UI 개선] 서브메뉴 스타일 ---
-
 const SubMenuWrapper = styled.div<{ $isOpen: boolean }>`
   position: fixed; top: 64px; left: 0; width: 100%; z-index: 20000; 
   background: white;
@@ -166,7 +164,6 @@ const SubMenuContent = styled.div`
   gap: 80px; 
 `;
 
-/* [왼쪽 영역] */
 const SubMenuLeft = styled.div`
   flex: 0 0 42%;
   display: flex;
@@ -225,7 +222,6 @@ const SubMenuDesc = styled.p`
   max-width: 540px;
 `;
 
-/* [오른쪽 영역] 버튼 리스트 */
 const SubMenuRight = styled.div`
   flex: 1;
   display: flex;
@@ -238,7 +234,6 @@ const SubMenuRight = styled.div`
   min-height: 140px;
 `;
 
-/* [수정] 호버 시 붉은색 효과 복원 */
 const PillButton = styled.button<{ $isActive: boolean }>`
   appearance: none;
   background: ${props => props.$isActive ? '#D31145' : '#fff'};
@@ -254,7 +249,6 @@ const PillButton = styled.button<{ $isActive: boolean }>`
   font-family: 'Pretendard', sans-serif;
   letter-spacing: -0.2px;
 
-  /* 활성/비활성 상관없이 호버 시 붉은색(#D31145) 적용 */
   &:hover {
     background: #D31145;
     color: #fff;
@@ -285,11 +279,18 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
   const [hoveredMenu, setHoveredMenu] = useState<string | null>(null);
   const [lastActiveMenu, setLastActiveMenu] = useState<string | null>(null);
   
+  // Hydration 에러 방지를 위한 마운트 체크 상태
+  const [mounted, setMounted] = useState(false);
+  
   const pathname = usePathname();
   const router = useRouter();
   
   const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const menuAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (hoveredMenu) {
@@ -298,6 +299,9 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
   }, [hoveredMenu]);
 
   const getCurrentActiveMenu = useCallback(() => {
+    // 서버 환경이거나 마운트 전이면 불일치 방지를 위해 null 반환
+    if (!mounted || !pathname) return null;
+
     const activeKey = MENU_KEYS.find(key => 
       subMenuData[key].items.some(item => 
         pathname === item.href || pathname.startsWith(item.href)
@@ -310,7 +314,7 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
     if (pathname.includes('/transport')) return "출하관리";
     
     return "자재관리"; 
-  }, [pathname]);
+  }, [pathname, mounted]);
 
   const currentActiveMenu = getCurrentActiveMenu();
 
@@ -329,6 +333,12 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
   };
 
   const updateGliderPosition = useCallback(() => {
+    // 마운트 전이거나 활성 메뉴가 없으면 글라이더를 숨김
+    if (!mounted || !currentActiveMenu) {
+        setGliderStyle({ x: 0, width: 0 });
+        return;
+    }
+
     const activeIndex = MENU_KEYS.indexOf(currentActiveMenu);
     const currentTabElement = tabsRef.current[activeIndex];
     const parentElement = menuAreaRef.current;
@@ -345,9 +355,11 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
         return { x: relativeX, width: childRect.width };
       });
     }
-  }, [currentActiveMenu]);
+  }, [currentActiveMenu, mounted]);
 
   useEffect(() => {
+    if (!mounted) return;
+
     updateGliderPosition();
     const resizeObserver = new ResizeObserver(() => updateGliderPosition());
 
@@ -357,7 +369,7 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
     });
 
     return () => resizeObserver.disconnect();
-  }, [updateGliderPosition]);
+  }, [updateGliderPosition, mounted]);
 
   const handleNavLeave = () => {
     setHoveredMenu(null);
@@ -380,12 +392,16 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
           <NavbarContextBot/>
           
           <MenuArea ref={menuAreaRef}>
-            <MenuGlider style={{ transform: `translate(${gliderStyle.x}px, -50%)`, width: gliderStyle.width }} />
+            {/* 마운트 후에만 글라이더 표시 */}
+            {mounted && (
+              <MenuGlider style={{ transform: `translate(${gliderStyle.x}px, -50%)`, width: gliderStyle.width }} />
+            )}
             {MENU_KEYS.map((menu, index) => (
               <MenuItem 
                 key={menu}
                 ref={(el) => { if(el) tabsRef.current[index] = el; }}
-                $isActive={currentActiveMenu === menu} 
+                // 마운트 전에는 무조건 false로 렌더링하여 서버 데이터와 일치시킴
+                $isActive={mounted ? currentActiveMenu === menu : false} 
                 onClick={(e) => handleMenuClick(e, menu)}
                 onMouseEnter={() => !isLoading && setHoveredMenu(menu)}
               >
@@ -423,7 +439,8 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
                   {activeMenuData.items.map((subItem: SubMenuItemType) => (
                     <PillButton 
                       key={subItem.label} 
-                      $isActive={pathname === subItem.href}
+                      // 마운트 전에는 false로 유지
+                      $isActive={mounted ? pathname === subItem.href : false}
                       onClick={(e) => handleSubMenuClick(e, subItem.href)}
                     >
                       {subItem.label}
