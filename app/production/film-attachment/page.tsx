@@ -230,7 +230,7 @@ export default function FilmAttachmentCheck() {
         <>
             <GlobalStyles />
             <div style={{ 
-                width: '100%', height: '100vh', padding: '32px', backgroundColor: THEME.bg,
+                width: '100%', height: 'calc(100vh - 64px)', padding: '32px', backgroundColor: THEME.bg,
                 fontFamily: '"Pretendard", -apple-system, sans-serif', boxSizing: 'border-box',
                 display: 'flex', flexDirection: 'column'
             }}>
