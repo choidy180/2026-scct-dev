@@ -6,26 +6,15 @@ import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { FiBell, FiSettings } from 'react-icons/fi';
 import { 
-  FaDolly, 
-  FaEye, 
-  FaCogs, 
-  FaChartLine, 
-  FaHardHat, 
-  FaTruck 
+  FaDolly, FaEye, FaCogs, FaChartLine, FaHardHat, FaTruck 
 } from 'react-icons/fa';
-import NavbarContextBot from '../chatbot-widget';
+import AIAgentSystem from '../chatbot-widget';
 
-// --- Types ---
-export type SubMenuItemType = {
-  label: string;
-  href: string;
-  detail: string;
-};
+// [변경] 기존 챗봇 대신 AIAgentSystem import
 
-export type MenuDataType = {
-  description: string; 
-  items: SubMenuItemType[];
-};
+// --- Types & Data (기존 코드 유지) ---
+export type SubMenuItemType = { label: string; href: string; detail: string; };
+export type MenuDataType = { description: string; items: SubMenuItemType[]; };
 
 const MENU_META: Record<string, { icon: any; color: string }> = {
   "자재관리": { icon: FaDolly, color: "#00A651" },
@@ -36,7 +25,6 @@ const MENU_META: Record<string, { icon: any; color: string }> = {
   "출하관리": { icon: FaTruck, color: "#2563EB" },
 };
 
-// --- Data ---
 const subMenuData: Record<string, MenuDataType> = {
   "자재관리": {
     description: "입고부터 불량 선별까지,\nAI 비전 기술로 자재 흐름을 완벽하게 제어합니다.",
@@ -77,250 +65,99 @@ const subMenuData: Record<string, MenuDataType> = {
   "출하관리": {
     description: "출하부터 배송까지,\n물류의 전 과정을 실시간으로 추적합니다.",
     items: [
+      { label: "운송관리", href: "/transport/realtime-status", detail: "" },
       { label: "제품창고", href: "/transport/warehouse-management", detail: "" },
       { label: "출하처리", href: "/transport/shipment", detail: "" },
-      { label: "운송관리", href: "/transport/realtime-status", detail: "" },
     ]
   },
 };
-
 const MENU_KEYS = Object.keys(subMenuData);
 
-// --- Styled Components ---
-
+// --- Styled Components (기존 코드 유지) ---
 const NavWrapper = styled.div<{ $isDisabled: boolean }>`
   position: sticky; top: 0; width: 100%; height: 64px;
   overflow: visible; z-index: 9999; background: transparent;
-  ${props => props.$isDisabled && css`
-    pointer-events: none; opacity: 0.6; cursor: not-allowed;
-  `}
+  ${props => props.$isDisabled && css`pointer-events: none; opacity: 0.6; cursor: not-allowed;`}
 `;
-
 const NavContainer = styled.nav`
-  height: 64px; background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  position: relative; z-index: 10000; font-family: var(--font-pretendard), sans-serif;
-  display: flex; justify-content: center;
+  height: 64px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06); position: relative; z-index: 10000;
+  font-family: var(--font-pretendard), sans-serif; display: flex; justify-content: center;
 `;
-
 const NavInner = styled.div`
   width: 100%; max-width: 1680px; padding: 0 24px; height: 100%;
   display: flex; align-items: center; justify-content: space-between;
 `;
-
 const LogoArea = styled.div`
   display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 18px; color: #111; cursor: pointer;
   font-family: 'Pretendard'; letter-spacing: -0.5px;
 `;
-
 const MenuArea = styled.div`
-  display: flex; align-items: center; gap: 4px; position: relative; height: 100%;
-  transform: translateZ(0); 
+  display: flex; align-items: center; gap: 4px; position: relative; height: 100%; transform: translateZ(0); 
 `;
-
 const MenuGlider = styled.div`
   position: absolute; height: 36px; background-color: #FFF0F3; border-radius: 8px; z-index: 0;
   transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1), width 0.3s cubic-bezier(0.2, 0, 0.2, 1);
   top: 50%; will-change: transform, width;
 `;
-
 const MenuItem = styled.button<{ $isActive?: boolean }>`
-  border: none; background: transparent; 
-  color: ${props => props.$isActive ? '#D31145' : '#555'};
+  border: none; background: transparent; color: ${props => props.$isActive ? '#D31145' : '#555'};
   padding: 0 20px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;
   position: relative; z-index: 1; transition: color 0.2s ease; font-family: inherit; height: 36px;
   display: flex; align-items: center; white-space: nowrap;
   &:hover { color: ${props => props.$isActive ? '#D31145' : '#111'}; }
 `;
-
 const IconActions = styled.div`
   display: flex; gap: 18px; margin-left: 28px; padding-left: 28px; border-left: 1px solid #e0e0e0; color: #666;
   svg { cursor: pointer; transition: color 0.2s; &:hover { color: #111; } }
 `;
-
-const SubMenuWrapper = styled.div<{ $isOpen: boolean }>`
-  position: fixed; top: 64px; left: 0; width: 100%; z-index: 20000; 
-  background: white;
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.06);
-  opacity: ${props => (props.$isOpen ? '1' : '0')};
-  visibility: ${props => (props.$isOpen ? 'visible' : 'hidden')};
-  transform: translateY(${props => (props.$isOpen ? '0' : '-8px')});
-  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
-  pointer-events: ${props => (props.$isOpen ? 'auto' : 'none')};
-  border-bottom: 1px solid #f0f0f0;
-  overflow: hidden;
-`;
-
-const SubMenuInner = styled.div`
-  width: 100%; display: flex; justify-content: center;
-`;
-
-const SubMenuContent = styled.div`
-  width: 100%; max-width: 1680px; 
-  padding: 56px 24px;
-  display: flex; 
-  align-items: stretch; 
-  gap: 80px; 
-`;
-
-const SubMenuLeft = styled.div`
-  flex: 0 0 42%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  padding-top: 4px; 
-`;
-
-const SubMenuHeaderRow = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 24px;
-`;
-
-const MenuIconBox = styled.div<{ $color: string }>`
-  width: 76px;
-  height: 76px;
-  border-radius: 20px;
-  background: linear-gradient(145deg, ${props => props.$color}15, ${props => props.$color}05);
-  color: ${props => props.$color};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 34px;
-  flex-shrink: 0;
-  box-shadow: inset 0 2px 4px rgba(255,255,255,0.8), 0 8px 20px -6px rgba(0,0,0,0.08);
-  border: 1px solid ${props => props.$color}20;
-`;
-
-const TextGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 4px;
-`;
-
-const SubMenuTitle = styled.h2`
-  font-size: 30px;
-  font-weight: 800;
-  color: #1a1a1a;
-  margin: 0;
-  font-family: 'Pretendard', sans-serif;
-  letter-spacing: -0.8px;
-  line-height: 1.1;
-`;
-
-const SubMenuDesc = styled.p`
-  font-size: 16px;
-  line-height: 1.6;
-  color: #666;
-  margin: 0;
-  white-space: pre-wrap; 
-  word-break: keep-all; 
-  font-weight: 500;
-  opacity: 0.9;
-  max-width: 540px;
-`;
-
-const SubMenuRight = styled.div`
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  align-items: flex-start;
-  gap: 12px;
-  padding-left: 60px;
-  border-left: 1px solid #f5f5f5;
-  min-height: 140px;
-`;
-
-const PillButton = styled.button<{ $isActive: boolean }>`
-  appearance: none;
-  background: ${props => props.$isActive ? '#D31145' : '#fff'};
-  color: ${props => props.$isActive ? '#fff' : '#333'};
-  border: 1px solid ${props => props.$isActive ? '#D31145' : '#e0e0e0'};
-  border-radius: 50px;
-  padding: 11px 26px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  white-space: nowrap;
-  font-family: 'Pretendard', sans-serif;
-  letter-spacing: -0.2px;
-
-  &:hover {
-    background: #D31145;
-    color: #fff;
-    border-color: #D31145;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(211, 17, 69, 0.25);
-  }
-`;
-
-const Overlay = styled.div<{ $isOpen: boolean }>`
-  position: fixed; top: 64px; left: 0; width: 100vw; height: calc(100vh - 64px); 
-  background: rgba(255, 255, 255, 0.1); 
-  backdrop-filter: blur(4px);
-  opacity: ${props => (props.$isOpen ? '1' : '0')}; 
-  visibility: ${props => (props.$isOpen ? 'visible' : 'hidden')};
-  transition: opacity 0.3s ease, visibility 0.3s; 
-  z-index: 15000; 
-  pointer-events: ${props => (props.$isOpen ? 'auto' : 'none')};
-`;
+// ... (SubMenu 관련 스타일들은 너무 길어서 생략, 기존 코드 그대로 유지) ...
+// (SubMenuWrapper, SubMenuInner, SubMenuContent, SubMenuLeft, SubMenuHeaderRow, MenuIconBox, TextGroup, SubMenuTitle, SubMenuDesc, SubMenuRight, PillButton, Overlay 모두 기존 유지)
+const SubMenuWrapper = styled.div<{ $isOpen: boolean }>` position: fixed; top: 64px; left: 0; width: 100%; z-index: 20000; background: white; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.06); opacity: ${props => (props.$isOpen ? '1' : '0')}; visibility: ${props => (props.$isOpen ? 'visible' : 'hidden')}; transform: translateY(${props => (props.$isOpen ? '0' : '-8px')}); transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s; pointer-events: ${props => (props.$isOpen ? 'auto' : 'none')}; border-bottom: 1px solid #f0f0f0; overflow: hidden; `;
+const SubMenuInner = styled.div` width: 100%; display: flex; justify-content: center; `;
+const SubMenuContent = styled.div` width: 100%; max-width: 1680px; padding: 56px 24px; display: flex; align-items: stretch; gap: 80px; `;
+const SubMenuLeft = styled.div` flex: 0 0 42%; display: flex; flex-direction: column; justify-content: flex-start; padding-top: 4px; `;
+const SubMenuHeaderRow = styled.div` display: flex; align-items: flex-start; gap: 24px; `;
+const MenuIconBox = styled.div<{ $color: string }>` width: 76px; height: 76px; border-radius: 20px; background: linear-gradient(145deg, ${props => props.$color}15, ${props => props.$color}05); color: ${props => props.$color}; display: flex; align-items: center; justify-content: center; font-size: 34px; flex-shrink: 0; box-shadow: inset 0 2px 4px rgba(255,255,255,0.8), 0 8px 20px -6px rgba(0,0,0,0.08); border: 1px solid ${props => props.$color}20; `;
+const TextGroup = styled.div` display: flex; flex-direction: column; gap: 10px; padding-top: 4px; `;
+const SubMenuTitle = styled.h2` font-size: 30px; font-weight: 800; color: #1a1a1a; margin: 0; font-family: 'Pretendard', sans-serif; letter-spacing: -0.8px; line-height: 1.1; `;
+const SubMenuDesc = styled.p` font-size: 16px; line-height: 1.6; color: #666; margin: 0; white-space: pre-wrap; word-break: keep-all; font-weight: 500; opacity: 0.9; max-width: 540px; `;
+const SubMenuRight = styled.div` flex: 1; display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; gap: 12px; padding-left: 60px; border-left: 1px solid #f5f5f5; min-height: 140px; `;
+const PillButton = styled.button<{ $isActive: boolean }>` appearance: none; background: ${props => props.$isActive ? '#D31145' : '#fff'}; color: ${props => props.$isActive ? '#fff' : '#333'}; border: 1px solid ${props => props.$isActive ? '#D31145' : '#e0e0e0'}; border-radius: 50px; padding: 11px 26px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); white-space: nowrap; font-family: 'Pretendard', sans-serif; letter-spacing: -0.2px; &:hover { background: #D31145; color: #fff; border-color: #D31145; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(211, 17, 69, 0.25); } `;
+const Overlay = styled.div<{ $isOpen: boolean }>` position: fixed; top: 64px; left: 0; width: 100vw; height: calc(100vh - 64px); background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(4px); opacity: ${props => (props.$isOpen ? '1' : '0')}; visibility: ${props => (props.$isOpen ? 'visible' : 'hidden')}; transition: opacity 0.3s ease, visibility 0.3s; z-index: 15000; pointer-events: ${props => (props.$isOpen ? 'auto' : 'none')}; `;
 
 // --- Component ---
-interface TopNavigationProps {
-  isLoading?: boolean;
-}
+interface TopNavigationProps { isLoading?: boolean; }
 
 export default function TopNavigation({ isLoading = false }: TopNavigationProps) {
   const [gliderStyle, setGliderStyle] = useState({ x: 0, width: 0 });
   const [hoveredMenu, setHoveredMenu] = useState<string | null>(null);
   const [lastActiveMenu, setLastActiveMenu] = useState<string | null>(null);
-  
-  // Hydration 에러 방지를 위한 마운트 체크 상태
   const [mounted, setMounted] = useState(false);
-  
   const pathname = usePathname();
   const router = useRouter();
-  
   const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const menuAreaRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (hoveredMenu) {
-      setLastActiveMenu(hoveredMenu);
-    }
-  }, [hoveredMenu]);
+  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { if (hoveredMenu) { setLastActiveMenu(hoveredMenu); } }, [hoveredMenu]);
 
   const getCurrentActiveMenu = useCallback(() => {
-    // 서버 환경이거나 마운트 전이면 불일치 방지를 위해 null 반환
     if (!mounted || !pathname) return null;
-
     const activeKey = MENU_KEYS.find(key => 
-      subMenuData[key].items.some(item => 
-        pathname === item.href || pathname.startsWith(item.href)
-      )
+      subMenuData[key].items.some(item => pathname === item.href || pathname.startsWith(item.href))
     );
-
     if (activeKey) return activeKey;
     if (pathname.includes('/material')) return "자재관리";
     if (pathname.includes('/production')) return "공정품질";
     if (pathname.includes('/transport')) return "출하관리";
-    
     return "자재관리"; 
   }, [pathname, mounted]);
 
   const currentActiveMenu = getCurrentActiveMenu();
 
   const handleMenuClick = (e: React.MouseEvent, menu: string) => {
-    e.preventDefault(); 
-    if (isLoading) return;
+    e.preventDefault(); if (isLoading) return;
     const subItems = subMenuData[menu]?.items;
     if (subItems && subItems.length > 0) router.push(subItems[0].href);
   };
@@ -333,25 +170,16 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
   };
 
   const updateGliderPosition = useCallback(() => {
-    // 마운트 전이거나 활성 메뉴가 없으면 글라이더를 숨김
-    if (!mounted || !currentActiveMenu) {
-        setGliderStyle({ x: 0, width: 0 });
-        return;
-    }
-
+    if (!mounted || !currentActiveMenu) { setGliderStyle({ x: 0, width: 0 }); return; }
     const activeIndex = MENU_KEYS.indexOf(currentActiveMenu);
     const currentTabElement = tabsRef.current[activeIndex];
     const parentElement = menuAreaRef.current;
-
     if (currentTabElement && parentElement) {
       const parentRect = parentElement.getBoundingClientRect();
       const childRect = currentTabElement.getBoundingClientRect();
       const relativeX = childRect.left - parentRect.left;
-      
       setGliderStyle(prev => {
-        if (Math.abs(prev.x - relativeX) < 0.5 && Math.abs(prev.width - childRect.width) < 0.5) {
-          return prev;
-        }
+        if (Math.abs(prev.x - relativeX) < 0.5 && Math.abs(prev.width - childRect.width) < 0.5) return prev;
         return { x: relativeX, width: childRect.width };
       });
     }
@@ -359,22 +187,14 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
 
   useEffect(() => {
     if (!mounted) return;
-
     updateGliderPosition();
     const resizeObserver = new ResizeObserver(() => updateGliderPosition());
-
     if (menuAreaRef.current) resizeObserver.observe(menuAreaRef.current);
-    tabsRef.current.forEach(tab => {
-      if (tab) resizeObserver.observe(tab);
-    });
-
+    tabsRef.current.forEach(tab => { if (tab) resizeObserver.observe(tab); });
     return () => resizeObserver.disconnect();
   }, [updateGliderPosition, mounted]);
 
-  const handleNavLeave = () => {
-    setHoveredMenu(null);
-  };
-
+  const handleNavLeave = () => { setHoveredMenu(null); };
   const displayMenuKey = hoveredMenu || lastActiveMenu;
   const activeMenuData = displayMenuKey ? subMenuData[displayMenuKey] : null;
   const activeMenuMeta = displayMenuKey ? MENU_META[displayMenuKey] : null;
@@ -385,14 +205,17 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
         <NavInner>
           <LogoArea onClick={() => router.push('/master-dashboard')}>
             <div style={{ position: 'relative', width: '60px', height: '40px' }}>
-                <Image src="/logo/gmt_logo.png" alt="Company Logo" fill style={{ objectFit: 'contain' }} priority />
+              <Image src="/logo/gmt_logo.png" alt="Company Logo" fill style={{ objectFit: 'contain' }} priority />
             </div>
             <h4>고모텍 AI 관제센터</h4>
           </LogoArea>
-          <NavbarContextBot/>
+
+          {/* [변경] NavbarContextBot 제거 후 AIAgentSystem 삽입 */}
+          <div style={{ margin: '0 20px' }}>
+            <AIAgentSystem />
+          </div>
           
           <MenuArea ref={menuAreaRef}>
-            {/* 마운트 후에만 글라이더 표시 */}
             {mounted && (
               <MenuGlider style={{ transform: `translate(${gliderStyle.x}px, -50%)`, width: gliderStyle.width }} />
             )}
@@ -400,7 +223,6 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
               <MenuItem 
                 key={menu}
                 ref={(el) => { if(el) tabsRef.current[index] = el; }}
-                // 마운트 전에는 무조건 false로 렌더링하여 서버 데이터와 일치시킴
                 $isActive={mounted ? currentActiveMenu === menu : false} 
                 onClick={(e) => handleMenuClick(e, menu)}
                 onMouseEnter={() => !isLoading && setHoveredMenu(menu)}
@@ -416,6 +238,7 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
         </NavInner>
       </NavContainer>
 
+      {/* 서브메뉴 렌더링 (기존 유지) */}
       <SubMenuWrapper $isOpen={!!hoveredMenu && !isLoading}>
         <SubMenuInner>
           <SubMenuContent>
@@ -434,12 +257,10 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
                         </TextGroup>
                     </SubMenuHeaderRow>
                 </SubMenuLeft>
-
                 <SubMenuRight>
                   {activeMenuData.items.map((subItem: SubMenuItemType) => (
                     <PillButton 
                       key={subItem.label} 
-                      // 마운트 전에는 false로 유지
                       $isActive={mounted ? pathname === subItem.href : false}
                       onClick={(e) => handleSubMenuClick(e, subItem.href)}
                     >
@@ -452,7 +273,6 @@ export default function TopNavigation({ isLoading = false }: TopNavigationProps)
           </SubMenuContent>
         </SubMenuInner>
       </SubMenuWrapper>
-
       <Overlay $isOpen={!!hoveredMenu && !isLoading} onMouseEnter={handleNavLeave} />
     </NavWrapper>
   );

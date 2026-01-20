@@ -50,15 +50,22 @@ import {
 } from 'recharts';
 
 // -----------------------------------------------------------------------------
-// [데이터 목업 & 설정]
-const GR2_DATA = [
-  { name: '09:00', inspection: 400, error: 24, rate: 0.5 },
-  { name: '10:00', inspection: 300, error: 13, rate: 0.8 },
-  { name: '11:00', inspection: 200, error: 58, rate: 1.2 },
-  { name: '12:00', inspection: 278, error: 39, rate: 1.0 },
-  { name: '13:00', inspection: 189, error: 48, rate: 1.5 },
-  { name: '14:00', inspection: 239, error: 38, rate: 1.1 },
-  { name: '15:00', inspection: 349, error: 43, rate: 0.9 },
+// [설정 및 목업 데이터]
+
+// 연간 데이터
+const ANNUAL_DATA = [
+  { name: 'Jan', inspection: 14000, error: 120, rate: 0.8 },
+  { name: 'Feb', inspection: 13500, error: 98, rate: 0.7 },
+  { name: 'Mar', inspection: 15000, error: 150, rate: 1.0 },
+  { name: 'Apr', inspection: 14200, error: 110, rate: 0.77 },
+  { name: 'May', inspection: 16000, error: 180, rate: 1.1 },
+  { name: 'Jun', inspection: 15500, error: 140, rate: 0.9 },
+  { name: 'Jul', inspection: 16200, error: 130, rate: 0.8 },
+  { name: 'Aug', inspection: 15800, error: 125, rate: 0.79 },
+  { name: 'Sep', inspection: 17000, error: 160, rate: 0.94 },
+  { name: 'Oct', inspection: 18000, error: 110, rate: 0.6 },
+  { name: 'Nov', inspection: 17500, error: 145, rate: 0.82 },
+  { name: 'Dec', inspection: 19000, error: 130, rate: 0.68 },
 ];
 
 const MOTOR_DATA = [
@@ -75,6 +82,7 @@ const MOTOR_DATA = [
 const JIG_MODEL_PATH = "/models/final_final_final.glb";
 const FLOOR_MODEL_PATH = "/models/final_final_final_final.glb";
 const FACTORY_BG_IMAGE = "/images/gmt_back.png"; 
+const API_URL = "http://1.254.24.170:24828/api/DX_API000024";
 
 const THEME = {
   primary: "#10b981",
@@ -105,6 +113,42 @@ const ERROR_REASONS = [
 
 // -----------------------------------------------------------------------------
 // [Types]
+
+interface ApiDataItem {
+  대차번호: string;
+  INTCART: number;
+  시리얼번호: string;
+  모델번호: string;
+  TIMEVALUE: string;
+  "R액 압력(kg/㎥)": string; 
+  "P액 압력(kg/㎥)": string;
+  "R액 유량(g)": string;
+  "P액 유량(g)": string;
+  "유량 비율(P/R)": string;
+  "R액 탱크온도(℃)": string;
+  "P액 탱크온도(℃)": string;
+  "R액 헤드온도(℃)": string;
+  "P액 헤드온도(℃)": string;
+  "온조#1리턴온도(℃)": string;
+  "온조#2리턴온도(℃)": string;
+  "온조#1공급수압력(kg/㎥)": string;
+  "온조#2공급수압력(kg/㎥)": string;
+  "발포시간(초)": string;
+  "가조립무게(g)": string;
+  "가조립온도(℃)": string;
+  "삽입주변온도(℃)": string;
+  "지그상판온도(℃)": string;
+  "지그하판온도(℃)": string;
+  "취출경화시간(초)": string;
+  "취출무게(g)": string;
+  "취출주변온도(℃)": string;
+  FILENAME1: string;
+  AI_TIME_STR: string;
+  AI_LABEL: string;
+  FILEPATH1: string;
+  [key: string]: any; 
+}
+
 interface UnitData {
   name: string;
   temp: number;
@@ -113,22 +157,6 @@ interface UnitData {
   uuid?: string;
   problem?: string;
   solution?: string;
-}
-
-interface ApiDataItem {
-  대차번호: string;
-  INTCART: number;
-  시리얼번호: string;
-  모델번호: string;
-  TIMEVALUE: string;
-  R액_압력: string;
-  P액_압력: string;
-  가조립온도: string;
-  발포시간: string;
-  FILENAME1: string;
-  AI_TIME_STR: string;
-  AI_LABEL: number;
-  FILEPATH1: string;
 }
 
 interface CustomTooltipProps {
@@ -323,14 +351,10 @@ class ModelErrorBoundary extends React.Component<{ fallback: React.ReactNode, ch
 interface JigModelProps {
   url: string;
   onHoverChange: (data: UnitData | null) => void;
-  onStatusUpdate: (units: UnitData[]) => void;
+  apiData: ApiDataItem[];
 }
 
-// [최적화 & 수정된 MovingLabel]
-// 1. Ref 기반 애니메이션
-// 2. 번호표 위치 고정 (relative)
-// 3. 에러창 Absolute Position (번호표 기준 우측 배치)
-const MovingLabel = ({ labelIndex, locations, errorIndices }: { labelIndex: number, locations: any[], errorIndices: number[] }) => {
+const MovingLabel = ({ labelIndex, locations, errorIndices, apiData }: { labelIndex: number, locations: any[], errorIndices: number[], apiData: ApiDataItem[] }) => {
     const groupRef = useRef<THREE.Group>(null);
     const CYCLE_DURATION = 15;
     const WAIT_DURATION = 10;
@@ -343,7 +367,6 @@ const MovingLabel = ({ labelIndex, locations, errorIndices }: { labelIndex: numb
         const cycleIndex = Math.floor(time / CYCLE_DURATION);
         const timeInCycle = time % CYCLE_DURATION;
 
-        // 현재 사이클에서의 논리적 위치 인덱스
         const currentIndex = (labelIndex + cycleIndex) % locations.length;
         const nextIndex = (currentIndex + 1) % locations.length;
 
@@ -351,10 +374,8 @@ const MovingLabel = ({ labelIndex, locations, errorIndices }: { labelIndex: numb
         const nextPos = locations[nextIndex].position;
 
         if (timeInCycle < WAIT_DURATION) {
-            // 대기 상태: 현재 위치 고정
             groupRef.current.position.copy(currentPos);
         } else {
-            // 이동 상태: Lerp
             const moveTime = timeInCycle - WAIT_DURATION;
             const progress = Math.min(moveTime / MOVE_DURATION, 1);
             groupRef.current.position.lerpVectors(currentPos, nextPos, progress);
@@ -364,10 +385,18 @@ const MovingLabel = ({ labelIndex, locations, errorIndices }: { labelIndex: numb
     const isError = errorIndices.includes(labelIndex);
     const labelText = `M-${(labelIndex + 1).toString().padStart(2, '0')}`;
     
-    // 에러 정보 (랜덤 매핑)
-    const errorInfo = useMemo(() => {
-        return ERROR_REASONS[(labelIndex * 3) % ERROR_REASONS.length];
-    }, [labelIndex]);
+    const errorReason = useMemo(() => {
+        if (!isError) return { problem: "", solution: "" };
+        const matched = apiData.find(d => parseInt(d.대차번호) === labelIndex + 1);
+        if (matched && matched.AI_LABEL !== '정상') {
+             return {
+                 problem: matched.AI_LABEL,
+                 solution: "관리자 점검 요망"
+             }
+        }
+        return { problem: "시스템 오류 감지", solution: "현장 확인 요망" };
+    }, [isError, apiData, labelIndex]);
+
 
     return (
         <group ref={groupRef}>
@@ -375,15 +404,9 @@ const MovingLabel = ({ labelIndex, locations, errorIndices }: { labelIndex: numb
                 center 
                 distanceFactor={15} 
                 style={{ pointerEvents: 'none' }}
-                // 에러가 있으면 Z-index를 무조건 최상위로
                 zIndexRange={isError ? [99999999, 99999990] : [100, 0]}
             >
-                {/* [중요] position: relative wrapper 
-                   width: fit-content로 번호표 크기만큼만 차지
-                */}
                 <div style={{ position: 'relative', width: 'fit-content' }}>
-                    
-                    {/* 1. 번호표 (기존 UI 유지) */}
                     <div style={{
                         background: 'rgba(0, 0, 0, 0.6)', padding: '2px 6px', borderRadius: '4px',
                         border: isError ? `1px solid ${THEME.danger}` : '1px solid rgba(255, 255, 255, 0.3)', 
@@ -396,14 +419,12 @@ const MovingLabel = ({ labelIndex, locations, errorIndices }: { labelIndex: numb
                         {labelText}
                     </div>
 
-                    {/* 2. 에러창 (Absolute Position으로 번호표 오른쪽에 매달기) */}
                     {isError && (
                         <div style={{ 
                             position: 'absolute', 
-                            left: '100%', // 번호표의 오른쪽 끝
-                            top: '50%',   // 번호표의 중간 높이
-                            transform: 'translate(12px, -20%)', // 오른쪽으로 12px 이동, 상하 위치 조정
-                            width: 'max-content' // 내용물만큼 너비
+                            left: '100%', top: '50%', 
+                            transform: 'translate(12px, -20%)', 
+                            width: 'max-content' 
                         }}>
                             <ErrorBubble>
                                 <BubbleTitle>
@@ -411,13 +432,13 @@ const MovingLabel = ({ labelIndex, locations, errorIndices }: { labelIndex: numb
                                 </BubbleTitle>
                                 <BubbleText>
                                     <span className="label">PROBLEM</span>
-                                    {errorInfo.problem}
+                                    {errorReason.problem}
                                 </BubbleText>
                                 <BubbleText>
                                     <span className="label">SOLUTION</span>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                         <Wrench size={10} color={THEME.success} />
-                                        {errorInfo.solution}
+                                        {errorReason.solution}
                                     </div>
                                 </BubbleText>
                             </ErrorBubble>
@@ -429,27 +450,28 @@ const MovingLabel = ({ labelIndex, locations, errorIndices }: { labelIndex: numb
     );
 };
 
-// [수정됨] 인터랙션 로직 복구 및 현재 위치 역계산 추가
-function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelProps) {
+// [API 데이터 기반 인터랙티브 모델]
+function InteractiveJigModel({ url, onHoverChange, apiData }: JigModelProps) {
   const { scene } = useGLTF(url);
   const activeIdRef = useRef<string | null>(null);
   const highlightColor = useMemo(() => new THREE.Color("#38bdf8"), []);
   const errorColor = useMemo(() => new THREE.Color("#ff0000"), []);
   
   const [meshLocations, setMeshLocations] = useState<{ id: string, position: THREE.Vector3, mesh: THREE.Mesh }[]>([]);
-  const [activeErrorIndices, setActiveErrorIndices] = useState<number[]>([]); 
   
-  // 애니메이션 동기화를 위한 Ref들
-  const lastCycleRef = useRef<number>(-1);
-  const [currentCycleIndex, setCurrentCycleIndex] = useState(0); // 렌더링용 상태
+  const activeErrorIndices = useMemo(() => {
+      return apiData
+          .filter(item => item.AI_LABEL !== "정상")
+          .map(item => parseInt(item.대차번호) - 1);
+  }, [apiData]);
 
+  const [currentCycleIndex, setCurrentCycleIndex] = useState(0);
+  const lastCycleRef = useRef<number>(-1);
   const OFFSET_START_INDEX = 6; 
   const CYCLE_DURATION = 15;
 
-  // 1. 메쉬 위치 초기화
   useEffect(() => {
     const meshes: { mesh: THREE.Mesh, position: THREE.Vector3 }[] = [];
-    
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
@@ -507,41 +529,24 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
     setMeshLocations(locations);
   }, [scene]);
 
-  // 2. 에러 업데이트
-  const updateErrors = useCallback(() => {
-      const total = 24; 
-      const newErrors: number[] = [];
-      while(newErrors.length < 2) {
-          const r = Math.floor(Math.random() * total);
-          if(!newErrors.includes(r)) newErrors.push(r);
-      }
-      setActiveErrorIndices(newErrors);
-  }, []);
-
-  // 3. 메인 루프
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
     const cycleIndex = Math.floor(time / CYCLE_DURATION);
 
-    // 사이클 변경 감지 (State 업데이트를 통해 MovingLabel과 동기화)
     if (cycleIndex !== lastCycleRef.current) {
         lastCycleRef.current = cycleIndex;
-        setCurrentCycleIndex(cycleIndex); // React State 업데이트 -> 리렌더링 유발 -> 라벨 이동
-        if (meshLocations.length > 0) updateErrors();
+        setCurrentCycleIndex(cycleIndex);
     }
 
-    // 메쉬 점멸 효과
     const flashIntensity = 1.5 + Math.sin(time * 12) * 1.0;
     
     if (meshLocations.length > 0) {
-        // 리셋
         meshLocations.forEach(loc => {
             if (loc.mesh.uuid !== activeIdRef.current) {
                 (loc.mesh.material as THREE.MeshPhysicalMaterial).emissiveIntensity = 0;
             }
         });
         
-        // 에러 메쉬 점멸
         activeErrorIndices.forEach(labelIdx => {
              const total = meshLocations.length;
              const currentPosIndex = (labelIdx + cycleIndex) % total;
@@ -556,25 +561,6 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
     }
   });
 
-  // 4. 데이터 전송
-  useEffect(() => {
-      if (meshLocations.length === 0) return;
-      const errorDataList = activeErrorIndices.map(labelIdx => {
-          const name = `M-${(labelIdx + 1).toString().padStart(2, '0')}`;
-          const reason = ERROR_REASONS[(labelIdx * 3) % ERROR_REASONS.length];
-          return {
-              name,
-              temp: Math.floor(Math.random() * 20) + 80,
-              load: Math.floor(Math.random() * 10) + 90,
-              status: 'error' as const,
-              problem: reason.problem,
-              solution: reason.solution
-          };
-      });
-      onStatusUpdate(errorDataList);
-  }, [activeErrorIndices, onStatusUpdate, meshLocations.length]);
-
-  // [복구됨] 마우스 오버 핸들러
   const handlePointerOver = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     document.body.style.cursor = "pointer";
@@ -583,17 +569,15 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
     if (mesh.isMesh) {
       activeIdRef.current = mesh.uuid;
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
-      mat.emissive.copy(highlightColor);
-      mat.emissiveIntensity = 2.0;
+      if(mat.emissive) {
+          mat.emissive.copy(highlightColor);
+          mat.emissiveIntensity = 2.0;
+      }
 
-      // [핵심 로직] 현재 마우스가 올라간 Mesh가 논리적으로 몇 번 라벨(M-xx)인지 계산
       const meshIndex = meshLocations.findIndex(loc => loc.mesh.uuid === mesh.uuid);
       
       if (meshIndex !== -1) {
           const total = meshLocations.length;
-          // 공식: (LabelIndex + Cycle) % Total = MeshIndex
-          // 따라서 LabelIndex를 찾으려면 루프를 돌거나 역산해야 함.
-          // 편의상 루프로 매칭되는 라벨을 찾습니다.
           let foundLabelIdx = -1;
           for(let l = 0; l < total; l++) {
               if ((l + currentCycleIndex) % total === meshIndex) {
@@ -604,29 +588,28 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
 
           if (foundLabelIdx !== -1) {
               const name = `M-${(foundLabelIdx + 1).toString().padStart(2, '0')}`;
-              const isError = activeErrorIndices.includes(foundLabelIdx);
-              // 더미 데이터 매핑 (API 데이터와 연결될 부분)
-              const hoverData: UnitData = {
+              const matchedData = apiData.find(d => parseInt(d.대차번호) === foundLabelIdx + 1);
+              const isError = matchedData ? matchedData.AI_LABEL !== '정상' : false;
+
+              onHoverChange({
                   name,
                   status: isError ? 'error' : 'normal',
-                  temp: isError ? 85 : 45,
-                  load: isError ? 92 : 30,
+                  temp: matchedData ? parseFloat(matchedData["가조립온도(℃)"]) : 0,
+                  load: matchedData ? parseFloat(matchedData["R액 압력(kg/㎥)"]) : 0,
                   uuid: mesh.uuid
-              };
-              onHoverChange(hoverData);
+              });
           }
       }
     }
-  }, [highlightColor, meshLocations, currentCycleIndex, activeErrorIndices, onHoverChange]);
+  }, [highlightColor, meshLocations, currentCycleIndex, apiData, onHoverChange]);
 
-  // [복구됨] 마우스 아웃 핸들러
   const handlePointerOut = useCallback((e: ThreeEvent<PointerEvent>) => {
     const mesh = e.object as THREE.Mesh;
     if (activeIdRef.current === mesh.uuid) {
       document.body.style.cursor = "auto";
       activeIdRef.current = null;
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
-      mat.emissiveIntensity = 0; // 점멸 로직이 다시 덮어쓰겠지만 일단 끔
+      if(mat) mat.emissiveIntensity = 0;
       onHoverChange(null);
     }
   }, [onHoverChange]);
@@ -634,14 +617,13 @@ function InteractiveJigModel({ url, onHoverChange, onStatusUpdate }: JigModelPro
   return (
     <group>
       <primitive object={scene} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} />
-      
-      {/* 라벨들 렌더링 */}
       {meshLocations.length > 0 && Array.from({ length: meshLocations.length }).map((_, i) => (
           <MovingLabel 
             key={i} 
             labelIndex={i} 
             locations={meshLocations} 
-            errorIndices={activeErrorIndices} 
+            errorIndices={activeErrorIndices}
+            apiData={apiData}
           />
       ))}
     </group>
@@ -659,7 +641,7 @@ const AIAdvisor = React.memo(({ errors }: { errors: UnitData[] }) => {
   useEffect(() => {
     if (errors.length > 0) {
       const target = errors[0];
-      const advice = `${target.name} 문제 발생: ${target.problem}. 조치사항: ${target.solution}`;
+      const advice = `${target.name} 이상 감지 (${target.problem}). ${target.solution || "담당자 확인 필요."}`;
       setMessage(advice);
       setIndex(0);
       setDisplayMessage("");
@@ -702,23 +684,39 @@ const AIAdvisor = React.memo(({ errors }: { errors: UnitData[] }) => {
 });
 AIAdvisor.displayName = "AIAdvisor";
 
+// ... 기존 import 생략 ...
+
+// Panels 컴포넌트 수정
 const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: UnitData | null, errorUnits: UnitData[], apiData: ApiDataItem[] }) => {
   const activeUnit = hoveredInfo || (errorUnits.length > 0 ? errorUnits[0] : null) || { name: 'M-01', status: 'normal' };
   const isError = activeUnit.status === 'error';
   const statusColor = isError ? THEME.danger : THEME.success;
   const statusBg = isError ? THEME.dangerBg : THEME.successBg;
 
-  // activeUnit.name이 "M-01" 형식이라 가정하고 숫자 추출
   const activeNumber = activeUnit && activeUnit.name ? parseInt(activeUnit.name.replace("M-", ""), 10) : 1;
   const matchedData = apiData.find(item => parseInt(item.대차번호) === activeNumber);
-
-  const displayImage = matchedData?.FILEPATH1 || "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
-  const displayValue1 = matchedData?.AI_LABEL ? Number(matchedData.AI_LABEL).toFixed(4) : "0.0000";
-  const displayValue2 = matchedData?.AI_LABEL ? Number(matchedData.AI_LABEL).toFixed(4) : "0.0000";
-
+  
+  // 호버용 데이터 매칭
   const hoverMatchedData = hoveredInfo 
     ? apiData.find(item => parseInt(item.대차번호) === parseInt(hoveredInfo.name.replace("M-", ""), 10))
     : null;
+
+  const displayImage = matchedData?.FILEPATH1 || "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
+  
+  // [수정 포인트] Hydration Error 방지를 위한 State 사용
+  // 초기값은 서버/클라이언트 동일하게 "-" 혹은 고정값으로 설정
+  const [randomStats, setRandomStats] = useState({ val1: "-", val2: "-" });
+
+  // [수정 포인트] 클라이언트 마운트 후(useEffect)에만 랜덤값 생성
+  useEffect(() => {
+    setRandomStats({
+      val1: (Math.random() * (1.02 - 0.94) + 0.94).toFixed(7),
+      val2: (Math.random() * (1.02 - 0.94) + 0.94).toFixed(7)
+    });
+  }, [activeNumber]); // activeNumber가 변경될 때마다 재생성
+
+  const displayValue1 = randomStats.val1;
+  const displayValue2 = randomStats.val2;
 
   const boxes = isError 
     ? [{ top: 40, left: 20, width: 10, height: 10, color: '#EF4444' }]
@@ -726,11 +724,12 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
     
   return (
     <>
-      {hoveredInfo && (
+      {hoveredInfo && hoverMatchedData && (
         <HoverInfoPanel style={{
           borderLeftColor: hoveredInfo.status === 'error' ? THEME.danger : THEME.primary,
           boxShadow: hoveredInfo.status === 'error' ? `0 8px 32px ${THEME.danger}30` : undefined
         }}>
+          {/* ... HoverInfoPanel 내부 내용은 그대로 유지 ... */}
           <ChartHeader>
             <div>
               <ChartTitle style={{ color: hoveredInfo.status === 'error' ? THEME.danger : THEME.textMain }}>
@@ -752,33 +751,34 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
           <InfoRow>
             <div className="label"><Droplets size={13} /> R액 압력</div>
             <div className="value" style={{ color: THEME.textMain }}>
-              {hoverMatchedData?.R액_압력 || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>bar</span>
+              {hoverMatchedData["R액 압력(kg/㎥)"] || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>bar</span>
             </div>
           </InfoRow>
 
           <InfoRow>
             <div className="label"><Gauge size={13} /> P액 압력</div>
             <div className="value" style={{ color: THEME.textMain }}>
-               {hoverMatchedData?.P액_압력 || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>bar</span>
+               {hoverMatchedData["P액 압력(kg/㎥)"] || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>bar</span>
             </div>
           </InfoRow>
 
            <InfoRow>
             <div className="label"><Thermometer size={13} /> 가조립 온도</div>
             <div className="value" style={{ color: hoveredInfo.status === 'error' ? THEME.danger : THEME.textMain }}>
-               {hoverMatchedData?.가조립온도 || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>°C</span>
+               {hoverMatchedData["가조립온도(℃)"] || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>°C</span>
             </div>
           </InfoRow>
         </HoverInfoPanel>
       )}
 
+      {/* ... DefectStatusPanel, TopRightPanel, BottomLeftPanel 내용 유지 ... */}
       <DefectStatusPanel>
         <ChartHeader>
           <div>
             <ChartTitle style={{ color: THEME.danger }}>
               <AlertTriangle size={16} fill={THEME.danger} stroke="#fff" /> 불량 오브젝트
             </ChartTitle>
-            <ChartSubtitle>Active Errors (Max 2)</ChartSubtitle>
+            <ChartSubtitle>Active Errors</ChartSubtitle>
           </div>
           <div style={{ background: THEME.danger, color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold' }}>
             {errorUnits.length} 건
@@ -805,6 +805,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
       </DefectStatusPanel>
       
       <TopRightPanel>
+        {/* ... TopRightPanel 내용 유지 ... */}
         <ChartHeader>
           <div><ChartTitle><Activity size={16} color={THEME.primary} /> 실시간 검사 현황</ChartTitle><ChartSubtitle>Real-time Monitor</ChartSubtitle></div>
           <div style={{ padding: '2px 8px', background: 'rgba(16, 185, 129, 0.1)', color: THEME.primary, borderRadius: '12px', fontSize: 10, fontWeight: 700 }}>LIVE</div>
@@ -812,13 +813,13 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
         <div style={{ marginBottom: 16 }}><BigNumber style={{fontSize: 28}}>14,480</BigNumber><TrendBadge $isUp={true}><TrendingUp size={12} /> 전일 대비 2.4% 증가</TrendBadge></div>
         <ChartWrapper>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={GR2_DATA} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
+            <ComposedChart data={ANNUAL_DATA.slice(0, 7)} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={4} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={0} />
               <YAxis yAxisId="L" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} />
               <YAxis yAxisId="R" orientation="right" tick={{ fontSize: 10, fill: THEME.danger, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.02)' }} />
-              <Bar yAxisId="L" dataKey="inspection" barSize={10} radius={[4, 4, 4, 4]}>{GR2_DATA.map((entry, index) => (<Cell key={`cell-${index}`} fill={index === GR2_DATA.length - 1 ? THEME.primary : "#cbd5e1"} />))}</Bar>
+              <Bar yAxisId="L" dataKey="inspection" barSize={10} radius={[4, 4, 4, 4]}>{ANNUAL_DATA.map((entry, index) => (<Cell key={`cell-${index}`} fill={index === 6 ? THEME.primary : "#cbd5e1"} />))}</Bar>
               <Line yAxisId="R" type="monotone" dataKey="error" stroke={THEME.danger} strokeWidth={2} dot={false} activeDot={{ r: 4, stroke: '#fff' }} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -826,14 +827,15 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
       </TopRightPanel>
 
       <BottomLeftPanel>
-        <ChartHeader><div><ChartTitle><Zap size={16} fill={THEME.textMain} stroke="none" /> 주간 불량률 추이</ChartTitle><ChartSubtitle>Weekly Defect Analysis</ChartSubtitle></div></ChartHeader>
-        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'baseline', gap: 8 }}><BigNumber style={{fontSize: 28}}>1.2%</BigNumber><TrendBadge $isUp={true} style={{ color: THEME.primary }}>안정권 유지 중</TrendBadge></div>
+        {/* ... BottomLeftPanel 내용 유지 ... */}
+        <ChartHeader><div><ChartTitle><Zap size={16} fill={THEME.textMain} stroke="none" /> 연간 데이터 추이</ChartTitle><ChartSubtitle>Annual Data Trend</ChartSubtitle></div></ChartHeader>
+        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'baseline', gap: 8 }}><BigNumber style={{fontSize: 28}}>0.8%</BigNumber><TrendBadge $isUp={true} style={{ color: THEME.primary }}>안정권 유지 중</TrendBadge></div>
         <ChartWrapper>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={GR2_DATA} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
+            <AreaChart data={ANNUAL_DATA} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
               <defs><linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={THEME.primary} stopOpacity={0.3} /><stop offset="100%" stopColor={THEME.primary} stopOpacity={0} /></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={4} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={2} />
               <YAxis tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} unit="%" tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1' }} />
               <Area type="monotone" dataKey="rate" stroke={THEME.primary} strokeWidth={2} fill="url(#areaGradient)" />
@@ -860,7 +862,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
                     fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px'
                 }}>
                     {isError ? <AlertTriangle size={10} strokeWidth={3} /> : <CheckCircle size={10} strokeWidth={3} />}
-                    {isError ? '불량' : '정상'}
+                    {matchedData?.AI_LABEL || (isError ? '불량' : '정상')}
                 </div>
             </div>
             
@@ -928,26 +930,26 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
             </div>
 
             <div style={{ marginTop: '4px' }}>
-               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                   <Activity size={10} color={THEME.warning} />
-                   <span style={{ fontSize: '10px', fontWeight: 700, color: THEME.textSub }}>모터 부하율</span>
-                 </div>
-                 <span style={{ fontSize: '10px', color: THEME.warning, fontWeight: 'bold' }}>Live</span>
-               </div>
-               <div style={{ height: '40px', width: '100%' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={MOTOR_DATA}>
-                      <defs>
-                        <linearGradient id="motorGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={THEME.warning} stopOpacity={0.4}/>
-                          <stop offset="95%" stopColor={THEME.warning} stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <Area type="monotone" dataKey="load" stroke={THEME.warning} strokeWidth={1.5} fill="url(#motorGradient)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-               </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Activity size={10} color={THEME.warning} />
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: THEME.textSub }}>모터 부하율</span>
+                </div>
+                <span style={{ fontSize: '10px', color: THEME.warning, fontWeight: 'bold' }}>Live</span>
+              </div>
+              <div style={{ height: '40px', width: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={MOTOR_DATA}>
+                    <defs>
+                      <linearGradient id="motorGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={THEME.warning} stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor={THEME.warning} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="load" stroke={THEME.warning} strokeWidth={1.5} fill="url(#motorGradient)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
         </div>
       </VisionAnalysisPanel>
@@ -959,15 +961,27 @@ Panels.displayName = "Panels";
 // -----------------------------------------------------------------------------
 // [Main Page]
 export default function GlbViewerPage() {
-  const [initialLoaded, setInitialLoaded] = useState(true);
   const [activeTab, setActiveTab] = useState("GR2");
   const [targetTab, setTargetTab] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
   const [modalTarget, setModalTarget] = useState<string | null>(null);
 
   const [hoveredInfo, setHoveredInfo] = useState<UnitData | null>(null);
-  const [errorUnits, setErrorUnits] = useState<UnitData[]>([]);
   const [apiData, setApiData] = useState<ApiDataItem[]>([]);
+
+  // API 데이터 기반 에러 유닛 계산
+  const errorUnits = useMemo(() => {
+      return apiData
+        .filter(item => item.AI_LABEL !== '정상')
+        .map(item => ({
+            name: `M-${item.대차번호.padStart(2, '0')}`,
+            temp: parseFloat(item["가조립온도(℃)"]),
+            load: parseFloat(item["R액 압력(kg/㎥)"]), // 부하 대신 압력 임시 매핑
+            status: 'error' as const,
+            problem: item.AI_LABEL,
+            solution: "관리자 확인 필요"
+        }));
+  }, [apiData]);
 
   // Critical Error Check (M-01 ~ M-04)
   const criticalUnit = useMemo(() => {
@@ -975,17 +989,24 @@ export default function GlbViewerPage() {
     return errorUnits.find(u => criticalTargets.includes(u.name));
   }, [errorUnits]);
 
+  // API Polling Logic
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch("http://1.254.24.170:24828/api/DX_API000024");
+        const response = await fetch(API_URL);
         const json = await response.json();
-        if (json.success) setApiData(json.data);
+        if (json.success) {
+            setApiData(json.data);
+        }
       } catch (error) {
-        console.error("Failed to fetch DX_API000024:", error);
+        console.error("Failed to fetch API:", error);
       }
     };
-    fetchData();
+
+    fetchData(); // 초기 실행
+    const interval = setInterval(fetchData, 5000); // 5초마다 갱신
+
+    return () => clearInterval(interval);
   }, []);
 
   const tabs = ["GR2", "GR3", "GR5", "GR9"];
@@ -1080,7 +1101,7 @@ export default function GlbViewerPage() {
                       <InteractiveJigModel
                         url={JIG_MODEL_PATH}
                         onHoverChange={setHoveredInfo}
-                        onStatusUpdate={setErrorUnits}
+                        apiData={apiData}
                       />
                     </ModelErrorBoundary>
                   </group>

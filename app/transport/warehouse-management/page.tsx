@@ -3,7 +3,7 @@
 import GmtLoadingScreen from '@/components/loading/gmt-loading';
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import styled, { createGlobalStyle, keyframes } from 'styled-components';
-import { X, ZoomIn, ZoomOut, Maximize2, Video, Clock, Truck, Tag, Activity } from 'lucide-react'; 
+import { X, ZoomIn, ZoomOut, Maximize2, Video, Clock, Activity } from 'lucide-react'; 
 
 // =============================================================================
 // 0. GLOBAL STYLE & THEME
@@ -87,7 +87,6 @@ const pulse = keyframes`
   100% { opacity: 1; transform: scale(1); }
 `;
 
-/* [수정 완료] flex-direction: column 복구하여 하단 바 위치 정상화 */
 const Layout = styled.div`
   display: flex;
   width: 100vw;
@@ -95,7 +94,7 @@ const Layout = styled.div`
   padding: 20px;
   gap: 20px;
   background-color: #F5F7FA;
-  flex-direction: column; /* 중요: 세로 배치 복구 */
+  flex-direction: column;
 `;
 
 const MainBody = styled.div`
@@ -265,6 +264,8 @@ const SectionTitle = ({ children, isActive = false }: { children: React.ReactNod
   </SectionTitleWrapper>
 );
 
+// --- [Grouping Components] ---
+
 const JigZoneBox = styled.div`
   background-color: rgba(214, 188, 250, 0.3); 
   border: 1px solid #D6BCFA;
@@ -273,6 +274,32 @@ const JigZoneBox = styled.div`
   display: flex;
   flex-direction: column;
 `;
+
+// [NEW] Active Zone Group (GA, GB, GC) - Blue theme
+const ActiveZoneBox = styled.div`
+  background-color: rgba(235, 248, 255, 0.5); /* 아주 연한 블루 */
+  border: 1px solid #90CDF4; /* 하늘색 테두리 */
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px; /* 내부 섹션 간 간격 */
+  position: relative;
+  box-shadow: 0 4px 6px rgba(49, 130, 206, 0.05);
+`;
+
+// [NEW] Inactive Zone Group (GF, GE, GD) - Gray theme
+const InactiveZoneBox = styled.div`
+  background-color: #dfe4ea; /* 연한 회색 */
+  border: 1px solid #747d8c; /* 회색 테두리 */
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px; /* 내부 섹션 간 간격 */
+`;
+
+// -----------------------------
 
 const StatusCard = styled.div`
   padding: 10px 20px;
@@ -412,14 +439,13 @@ const CompactRow = styled.div`
 // Bottom & Modal
 // =============================================================================
 
-/* [수정 완료] flex-direction이 column인 Layout 하단에 위치하게 됨 */
 const BottomBar = styled.div`
   height: 60px;
   display: flex;
   justify-content: center;
   align-items: center;
   margin-top: 0;
-  flex-shrink: 0; /* 축소 방지 */
+  flex-shrink: 0;
 `;
 
 const ExpandButton = styled.button`
@@ -561,8 +587,10 @@ CellItem.displayName = "CellItem";
 
 const WarehouseLayout = React.memo(({ renderCell }: WarehouseLayoutProps) => {
   const JigStrip = ({ ids }: { ids: string[] }) => ( <Row>{ids.map(id => renderCell(id, W_JIG))}</Row> );
+  
   return (
     <MapContentWrapper>
+      {/* 1. Left Column: JIG ZONE + ACTIVE ZONE GROUP */}
       <ColLeft>
         <JigZoneBox>
           <SectionTitle>JIG ZONE</SectionTitle>
@@ -575,63 +603,75 @@ const WarehouseLayout = React.memo(({ renderCell }: WarehouseLayoutProps) => {
           </div>
         </JigZoneBox>
 
-        <div>
-          <SectionTitle isActive={true}>GA</SectionTitle>
-          <GridContainer>
-            <Row>{GA_TOP_1.slice(0,3).map((n) => renderCell(`GA${n}`, W_NARROW))}{GA_TOP_1.slice(3).map((n) => renderCell(`GA${n}`, W_WIDE))}</Row>
-            <Row>{GA_TOP_2.slice(0,3).map((n) => renderCell(`GA${n}`, W_NARROW))}{GA_TOP_2.slice(3).map((n) => renderCell(`GA${n}`, W_WIDE))}</Row>
-          </GridContainer>
-        </div>
-        <div>
-          <SectionTitle isActive={true}>GA / GB</SectionTitle>
-          <GridContainer>
-            {GA_ROWS.map((row, i) => (
-                <Row key={i}>{row.l.map(n => renderCell(`GA${n}`, W_NARROW))}{row.r.map(n => renderCell(`GA${n}`, W_WIDE))}</Row>
-            ))}
-            <Row>{GB_34_L.map(n => renderCell(`GB${n}`, W_NARROW))}{GB_34_R.map(n => renderCell(`GB${n}`, W_NARROW))}</Row>
-            <Row>{GB_17_L.map(n => renderCell(`GB${n}`, W_NARROW))}{GB_17_R.map(n => renderCell(`GB${n}`, W_NARROW))}</Row>
-          </GridContainer>
-        </div>
-        <div>
-          <SectionTitle isActive={true}>GC</SectionTitle>
-          <div style={{display:'flex', gap:'20px'}}>
-            <GridContainer><Row>{GC_L_TOP.map(n => renderCell(`GC${n}`, W_NARROW))}</Row><Row>{GC_L_BTM.map(n => renderCell(`GC${n}`, W_NARROW))}</Row></GridContainer>
-            <GridContainer><Row>{GC_R_TOP.map(n => renderCell(`GC${n}`, W_NARROW))}</Row><Row>{GC_R_BTM.map(n => renderCell(`GC${n}`, W_NARROW))}</Row></GridContainer>
+        {/* [GROUP 1: Active Zones] */}
+        <ActiveZoneBox>
+          {/* GA */}
+          <div>
+            <SectionTitle isActive={true}>GA</SectionTitle>
+            <GridContainer>
+              <Row>{GA_TOP_1.slice(0,3).map((n) => renderCell(`GA${n}`, W_NARROW))}{GA_TOP_1.slice(3).map((n) => renderCell(`GA${n}`, W_WIDE))}</Row>
+              <Row>{GA_TOP_2.slice(0,3).map((n) => renderCell(`GA${n}`, W_NARROW))}{GA_TOP_2.slice(3).map((n) => renderCell(`GA${n}`, W_WIDE))}</Row>
+            </GridContainer>
           </div>
-        </div>
+          {/* GA / GB */}
+          <div>
+            <SectionTitle isActive={true}>GA / GB</SectionTitle>
+            <GridContainer>
+              {GA_ROWS.map((row, i) => (
+                <Row key={i}>{row.l.map(n => renderCell(`GA${n}`, W_NARROW))}{row.r.map(n => renderCell(`GA${n}`, W_WIDE))}</Row>
+              ))}
+              <Row>{GB_34_L.map(n => renderCell(`GB${n}`, W_NARROW))}{GB_34_R.map(n => renderCell(`GB${n}`, W_NARROW))}</Row>
+              <Row>{GB_17_L.map(n => renderCell(`GB${n}`, W_NARROW))}{GB_17_R.map(n => renderCell(`GB${n}`, W_NARROW))}</Row>
+            </GridContainer>
+          </div>
+          {/* GC */}
+          <div>
+            <SectionTitle isActive={true}>GC</SectionTitle>
+            <div style={{display:'flex', gap:'20px'}}>
+              <GridContainer><Row>{GC_L_TOP.map(n => renderCell(`GC${n}`, W_NARROW))}</Row><Row>{GC_L_BTM.map(n => renderCell(`GC${n}`, W_NARROW))}</Row></GridContainer>
+              <GridContainer><Row>{GC_R_TOP.map(n => renderCell(`GC${n}`, W_NARROW))}</Row><Row>{GC_R_BTM.map(n => renderCell(`GC${n}`, W_NARROW))}</Row></GridContainer>
+            </div>
+          </div>
+        </ActiveZoneBox>
       </ColLeft>
 
+      {/* 2. Right Column: INACTIVE ZONE GROUP */}
       <ColRight>
-        <div>
-          <SectionTitle>GF</SectionTitle>
-          <div style={{display:'flex', gap:'15px'}}>
-              <GridContainer>
-                  <Row>
-                    <div style={{display:'flex', flexDirection:'column'}}>{GF_LEFT_COL.map(n => renderCell(`GF${n}`, W_NARROW))}</div>
-                    <div style={{display:'flex', flexDirection:'column'}}>{GF_RIGHT_COL.map(n => renderCell(`GF${n}`, W_NARROW))}</div>
-                  </Row>
-              </GridContainer>
-              <GridContainer>{GF_GRID.map((row, i) => (<Row key={i}>{row.map(n => renderCell(`GF${n}`, W_NARROW))}</Row>))}</GridContainer>
+        {/* [GROUP 2: Inactive Zones] */}
+        <InactiveZoneBox>
+          {/* GF */}
+          <div>
+            <SectionTitle>GF</SectionTitle>
+            <div style={{display:'flex', gap:'15px'}}>
+                <GridContainer>
+                    <Row>
+                      <div style={{display:'flex', flexDirection:'column'}}>{GF_LEFT_COL.map(n => renderCell(`GF${n}`, W_NARROW))}</div>
+                      <div style={{display:'flex', flexDirection:'column'}}>{GF_RIGHT_COL.map(n => renderCell(`GF${n}`, W_NARROW))}</div>
+                    </Row>
+                </GridContainer>
+                <GridContainer>{GF_GRID.map((row, i) => (<Row key={i}>{row.map(n => renderCell(`GF${n}`, W_NARROW))}</Row>))}</GridContainer>
+            </div>
           </div>
-        </div>
-        <div>
-          <SectionTitle>GE / GD</SectionTitle>
-          <div style={{display:'flex', gap:'20px'}}>
-              <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end'}}>
-                  <GridContainer style={{marginRight: W_NARROW}}>{renderCell(`GE${GE_L[0]}`, W_NARROW)}</GridContainer>
-                  <GridContainer style={{marginBottom:'20px'}}>{GE_BODY.map((p,i) => (<Row key={i}>{renderCell(`GE${p.l}`, W_NARROW)}{renderCell(`GE${p.r}`, W_NARROW)}</Row>))}</GridContainer>
-                  <GridContainer>{GD_STRIP.map((p,i) => (<Row key={i}>{renderCell(`GD${p.l}`, W_NARROW)}{renderCell(`GD${p.r}`, W_NARROW)}</Row>))}</GridContainer>
-              </div>
-              <div style={{display:'flex', flexDirection:'column'}}>
-                  <div style={{height:'40px'}}></div>
-                  <GridContainer style={{marginBottom:'20px'}}>{GE_GRID.map((row,i) => (<Row key={i}>{row.map(n => renderCell(`GE${n}`, W_NARROW))}</Row>))}</GridContainer>
-                  <GridContainer>
-                      <Row>{GD_GRID_H.map(id => renderCell(id, W_NARROW))}</Row>
-                      {GD_GRID.map((row,i) => (<Row key={i}>{row.map(n => renderCell(`GD${n}`, W_NARROW))}</Row>))}
-                  </GridContainer>
-              </div>
+          {/* GE / GD */}
+          <div>
+            <SectionTitle>GE / GD</SectionTitle>
+            <div style={{display:'flex', gap:'20px'}}>
+                <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end'}}>
+                    <GridContainer style={{marginRight: W_NARROW}}>{renderCell(`GE${GE_L[0]}`, W_NARROW)}</GridContainer>
+                    <GridContainer style={{marginBottom:'20px'}}>{GE_BODY.map((p,i) => (<Row key={i}>{renderCell(`GE${p.l}`, W_NARROW)}{renderCell(`GE${p.r}`, W_NARROW)}</Row>))}</GridContainer>
+                    <GridContainer>{GD_STRIP.map((p,i) => (<Row key={i}>{renderCell(`GD${p.l}`, W_NARROW)}{renderCell(`GD${p.r}`, W_NARROW)}</Row>))}</GridContainer>
+                </div>
+                <div style={{display:'flex', flexDirection:'column'}}>
+                    <div style={{height:'40px'}}></div>
+                    <GridContainer style={{marginBottom:'20px'}}>{GE_GRID.map((row,i) => (<Row key={i}>{row.map(n => renderCell(`GE${n}`, W_NARROW))}</Row>))}</GridContainer>
+                    <GridContainer>
+                        <Row>{GD_GRID_H.map(id => renderCell(id, W_NARROW))}</Row>
+                        {GD_GRID.map((row,i) => (<Row key={i}>{row.map(n => renderCell(`GD${n}`, W_NARROW))}</Row>))}
+                    </GridContainer>
+                </div>
+            </div>
           </div>
-        </div>
+        </InactiveZoneBox>
       </ColRight>
     </MapContentWrapper>
   );
@@ -658,7 +698,7 @@ export default function FinalDashboard() {
   const [scrollTop, setScrollTop] = useState(0);
 
   // [설정] 비디오 URL
-  const VIDEO_URL = "/videos/aivideo.mp4"; 
+  const VIDEO_URL = "http://1.254.24.170:24828/api/DX_API000031?videoName=G_STOCK.mp4"; 
 
   useEffect(() => {
     const fetchData = async () => {
@@ -881,7 +921,6 @@ export default function FinalDashboard() {
                       <span className="label">차량</span>
                       <span className="value">{recentEntry.vehicle_id || '-'}</span>
                     </CompactRow>
-                    {/* [추가된 부분] 입고 시간 표시 */}
                     <CompactRow>
                       <span className="label">시간</span>
                       <span className="value">{formatTime(recentEntry.entry_time)}</span>
@@ -911,7 +950,6 @@ export default function FinalDashboard() {
           </RightPanel>
         </MainBody>
         
-        {/* [원복] 원래 위치(화면 맨 아래) 및 원래 용어(Maximize2 아이콘 + 확대해서 보기) */}
         <BottomBar>
           <ExpandButton onClick={() => setIsZoomMode(true)}>
             <Maximize2 size={18} /> 확대해서 보기

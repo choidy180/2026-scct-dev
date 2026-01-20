@@ -535,10 +535,10 @@ export default function LocalMapPage() {
           targetIds={targetIds}
       />
 
-      {/* <DummyToggleBtn onClick={() => setIsDummyMode(!isDummyMode)} $active={isDummyMode}>
+      <DummyToggleBtn onClick={() => setIsDummyMode(!isDummyMode)} $active={isDummyMode}>
         {isDummyMode ? <StopCircle size={20} /> : <PlayCircle size={20} />}
         {isDummyMode ? "Stop Test" : "Test Mode"}
-      </DummyToggleBtn> */}
+      </DummyToggleBtn>
 
     </Container>
   );

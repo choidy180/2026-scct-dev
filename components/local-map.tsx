@@ -15,8 +15,10 @@ const VWorldMap = dynamic(
 );
 
 /* --- Types & Constants --- */
-// ... (기존 데이터 구조 및 상수 코드는 동일) ...
+
+// [수정 1] id 속성 추가 (VWorldMap 컴포넌트의 요구사항에 맞춤)
 export interface VWorldMarker {
+  id: string; // ✅ 필수 속성 추가
   lat: number;
   lng: number;
   title?: string;
@@ -32,9 +34,27 @@ export interface VWorldMarker {
 
 const RED_ARROW_ICON = "data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='%23ef4444' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M12 2l7 19-7-4-7 4 7-19z'/%3e%3c/svg%3e";
 
-const GOMOTEK_POS = { lat: 35.1487345915681, lng: 128.859885213411, title: "고모텍 부산", imageUrl: "/icons/GMT.png" };
-const LG_POS = { lat: 35.2078432680624, lng: 128.666263957419, title: "LG전자", imageUrl: "/icons/LG.jpg" };
-const FACILITY_MARKERS: VWorldMarker[] = [{ ...GOMOTEK_POS, isFacility: true }, { ...LG_POS, isFacility: true }];
+// [수정 2] 정적 위치 데이터에 고유 ID 추가
+const GOMOTEK_POS = { 
+  id: "loc-gomotek", // ✅ ID 추가
+  lat: 35.1487345915681, 
+  lng: 128.859885213411, 
+  title: "고모텍 부산", 
+  imageUrl: "/icons/GMT.png" 
+};
+
+const LG_POS = { 
+  id: "loc-lg", // ✅ ID 추가
+  lat: 35.2078432680624, 
+  lng: 128.666263957419, 
+  title: "LG전자", 
+  imageUrl: "/icons/LG.jpg" 
+};
+
+const FACILITY_MARKERS: VWorldMarker[] = [
+  { ...GOMOTEK_POS, isFacility: true }, 
+  { ...LG_POS, isFacility: true }
+];
 
 const formatDuration = (seconds: number) => {
   if (!seconds) return "-";
@@ -115,7 +135,9 @@ export default function LocalMapPage() {
         const timeVal = currentTime.getTime();
         const progress = (timeVal / (10000 + i * 2000)) % 1;
 
+        // [수정 3] 시뮬레이션 마커 생성 시 id 속성 추가
         markers.push({
+          id: `sim-truck-${i}`, // ✅ ID 추가
           lat: 0, lng: 0,
           title: `Sim-${i + 1}`,
           arrival: isToBusan ? "GMT" : "LG",
@@ -586,4 +608,4 @@ const BottomGroup = styled.div`
 const SystemTicker = styled.div`
   display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: #94a3b8; padding-left: 20px; border-left: 1px solid #e2e8f0; .dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 8px #22c55e; animation: ${pulseGreen} 2s infinite; }
   @media (min-width: 2200px) { font-size: 18px; padding-left: 32px; .dot { width: 8px; height: 8px; } }
-`; 
+`;

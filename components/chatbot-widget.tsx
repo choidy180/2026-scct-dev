@@ -1,391 +1,402 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
-import styled, { css, keyframes } from "styled-components";
-import { Send, Bot, Activity, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, Sliders } from "lucide-react";
+import styled, { css } from "styled-components";
+import { Send, Bot, X, Sparkles, MessageSquare, ChevronRight, BarChart3, Factory } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
-// --------------------------------------------------------------------------
-// 1. Mock Data
-// --------------------------------------------------------------------------
-type PageStatus = "danger" | "warning" | "normal";
-
-interface PageContextData {
-  title: string;
-  status: PageStatus;
-  message: string;
-}
-
-const MOCK_CONTEXTS: Record<string, PageContextData> = {
-  "/factory/cooling-tower": {
-    title: "냉각탑 제어 모듈",
-    status: "danger",
-    message: "경고: GR06 코어 온도 95°C. 즉시 밸브를 개방하십시오.",
-  },
+// --- Mock Data ---
+const AGENT_DATA: Record<string, any> = {
   "/master-dashboard": {
-    title: "마스터 대시보드",
-    status: "normal",
-    message: "전체 시스템 가동률 98%. 모든 라인 정상입니다.",
+    role: "manager",
+    name: "GMT 공장장 AI",
+    description: "전체 공장 현황 총괄 브리핑",
+    guide: "반갑습니다. 현재 전체 공장 가동률은 98%입니다. 핵심 지표 리포트가 준비되었습니다.",
+    suggestions: ["가동률 상세 보고", "금일 생산 목표", "에너지 효율 분석"],
+    answers: {}
   },
   "default": {
-    title: "System Advisor",
-    status: "warning",
-    message: "현재 페이지의 데이터를 분석하고 있습니다...",
+    role: "specialist",
+    name: "파트장 AI",
+    description: "시스템 가이드 및 지원",
+    guide: "현재 페이지를 분석 중입니다. 궁금한 점이 있으시면 언제든 말씀해주세요.",
+    suggestions: ["이 페이지 사용법", "데이터 내보내기", "오류 리포트"],
+    answers: {}
   }
 };
 
-// --------------------------------------------------------------------------
-// 2. Styled Components (Clean Red Theme)
-// --------------------------------------------------------------------------
+// --- Portal ---
+const Portal = ({ children }: { children: React.ReactNode }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (typeof window === "undefined" || !mounted) return null;
+  return createPortal(children, document.body);
+};
 
-// [NEW] 배지(Red Dot)가 두근거리는 애니메이션 (깔끔함 강조)
-const heartbeat = keyframes`
-  0% { transform: scale(1); }
-  50% { transform: scale(1.4); }
-  100% { transform: scale(1); }
-`;
+// --- Styled Components (Modern White & Red Theme) ---
 
-const WidgetWrapper = styled.div`
-  position: relative;
-  display: inline-block;
-  font-family: 'Pretendard', sans-serif;
-  z-index: 9999;
-`;
-
-// [NEW] 닫혀있을 때 Danger 상태면 나타나는 알림 배지 (빨간 점)
-const NotificationBadge = styled.div`
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 14px;
-  height: 14px;
-  background-color: #dc2626; /* 선명한 레드 */
-  border: 2px solid white;   /* 흰색 테두리로 분리감 줌 */
-  border-radius: 50%;
-  z-index: 10;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  
-  /* 심장박동 애니메이션 */
-  animation: ${heartbeat} 1.5s infinite ease-in-out;
-`;
-
-const ToggleBtn = styled.button<{ $isOpen: boolean; $isDanger: boolean }>`
-  position: relative; /* 배지 위치 기준점 */
+// 네비게이션 바 트리거 버튼
+const NavbarTrigger = styled(motion.button)`
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
-  border-radius: 30px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  
-  /* 기본 스타일 (Clean White) */
-  background: #ffffff;
+  padding: 8px 18px;
+  height: 42px;
+  border-radius: 12px;
   border: 1px solid #e5e7eb;
+  background: white;
   color: #374151;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+  font-family: 'Pretendard', sans-serif;
+  
+  /* 미세한 그림자 */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
 
-  /* [열림 상태] */
-  ${(props) => props.$isOpen && css`
-      background: #fef2f2;
-      color: #b91c1c;
-      border-color: #fca5a5;
-  `}
-
-  /* [닫힘 & Danger 상태] -> 번지는 그림자 제거, 선명한 테두리와 텍스트 적용 */
-  ${(props) => !props.$isOpen && props.$isDanger && css`
-      color: #dc2626;          /* 글자색 레드 */
-      border: 2px solid #dc2626; /* 테두리 굵고 선명한 레드 */
-      background: #fff;        /* 배경은 깨끗한 화이트 유지 */
-  `}
-
-  &:hover { 
+  &:hover {
+    background: #FFF0F3; /* 아주 연한 레드 배경 */
+    border-color: #FECDD3;
+    color: #D31145; /* GMT 레드 */
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px rgba(211, 17, 69, 0.1); /* 레드 빛 그림자 */
+  }
+
+  svg {
+    color: #D31145;
+    transition: transform 0.2s;
+  }
+  
+  &:hover svg {
+    transform: scale(1.1);
   }
 `;
 
-const PanelContainer = styled(motion.div)<{ $opacity: number }>`
-  position: absolute;
-  top: calc(100% + 14px);
-  left: 0;
-  width: 380px;
-  
-  opacity: ${(props) => props.$opacity};
-  
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  border-radius: 20px;
-  /* 패널 그림자는 은은하게 유지 */
+// [디자인 변경] 어두운 배경 대신 -> 밝은 블러 배경
+const ModalOverlay = styled(motion.div)`
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  width: 100vw; height: 100vh;
+  /* 밝은 반투명 배경 + 강한 블러 */
+  background: rgba(255, 255, 255, 0.4); 
+  backdrop-filter: blur(12px); 
+  z-index: 999999;
+  display: flex; align-items: center; justify-content: center;
+`;
+
+// [디자인 변경] 그림자를 깊게 주어 흰 배경에서도 뜨게 만듦
+const ModalPanel = styled(motion.div)`
+  width: 500px; 
+  height: 720px; 
+  background: #ffffff;
+  border-radius: 28px; 
+  /* 부드럽고 깊은 그림자 */
   box-shadow: 
-    0 4px 6px -1px rgba(0, 0, 0, 0.05),
-    0 10px 40px -5px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(254, 202, 202, 0.5);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transform-origin: top left;
-
-  &::before {
-    content: "";
-    position: absolute;
-    top: -6px;
-    left: 24px;
-    width: 12px;
-    height: 12px;
-    background: inherit;
-    border-top: 1px solid rgba(254, 202, 202, 0.5);
-    border-left: 1px solid rgba(254, 202, 202, 0.5);
-    transform: rotate(45deg);
-  }
+    0 10px 40px -10px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0,0,0,0.05); /* 미세한 테두리 */
+  display: flex; flex-direction: column; overflow: hidden;
+  position: relative;
 `;
 
-const Header = styled.div<{ $status: PageStatus }>`
-  padding: 16px 20px;
-  background: ${(props) => 
-    props.$status === 'danger' ? 'rgba(254, 226, 226, 0.8)' : 'rgba(255, 241, 242, 0.6)'};
-  border-bottom: 1px solid rgba(254, 202, 202, 0.4);
+const ChatContainer = styled.div`
+  display: flex; flex-direction: column; height: 100%; 
+  font-family: 'Pretendard', sans-serif; 
+  background: #fff;
+`;
 
-  .controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
+// 헤더: 그라데이션 대신 깔끔한 화이트 + 하단 보더
+const Header = styled.div`
+  padding: 24px 28px;
+  background: #fff;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  flex-shrink: 0;
 
-    .title-group {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      .avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        background: #dc2626;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);
-      }
-      div {
-        display: flex;
-        flex-direction: column;
-        h3 { font-size: 11px; color: #991b1b; font-weight: 700; margin: 0; }
-        h2 { font-size: 15px; color: #450a0a; font-weight: 800; margin: 0; }
-      }
+  .header-content {
+    display: flex; gap: 16px; align-items: center;
+    
+    .avatar-box {
+      width: 52px; height: 52px;
+      border-radius: 16px;
+      background: #FFF0F3; /* 연한 레드 */
+      color: #D31145;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
     }
     
-    .slider-group {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 8px;
-      background: rgba(255,255,255,0.6);
-      border-radius: 12px;
-      border: 1px solid rgba(254, 202, 202, 0.5);
-      input { width: 60px; height: 4px; accent-color: #dc2626; cursor: grab; }
+    .text-box {
+      display: flex; flex-direction: column; gap: 4px;
+      h2 { 
+        margin: 0; font-size: 18px; font-weight: 700; color: #111; 
+        display: flex; align-items: center; gap: 6px;
+      }
+      p { margin: 0; font-size: 13px; color: #6b7280; font-weight: 400; }
     }
   }
 
-  .alert-card {
-    background: rgba(255,255,255,0.7);
-    border-radius: 12px;
-    padding: 12px;
-    border: 1px solid rgba(254, 202, 202, 0.8);
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    .icon { flex-shrink: 0; color: ${(props) => props.$status === 'danger' ? '#dc2626' : props.$status === 'normal' ? '#059669' : '#d97706'}; }
-    span { font-size: 13px; line-height: 1.4; color: #374151; font-weight: 500; }
+  .close-btn {
+    background: #f3f4f6;
+    border: none;
+    color: #9ca3af;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    
+    &:hover {
+      background: #e5e7eb;
+      color: #374151;
+    }
   }
 `;
 
-const ChatList = styled.div`
-  height: 280px;
-  padding: 16px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: rgba(255, 241, 242, 0.2);
-  scrollbar-width: none;
+const MessageList = styled.div`
+  flex: 1; 
+  padding: 28px; 
+  overflow-y: auto; 
+  display: flex; flex-direction: column; gap: 20px; 
+  background: #fff;
+  
+  /* 스크롤바 숨김 */
   &::-webkit-scrollbar { display: none; }
 `;
 
-const ChatBubble = styled.div<{ $isUser: boolean }>`
-  max-width: 85%;
-  padding: 10px 14px;
-  font-size: 13px;
-  line-height: 1.5;
-  align-self: ${(props) => (props.$isUser ? "flex-end" : "flex-start")};
+// 말풍선 디자인 개선
+const Bubble = styled(motion.div)<{ $isUser: boolean }>`
+  max-width: 82%; 
+  padding: 14px 18px; 
+  font-size: 15px; 
+  line-height: 1.6;
+  border-radius: 20px;
+  position: relative;
   
-  ${(props) => props.$isUser ? css`
-    background: #dc2626;
+  ${props => props.$isUser ? css`
+    align-self: flex-end;
+    background: #D31145; /* 브랜드 레드 */
     color: white;
-    border-radius: 16px 16px 2px 16px;
-    box-shadow: 0 2px 5px rgba(220, 38, 38, 0.2);
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 4px 12px rgba(211, 17, 69, 0.2);
   ` : css`
-    background: white;
+    align-self: flex-start;
+    background: #f8f9fa; /* 아주 연한 그레이 */
     color: #1f2937;
-    border: 1px solid #fee2e2;
-    border-radius: 16px 16px 16px 2px;
+    border-top-left-radius: 4px;
+    border: 1px solid #f3f4f6;
   `}
 `;
 
-const InputArea = styled.form`
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.6);
-  border-top: 1px solid rgba(254, 202, 202, 0.4);
-  display: flex;
-  gap: 8px;
-  input { flex: 1; background: rgba(255, 241, 242, 0.8); border: 1px solid transparent; border-radius: 20px; padding: 10px 14px; font-size: 13px; outline: none; color: #450a0a; &:focus { background: white; border-color: #fca5a5; } }
-  button { background: #dc2626; color: white; width: 34px; height: 34px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; &:hover { background: #b91c1c; } }
+// 추천 질문 칩 (Chips)
+const SuggestionArea = styled.div`
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
 `;
 
-// --------------------------------------------------------------------------
-// 3. Logic
-// --------------------------------------------------------------------------
-interface Message { id: number; text: string; isUser: boolean; }
+const Chip = styled.button`
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  font-weight: 500;
+  display: flex; align-items: center; gap: 4px;
 
-export default function ContextBot() {
-  const pathname = usePathname(); 
+  &:hover {
+    border-color: #D31145;
+    color: #D31145;
+    background: #FFF0F3;
+  }
+`;
+
+const InputArea = styled.form`
+  padding: 20px 28px;
+  background: #fff;
+  /* 상단에 옅은 그라데이션 그림자 */
+  box-shadow: 0 -10px 30px rgba(0,0,0,0.02); 
+  display: flex; gap: 12px;
+  align-items: center;
+
+  .input-wrapper {
+    flex: 1;
+    position: relative;
+    display: flex; align-items: center;
+    
+    input {
+      width: 100%;
+      padding: 14px 20px;
+      padding-right: 48px;
+      border-radius: 24px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      font-size: 15px;
+      outline: none;
+      transition: all 0.2s;
+      font-family: inherit;
+      
+      &:focus {
+        background: #fff;
+        border-color: #D31145;
+        box-shadow: 0 0 0 3px rgba(211, 17, 69, 0.1);
+      }
+      
+      &::placeholder { color: #9ca3af; }
+    }
+  }
+
+  button { 
+    width: 48px; height: 48px; 
+    border-radius: 50%; 
+    background: #111; /* 전송 버튼은 블랙으로 무게감 */
+    color: white; 
+    border: none; 
+    cursor: pointer; 
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s, background 0.2s;
+    
+    &:hover { 
+      transform: scale(1.05); 
+      background: #D31145; /* 호버시 레드로 변경 */
+    } 
+  }
+`;
+
+export default function AIAgentSystem() {
+  const pathname = usePathname();
   const currentPath = pathname || "";
-
-  // [NEW] 외부 클릭 감지를 위한 ref
-  const widgetRef = useRef<HTMLDivElement>(null);
-
   const [isOpen, setIsOpen] = useState(false);
-  const [opacity, setOpacity] = useState(0.6); 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const ctx = useMemo(() => {
-    if (currentPath.includes("/master-dashboard")) return MOCK_CONTEXTS["/master-dashboard"];
-    if (MOCK_CONTEXTS[currentPath]) return MOCK_CONTEXTS[currentPath];
-    return MOCK_CONTEXTS["default"];
+    if (currentPath.includes("/master-dashboard")) return AGENT_DATA["/master-dashboard"];
+    return AGENT_DATA["default"];
   }, [currentPath]);
 
-  // [NEW] 외부 영역 클릭 시 닫기 (Event Listener)
+  // 페이지 이동시 리셋
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      // 위젯 영역(widgetRef) 밖을 클릭했고, 현재 열려있다면 -> 닫기
-      if (widgetRef.current && !widgetRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
+    setMessages([{ 
+      id: Date.now(), 
+      text: ctx.guide, 
+      isUser: false,
+      suggestions: ctx.suggestions 
+    }]);
+  }, [ctx, isOpen]);
 
-    // 마우스 누를 때 감지 (mousedown이 click보다 반응 빠름)
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    setIsOpen(false);
-    setOpacity(0.6); 
-    setMessages([]); 
-
-    let timer: NodeJS.Timeout;
-    if (!currentPath.includes("/master-dashboard")) {
-      timer = setTimeout(() => {
-        setIsOpen(true);
-        const initMsg = ctx.status === 'danger' 
-          ? "🚨 긴급: 현재 페이지 데이터에 이상이 있습니다. 확인해주세요." 
-          : `[${ctx.title}] 분석 완료. 정상 작동 중입니다.`;
-        setMessages([{ id: Date.now(), text: initMsg, isUser: false }]);
-      }, 3000); 
-    }
-    return () => clearTimeout(timer);
-  }, [currentPath, ctx.status, ctx.title]);
-
+  // 자동 스크롤
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isOpen]);
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if(!input.trim()) return;
-    setMessages(prev => [...prev, { id: Date.now(), text: input, isUser: true }]);
+  const handleSend = (text: string) => {
+    if(!text.trim()) return;
+    setMessages(prev => [...prev, { id: Date.now(), text, isUser: true }]);
     setInput("");
+    
+    // AI 응답 시뮬레이션
     setTimeout(() => {
-      setMessages(prev => [...prev, { id: Date.now(), text: "확인했습니다.", isUser: false }]);
+      setMessages(prev => [...prev, { 
+        id: Date.now() + 1, 
+        text: "요청하신 내용을 확인했습니다. 관련 데이터를 분석하여 결과를 표시합니다.", 
+        isUser: false 
+      }]);
     }, 600);
   };
 
+  const ChatUI = () => (
+    <ChatContainer>
+      <Header>
+        <div className="header-content">
+          <div className="avatar-box">
+            {ctx.role === 'manager' ? <BarChart3 size={26}/> : <Bot size={26}/>}
+          </div>
+          <div className="text-box">
+            <h2>{ctx.name} <Sparkles size={14} fill="#FFD700" color="#FFD700"/></h2>
+            <p>{ctx.description}</p>
+          </div>
+        </div>
+        <button className="close-btn" onClick={() => setIsOpen(false)}><X size={18}/></button>
+      </Header>
+
+      <MessageList>
+        {messages.map((m, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.isUser ? 'flex-end' : 'flex-start' }}>
+            <Bubble 
+              $isUser={m.isUser}
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              {m.text}
+            </Bubble>
+            {/* AI 답변에만 추천 칩 표시 */}
+            {!m.isUser && m.suggestions && (
+              <SuggestionArea>
+                {m.suggestions.map((sug: string) => (
+                  <Chip key={sug} onClick={() => handleSend(sug)}>
+                    <MessageSquare size={13} />
+                    {sug}
+                    <ChevronRight size={13} style={{opacity: 0.5}}/>
+                  </Chip>
+                ))}
+              </SuggestionArea>
+            )}
+          </div>
+        ))}
+        <div ref={scrollRef}/>
+      </MessageList>
+
+      <InputArea onSubmit={(e) => { e.preventDefault(); handleSend(input); }}>
+        <div className="input-wrapper">
+          <input 
+            value={input} 
+            onChange={e=>setInput(e.target.value)} 
+            placeholder="무엇이든 물어보세요..." 
+          />
+        </div>
+        <button type="submit"><Send size={20}/></button>
+      </InputArea>
+    </ChatContainer>
+  );
+
   return (
-    // [NEW] ref 연결
-    <WidgetWrapper ref={widgetRef}>
-      
-      <ToggleBtn 
-        onClick={() => setIsOpen(!isOpen)} 
-        $isOpen={isOpen}
-        $isDanger={ctx.status === 'danger'}
+    <>
+      <NavbarTrigger 
+        onClick={() => setIsOpen(true)}
+        whileTap={{ scale: 0.95 }}
       >
-        <Bot size={18} />
-        <span>GMT Advisor</span>
-        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <Bot size={20} />
+        <span>AI Advisor</span>
+      </NavbarTrigger>
 
-        {/* [NEW] 닫혀있고 Danger 상태일 때만 보이는 '심장박동' 배지 */}
-        {!isOpen && ctx.status === 'danger' && (
-          <NotificationBadge />
-        )}
-      </ToggleBtn>
-
-      <AnimatePresence>
-        {isOpen && (
-          <PanelContainer
-            $opacity={opacity}
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: opacity, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-          >
-            <Header $status={ctx.status}>
-              <div className="controls">
-                <div className="title-group">
-                  <div className="avatar"><Bot size={20}/></div>
-                  <div>
-                    <h3>Factory AI</h3>
-                    <h2>{ctx.title}</h2>
-                  </div>
-                </div>
-                <div className="slider-group">
-                  <Sliders size={12} color="#991b1b"/>
-                  <input 
-                    type="range" min="0.2" max="1" step="0.1" 
-                    value={opacity}
-                    onChange={(e) => setOpacity(parseFloat(e.target.value))}
-                  />
-                </div>
-              </div>
-
-              <div className="alert-card">
-                {ctx.status === 'danger' ? <AlertCircle className="icon" size={18} /> : 
-                ctx.status === 'normal' ? <CheckCircle2 className="icon" size={18} /> : 
-                <Activity className="icon" size={18} />}
-                <span>{ctx.message}</span>
-              </div>
-            </Header>
-
-            <ChatList>
-              {messages.map(m => (
-                <ChatBubble key={m.id} $isUser={m.isUser}>{m.text}</ChatBubble>
-              ))}
-              <div ref={scrollRef} />
-            </ChatList>
-
-            <InputArea onSubmit={handleSend}>
-              <input value={input} onChange={e => setInput(e.target.value)} placeholder="질문을 입력하세요..." />
-              <button><Send size={14}/></button>
-            </InputArea>
-          </PanelContainer>
-        )}
-      </AnimatePresence>
-    </WidgetWrapper>
+      <Portal>
+        <AnimatePresence>
+          {isOpen && (
+            <ModalOverlay
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+            >
+              <ModalPanel
+                onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+              >
+                <ChatUI />
+              </ModalPanel>
+            </ModalOverlay>
+          )}
+        </AnimatePresence>
+      </Portal>
+    </>
   );
 }

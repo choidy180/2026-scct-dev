@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -84,7 +84,6 @@ const ZoneColumn = React.memo(({ zone, index }: { zone: ZoneData, index: number 
     <div className="z-head">
       <div className="top">
         <span className="id">{zone.id}</span>
-        {/* 상태 뱃지는 의미론적 색상 유지 혹은 붉은 테마에 맞게 조정 가능. 여기선 기존 로직 유지하되 CSS에서 색상 제어 */}
         <span className={`st ${zone.status === '만차' ? 'r' : zone.status === '혼잡' ? 'o' : 'g'}`}>{zone.status}</span>
       </div>
       <div className="usage-text">
@@ -92,7 +91,6 @@ const ZoneColumn = React.memo(({ zone, index }: { zone: ZoneData, index: number 
         <b>{Math.round((zone.used / zone.total) * 100)}%</b>
       </div>
       <div className="bar">
-        {/* 진행 바 색상 Red */}
         <div className="fill" style={{ width: `${(zone.used / zone.total) * 100}%` }} />
       </div>
     </div>
@@ -123,28 +121,9 @@ export default function WarehouseDashboard() {
     { id: 'D105', total: 19, used: 0, free: 19, status: '비어있음', slots: Array.from({ length: 19 }, (_, i) => ({ no: i + 1, active: false })) },
   ];
 
-  const [mapData, setMapData] = useState<ZoneData[]>(initialMapData);
-
-  // 3초 뒤 적재 시뮬레이션
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setMapData(prev => prev.map(zone => {
-        if (zone.id === 'D101') {
-          const newSlots = zone.slots.map(slot =>
-            slot.no === 5 ? { ...slot, active: true } : slot
-          );
-          return {
-            ...zone,
-            used: zone.used + 1,
-            free: zone.free - 1,
-            slots: newSlots
-          };
-        }
-        return zone;
-      }));
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, []);
+  // [수정 1] 시뮬레이션용 useEffect 삭제함
+  // 단순히 정적 데이터(initialMapData)를 사용하도록 설정
+  const [mapData] = useState<ZoneData[]>(initialMapData);
 
   const inventoryData: InventoryItem[] = useMemo(() => [
     { code: 'ADC30009358', qty: 708, loc: 'D101' }, { code: 'ADC30014326', qty: 294, loc: 'D102' },
@@ -204,8 +183,7 @@ export default function WarehouseDashboard() {
 
             <InventorySection>
               <div className="sec-head">
-                {/* 용어 변경: 재고 -> 부품 */}
-                <h3><Package size={16} /> 부품 리스트</h3>
+                <h3><Package size={16} /> 검수 리스트</h3>
                 <div className="search-box">
                   <Search size={14} color="#94a3b8" />
                   <input
@@ -238,10 +216,8 @@ export default function WarehouseDashboard() {
               <div className="title">구역별 상세 배치도 (D101 ~ D105)</div>
               <div className="legend-bar">
                 <span className="badge empty"><div className="dot" style={{ background: '#cbd5e1' }} /> 여유</span>
-                {/* Active 색상 Red 계열로 변경 */}
                 <span className="badge active"><div className="dot" style={{ background: '#ef4444' }} /> 사용</span>
-                {/* 만차 색상 더 진한 Red로 변경하여 구분 */}
-                <span className="badge full"><div className="dot" style={{ background: '#7f1d1d' }} /> 만차</span>
+                <span className="badge full"><div className="dot" style={{ background: '#ffffff' }} /> 만차</span>
               </div>
             </MapHeader>
 
@@ -333,7 +309,6 @@ const Header = styled.header`
   height: 60px; background: #fff; border-bottom: 1px solid #e2e8f0;
   display: flex; justify-content: space-between; align-items: center; padding: 0 24px; flex-shrink: 0;
   .brand { display: flex; align-items: center; gap: 10px; 
-    /* Red Theme */
     .icon { width: 32px; height: 32px; background: #ef4444; border-radius: 8px; display: flex; align-items: center; justify-content: center; } 
     h1 { font-size: 1.1rem; font-weight: 800; color: #1e293b; } 
   }
@@ -344,7 +319,6 @@ const Header = styled.header`
 `;
 
 const IconBtn = styled.button<{ $active?: boolean }>` 
-  /* Red Theme Hover/Active */
   background: ${props => props.$active ? '#fef2f2' : '#fff'}; 
   border: 1px solid ${props => props.$active ? '#ef4444' : '#e2e8f0'}; 
   width: 32px; height: 32px; border-radius: 8px; 
@@ -373,7 +347,6 @@ const SummaryCard = styled.div`
       .pie-mock {
         width: 80px; height: 80px; border-radius: 50%;
         border: 8px solid #f1f5f9; 
-        /* Red Theme */
         border-top-color: #ef4444; border-right-color: #ef4444;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
         .val { font-weight: 800; color: #ef4444; font-size: 1.1rem; }
@@ -417,7 +390,6 @@ const InvItem = styled.div`
   &:hover { background: #f8fafc; }
   .icon { width: 32px; height: 32px; background: #f1f5f9; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #64748b; }
   .info { flex: 1; .code { font-size: 0.85rem; font-weight: 600; color: #334155; } .loc { font-size: 0.75rem; color: #94a3b8; display: flex; gap: 2px; align-items: center; margin-top: 2px; } }
-  /* Red Theme */
   .qty { font-weight: 700; color: #ef4444; font-family: monospace; }
 `;
 
@@ -425,9 +397,11 @@ const EmptyState = styled.div`
     text-align: center; color: #94a3b8; font-size: 0.85rem; margin-top: 20px;
 `;
 
+// [수정 2] MapArea 스타일 개선: min-height: 0 추가하여 Flex 자식 요소가 부모 높이를 넘치지 않도록 함
 const MapArea = styled.main`
   flex: 1; background: #fff; border-radius: 16px; border: 1px solid #e2e8f0;
   display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+  min-height: 0; /* Flexbox item이 줄어들 수 있도록 필수 */
 `;
 
 const MapHeader = styled.div`
@@ -444,11 +418,9 @@ const MapHeader = styled.div`
   .legend-bar { 
     display: flex; 
     gap: 8px; 
-
-    /* 공통 뱃지 스타일 */
     .badge { 
       font-size: 0.75rem; 
-      padding: 6px 12px; /* 패딩을 살짝 키워 터치감 개선 */
+      padding: 6px 12px;
       border-radius: 6px; 
       font-weight: 700; 
       display: flex; 
@@ -456,47 +428,40 @@ const MapHeader = styled.div`
       gap: 6px; 
       transition: all 0.2s;
     }
-
-    /* 1. 여유 (회색 톤) */
     .empty { 
       background: #f1f5f9; 
       color: #64748b; 
       border: 1px solid #e2e8f0; 
       .dot { background: #cbd5e1; }
     }
-
-    /* 2. 사용 (연한 빨강 - 기존 유지하되 테두리 색 조정) */
     .active { 
       background: #fef2f2; 
       color: #ef4444; 
       border: 1px solid #fecaca; 
       .dot { background: #ef4444; }
     }
-
-    /* 3. 만차 (진한 빨강 - 수정됨) 
-       - 기존의 어두운 배경(#7f1d1d)을 제거하고 선명한 Red(#ef4444) 적용
-       - 텍스트를 흰색으로 변경하여 가독성 확보
-    */
     .full { 
       background: #ef4444; 
       color: #ffffff; 
       border: 1px solid #ef4444; 
-      /* 만차는 배경이 진하므로 내부 점을 흰색으로 변경 */
       .dot { background: #ffffff; } 
     }
-
-    .dot { 
-      width: 6px; 
-      height: 6px; 
-      border-radius: 50%; 
-    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; }
   }
 `;
 
+// [수정 3] ZoneWrapper 스타일 개선: min-height: 0 추가
 const ZoneWrapper = styled.div`
-  flex: 1; padding: 20px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; overflow: hidden;
+  flex: 1; 
+  padding: 20px; 
+  display: grid; 
+  grid-template-columns: repeat(5, 1fr); 
+  gap: 16px; 
+  overflow: hidden;
+  min-height: 0; /* 중요: 부모 높이 안에서 스크롤 처리 등을 위해 필요 */
 `;
 
+// [수정 4] ZoneColumnWrapper: height: 100% 및 내부 스크롤 로직 강화
 const ZoneColumnWrapper = styled(motion.div)`
   display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0;
   
@@ -511,23 +476,36 @@ const ZoneColumnWrapper = styled(motion.div)`
     .o { background: #ffedd5; color: #9a3412; }
     .r { background: #fee2e2; color: #991b1b; }
 
-    /* Red Theme */
     .usage-text { font-size: 0.8rem; color: #64748b; margin-bottom: 6px; display: flex; justify-content: space-between; font-weight: 600; b { color: #ef4444; } }
     .bar { height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
     .fill { height: 100%; background: #ef4444; border-radius: 4px; transition: width 0.5s ease-out; }
   }
 
   .slot-grid-container {
-    flex: 1; min-height: 0; display: flex; flex-direction: column;
-    background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; padding: 8px;
+    flex: 1; 
+    min-height: 0; 
+    display: flex; 
+    flex-direction: column;
+    background: #f8fafc; 
+    border-radius: 12px; 
+    border: 1px solid #e2e8f0; 
+    padding: 8px;
+    overflow-y: auto; /* 핵심: 내용이 많으면 내부 스크롤 생성 */
+    
+    &::-webkit-scrollbar { width: 4px; }
+    &::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
   }
+  
   .slot-grid {
-    flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(10, 1fr); gap: 8px;
+    flex: 1; 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    grid-template-rows: repeat(10, 1fr); 
+    gap: 6px; /* 갭을 줄여서 공간 확보 */
   }
 `;
 
 const Slot = styled.div<{ $active: boolean }>`
-  /* Red Theme */
   background: ${props => props.$active ? '#fef2f2' : '#fff'};
   border: 1px solid ${props => props.$active ? '#fecaca' : '#e2e8f0'};
   border-radius: 8px;
@@ -573,7 +551,6 @@ const SideDrawer = styled(motion.div)`
 
 const MenuItem = styled.div<{ $active?: boolean }>`
   padding: 12px 16px; border-radius: 8px; display: flex; align-items: center; gap: 12px; font-size: 0.95rem; font-weight: 500;
-  /* Red Theme */
   color: ${props => props.$active ? '#ef4444' : '#334155'};
   background: ${props => props.$active ? '#fef2f2' : 'transparent'};
   cursor: pointer; transition: background 0.2s;

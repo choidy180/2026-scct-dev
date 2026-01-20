@@ -16,25 +16,20 @@ import { boundingExtent } from "ol/extent";
 import { Coordinate } from "ol/coordinate";
 import { Geometry } from "ol/geom";
 
-// ✅ Marker 인터페이스
 export interface VWorldMarker {
+  id: string; 
   lat: number;
   lng: number;
   title?: string;
   imageUrl?: string;
   isFacility?: boolean;
   startLat?: number;
-  startLng?: number;
-  destLat?: number;
-  destLng?: number;
-  arrival?: string;
   progress?: number;
-  // rotation?: number; // [삭제] 회전값은 더 이상 사용하지 않음
-  flip?: boolean;      // [추가] 좌우 반전 여부
   isFocused?: boolean;
   driver?: string;
   cargo?: string;
   eta?: string;
+  vehicleNo?: string;
 }
 
 interface EtaData { toBusan: number; toLG: number; }
@@ -45,7 +40,7 @@ interface VWorldMapProps {
   onEtaUpdate?: (eta: EtaData) => void;
 }
 
-// 🟢 [고정 경로] LG전자 -> 창원터널 -> 녹산
+// 🟢 [고정 경로 데이터] LG전자 -> 고모텍 부산 (순방향)
 const FIXED_NAV_PATH = [
   [128.665967, 35.207494], [128.667333, 35.206717], [128.666675, 35.205953], [128.666686, 35.205829],
   [128.666654, 35.20562], [128.666284, 35.205149], [128.670354, 35.202816], [128.670434, 35.202671],
@@ -111,8 +106,6 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
   const remainingRouteSourceRef = useRef<VectorSource<Feature<Geometry>> | null>(null);
   const markerSourceRef = useRef<VectorSource<Feature<Geometry>> | null>(null);
   const routeGeomRef = useRef<LineString | null>(null);
-  const popupOverlayRef = useRef<Overlay | null>(null);
-  const popupElementRef = useRef<HTMLDivElement | null>(null);
 
   const createStyles = () => ({
     baseRoute: [
@@ -124,6 +117,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     ]
   });
 
+  // 1. 맵 초기화
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
 
@@ -152,12 +146,13 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
       ],
       view: new View({ 
         center: fromLonLat([128.76, 35.18]), 
-        zoom: 8, minZoom: 6, maxZoom: 18    
+        zoom: 7, minZoom: 7, maxZoom: 12
       }),
       controls: [], 
     });
     mapRef.current = map;
 
+    // 공장/본사 오버레이 추가
     const facilities = [
         { lat: 35.207843, lng: 128.666263, title: "LG전자", imageUrl: "/icons/LG.jpg" },
         { lat: 35.148734, lng: 128.859885, title: "고모텍 부산", imageUrl: "/icons/GMT.png" }
@@ -182,21 +177,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
       map.addOverlay(new Overlay({ position: mPos, element: el, positioning: 'center-center' }));
     });
 
-    const popupEl = document.createElement('div');
-    popupEl.style.pointerEvents = 'none'; 
-    popupEl.style.zIndex = '1000';
-
-    popupElementRef.current = popupEl;
-    
-    const popupOverlay = new Overlay({
-      element: popupEl,
-      positioning: 'bottom-center',
-      offset: [0, -35], 
-      stopEvent: false,
-    });
-    map.addOverlay(popupOverlay);
-    popupOverlayRef.current = popupOverlay;
-
+    // 기본 경로 그리기 (LG -> GMT)
     const projectedCoords = FIXED_NAV_PATH.map(coord => fromLonLat([coord[0], coord[1]]));
     const routeGeom = new LineString(projectedCoords);
     routeGeomRef.current = routeGeom;
@@ -206,9 +187,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     routeSource.addFeature(routeFeature);
 
     const extent = boundingExtent(projectedCoords);
-    map.getView().fit(extent, { padding: [200, 200, 200, 200], duration: 1000 });
-
-    setTimeout(() => map.updateSize(), 300);
+    map.getView().fit(extent, { padding: [100, 100, 100, 100], duration: 1000 });
 
     if (onEtaUpdate) onEtaUpdate({ toBusan: 2400, toLG: 2400 });
 
@@ -218,47 +197,65 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     };
   }, []);
 
-  // 2. 마커 & 팝업 업데이트
+  // 2. 마커 & 팝업 & 경로 업데이트 (무한 렌더링 방지 로직 적용)
   useEffect(() => {
     const markerSource = markerSourceRef.current;
     const remainingRouteSource = remainingRouteSourceRef.current;
     const map = mapRef.current;
     const routeGeom = routeGeomRef.current;
-    const popupOverlay = popupOverlayRef.current;
-    const popupElement = popupElementRef.current;
 
-    if (!map || !markerSource || !remainingRouteSource || !routeGeom || !popupOverlay || !popupElement) return;
+    if (!map || !markerSource || !remainingRouteSource || !routeGeom) return;
 
+    // 소스는 초기화하되 오버레이는 재활용합니다.
     markerSource.clear();
     remainingRouteSource.clear();
-    popupOverlay.setPosition(undefined);
 
     const currentZoom = map.getView().getZoom() || 10; 
     const zoomFactor = Math.pow(1.2, currentZoom - 13);
-
     let dynamicIconScale = 0.3 * zoomFactor;
     dynamicIconScale = Math.max(0.05, Math.min(dynamicIconScale, 1.0));
-    
     let dynamicDotRadius = 6 * zoomFactor;
     dynamicDotRadius = Math.max(2, dynamicDotRadius);
 
-    markers.filter(car => !car.isFacility).forEach(car => {
+    // 현재 마커 ID 목록
+    const currentMarkerIds = new Set(markers.filter(m => m.isFocused).map(m => `popup-${m.id}`));
+
+    // 더 이상 존재하지 않는 오버레이 삭제
+    const existingOverlays = map.getOverlays().getArray();
+    // 복사본을 만들어 순회해야 삭제 시 문제가 안 생김
+    [...existingOverlays].forEach(overlay => {
+      const oid = overlay.get('id');
+      // 차량용 팝업이고(id가 popup-로 시작), 현재 마커 목록에 없으면 삭제
+      if (oid && String(oid).startsWith('popup-') && !currentMarkerIds.has(String(oid))) {
+        map.removeOverlay(overlay);
+      }
+    });
+
+    // 마커 순회 및 렌더링
+    markers.filter(car => !car.isFacility).forEach((car, index) => {
       let carPos: Coordinate;
-      // [수정] 회전값은 0으로 고정
-      const rotation = 0; 
-      
-      const isTarget = car.title === focusedTitle; 
+      const isTarget = car.isFocused; 
+      const isLgStart = (car.startLat || 0) > 35.18;
 
       if (typeof car.progress === 'number') {
-        const progress = Math.max(0, Math.min(1, car.progress));
-        carPos = routeGeom.getCoordinateAt(progress);
+        let progress = Math.max(0, Math.min(1, car.progress || 0));
         
-        // 경로에 따른 회전 로직 제거됨 (rotation = 0)
-
+        if (isLgStart) {
+            carPos = routeGeom.getCoordinateAt(progress);
+        } else {
+            carPos = routeGeom.getCoordinateAt(1 - progress);
+        }
+        
         if (isTarget) {
           const flatCoords = routeGeom.getCoordinates();
-          const startIndex = Math.floor((flatCoords.length - 1) * progress);
-          const remainingCoords = [carPos, ...flatCoords.slice(startIndex)];
+          let remainingCoords: Coordinate[] = [];
+          if (isLgStart) {
+            const startIndex = Math.floor((flatCoords.length - 1) * progress);
+            remainingCoords = [carPos, ...flatCoords.slice(startIndex)];
+          } else {
+             const endIndex = Math.floor((flatCoords.length - 1) * (1 - progress));
+             remainingCoords = [...flatCoords.slice(0, endIndex), carPos];
+          }
 
           if (remainingCoords.length > 1) {
             const remainingFeature = new Feature({ geometry: new LineString(remainingCoords) });
@@ -266,14 +263,17 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
             remainingRouteSource.addFeature(remainingFeature);
           }
 
-          popupOverlay.setPosition(carPos);
-          popupElement.innerHTML = `
+          // 🟢 오버레이 처리 (생성 or 업데이트)
+          const overlayId = `popup-${car.id || index}`;
+          let overlay = map.getOverlayById(overlayId);
+
+          const popupContent = `
             <div style="background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(8px); padding: 12px 16px; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; min-width: 200px; font-family: 'Pretendard', sans-serif; pointer-events: none;">
               <div style="position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 8px solid rgba(255,255,255,0.95);"></div>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9;">
                 <div style="display:flex; align-items:center; gap:6px;">
                   <div style="width:8px; height:8px; background:#22c55e; border-radius:50%; box-shadow:0 0 5px #22c55e;"></div>
-                  <span style="font-size: 15px; font-weight: 800; color: #1e293b;">${car.title}</span>
+                  <span style="font-size: 15px; font-weight: 800; color: #1e293b;">${car.title || car.vehicleNo}</span>
                 </div>
                 <span style="font-size: 11px; font-weight: 700; color: #3b82f6; background: #eff6ff; padding: 3px 8px; border-radius: 6px;">배송중</span>
               </div>
@@ -286,6 +286,27 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
                 </div>
               </div>
             </div>`;
+
+          if (overlay) {
+            // 이미 있으면 위치와 내용만 업데이트 (무한 렌더링 방지)
+            overlay.setPosition(carPos);
+            if (overlay.getElement()) {
+               overlay.getElement()!.innerHTML = popupContent;
+            }
+          } else {
+            // 없으면 새로 생성
+            const popupEl = document.createElement('div');
+            popupEl.innerHTML = popupContent;
+            const newOverlay = new Overlay({
+              id: overlayId,
+              element: popupEl,
+              position: carPos,
+              positioning: 'bottom-center',
+              offset: [0, -35], 
+              stopEvent: false,
+            });
+            map.addOverlay(newOverlay);
+          }
         }
       } else {
         carPos = routeGeom.getFirstCoordinate();
@@ -294,16 +315,17 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
       const carFeature = new Feature({ geometry: new Point(carPos) });
       
       if (isTarget && car.imageUrl) {
-        // [수정] car.flip이 true면 X축을 음수로 반전 (-scaleX)
-        // car.flip: LG -> 고모텍 (서쪽 이동) 인 경우 true
-        const scaleX = car.flip ? -dynamicIconScale : dynamicIconScale;
+        // 🟢 아이콘 반전 처리 수정 (반대 방향)
+        // LG->GMT (isLgStart=true): 원래 오른쪽을 보므로, 왼쪽으로 가게 하려면 반전(-1) 필요
+        // GMT->LG (isLgStart=false): 원래 오른쪽을 보므로, 오른쪽으로 가려면 그대로(1) 필요
+        const scaleX = isLgStart ? -dynamicIconScale : dynamicIconScale;
         const scaleY = dynamicIconScale;
 
         carFeature.setStyle(new Style({
           image: new Icon({
             src: car.imageUrl,
-            scale: [scaleX, scaleY], // [수정] 배열 형태로 스케일 지정하여 좌우 반전 처리
-            rotation: 0, // [수정] 회전 없음
+            scale: [scaleX, scaleY], 
+            rotation: 0,
             rotateWithView: true,
             anchor: [0.5, 0.5]
           }),
@@ -323,7 +345,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
       markerSource.addFeature(carFeature);
     });
 
-  }, [markers, focusedTitle]);
+  }, [markers]);
 
   return (
     <>

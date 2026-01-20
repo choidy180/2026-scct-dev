@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Monitor, Layers, Clock, FileText, CheckCircle, AlertTriangle, X, ZoomIn, Volume2, VolumeX, Siren, ChevronRight } from 'lucide-react';
+import { 
+    Monitor, Layers, Clock, FileText, CheckCircle, AlertTriangle, X, 
+    ZoomIn, Volume2, VolumeX, Siren, ChevronRight, CheckCircle2, XCircle 
+} from 'lucide-react';
 
 // ─── [CONFIG] 설정 및 테마 ───
 type ScreenMode = 'FHD' | 'QHD';
@@ -31,7 +34,7 @@ const LAYOUT_CONFIGS = {
     FHD: {
         padding: '24px',
         gap: '20px',
-        headerHeight: '64px',
+        headerHeight: '110px', // 헤더 높이 증가 (이전 UI 스타일 맞춤)
         fontSize: { title: '20px', sub: '14px', badge: '13px', metaLabel: '12px', metaValue: '15px' },
         iconSize: 20,
         cornerCardWidth: '300px',
@@ -39,7 +42,7 @@ const LAYOUT_CONFIGS = {
     QHD: {
         padding: '40px',
         gap: '32px',
-        headerHeight: '88px',
+        headerHeight: '140px',
         fontSize: { title: '28px', sub: '18px', badge: '16px', metaLabel: '14px', metaValue: '18px' },
         iconSize: 28,
         cornerCardWidth: '450px',
@@ -47,65 +50,171 @@ const LAYOUT_CONFIGS = {
 };
 
 const theme = {
-    bg: '#F3F4F6',
+    bg: '#F8FAFC', // 배경색 약간 더 밝게 조정
     cardBg: '#FFFFFF',
-    textPrimary: '#111827',
-    textSecondary: '#6B7280',
-    accent: '#7C3AED',
+    textPrimary: '#1E293B',
+    textSecondary: '#64748B',
+    accent: '#3B82F6', // 이전 UI의 파란색 톤
     success: '#059669',
     danger: '#DC2626',
-    border: '#E5E7EB',
+    border: '#E2E8F0',
     shadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+    status: {
+        ok: { bg: '#ECFDF5', text: '#059669', border: '#10B981' },
+        ng: { bg: '#FEF2F2', text: '#DC2626', border: '#EF4444' },
+        wait: { bg: '#F1F5F9', text: '#94A3B8', border: '#CBD5E1' }
+    }
 };
+
+// ─── [GLOBAL STYLES] 애니메이션 ───
+const GlobalStyles = () => (
+    <style jsx global>{`
+        @keyframes pulse-green-soft {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.2); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        @keyframes pulse-red-soft {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .animate-ok { animation: pulse-green-soft 2s infinite; }
+        .animate-ng { animation: pulse-red-soft 2s infinite; }
+    `}</style>
+);
 
 // ─── [UI COMPONENTS] ───
 
-// 1. [헤더] 사운드 제어 버튼
+// 1. [헤더] 사운드 제어 버튼 (스타일 수정됨)
 const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => void }) => {
-    const [isHover, setIsHover] = useState(false);
-    const [isPress, setIsPress] = useState(false);
-
     return (
         <button
             onClick={onClick}
-            onMouseEnter={() => setIsHover(true)}
-            onMouseLeave={() => { setIsHover(false); setIsPress(false); }}
-            onMouseDown={() => setIsPress(true)}
-            onMouseUp={() => setIsPress(false)}
             style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '0 16px', height: '100%',
-                borderRadius: '12px',
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '8px 16px', borderRadius: '12px',
                 border: isOn ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
-                backgroundColor: isOn ? '#F5F3FF' : '#FFFFFF',
+                backgroundColor: isOn ? '#EFF6FF' : '#F1F5F9',
                 color: isOn ? theme.accent : theme.textSecondary,
                 cursor: 'pointer', outline: 'none',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: isOn 
-                    ? `0 0 0 1px ${theme.accent} inset` 
-                    : isHover ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
-                transform: isPress ? 'scale(0.96)' : 'scale(1)',
-                position: 'relative', overflow: 'hidden'
+                transition: 'all 0.2s',
+                marginLeft: 'auto' // 우측 정렬
             }}
         >
-            <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: '32px', height: '32px', borderRadius: '8px',
-                backgroundColor: isOn ? theme.accent : '#F3F4F6',
-                color: isOn ? '#FFF' : '#9CA3AF',
-                transition: 'all 0.2s'
-            }}>
-                {isOn ? <Volume2 size={18} strokeWidth={2.5} /> : <VolumeX size={18} strokeWidth={2.5} />}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', paddingTop: '1px' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: isOn ? theme.accent : '#9CA3AF', letterSpacing: '0.5px' }}>ALARM</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: isOn ? '#111827' : '#4B5563' }}>{isOn ? 'ON' : 'OFF'}</span>
-            </div>
+            {isOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            <span style={{ fontSize: '12px', fontWeight: 700 }}>{isOn ? 'ON' : 'MUTE'}</span>
         </button>
     );
 };
 
-// 2. [카드] 이미지 확대 버튼
+// 2. [헤더] 대시보드 헤더 (New UI)
+const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: any, data: ApiData | null, isSoundOn: boolean, onToggleSound: () => void }) => {
+    // 판정 결과 로직
+    const resultStr = data?.RESULT || '';
+    const isPass = resultStr === '정상' || resultStr.toUpperCase() === 'OK';
+    const isFail = !isPass && !!resultStr;
+
+    let style = theme.status.wait;
+    let Icon = Clock;
+    let label = "READY";
+    let subLabel = "SYSTEM STANDBY";
+    let animClass = "";
+
+    if (isPass) {
+        style = theme.status.ok;
+        Icon = CheckCircle2;
+        label = "OK (정상)";
+        subLabel = "PASSED";
+        animClass = "animate-ok";
+    } else if (isFail) {
+        style = theme.status.ng;
+        Icon = XCircle;
+        label = "NG (불량)";
+        subLabel = "FAILED";
+        animClass = "animate-ng";
+    }
+
+    // 데이터 안전 참조
+    const timeValue = data?.TIMEVALUE || '00:00:00';
+    const countValue = data?.COUNT_NUM || '0';
+    const modelValue = data?.CDGITEM || '-';
+    const woValue = data?.WO || '-';
+
+    return (
+        <div style={{ display: 'flex', gap: layout.gap, height: layout.headerHeight, marginBottom: layout.gap, flexShrink: 0 }}>
+            {/* 1. 타이틀 & 로고 & 사운드 버튼 */}
+            <div style={{ 
+                width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
+                display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
+                boxShadow: theme.shadow
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Monitor size={28} color={theme.accent} />
+                        <span style={{ fontSize: '22px', fontWeight: 800, color: theme.textPrimary }}>Estify<span style={{color:theme.accent}}>Vision</span></span>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: theme.textSecondary, fontWeight: 600 }}>유리틈새검사</span>
+                    <SoundControlButton isOn={isSoundOn} onClick={onToggleSound} />
+                </div>
+            </div>
+
+            {/* 2. 판정 결과 박스 (가운데 강조) */}
+            <div className={animClass} style={{
+                width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
+                display: 'flex', alignItems: 'center', padding: '0 32px', gap: '24px', position: 'relative', overflow: 'hidden',
+                boxShadow: theme.shadow
+            }}>
+                <div style={{
+                    width: '64px', height: '64px', borderRadius: '50%', backgroundColor: style.bg,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: style.text, flexShrink: 0
+                }}>
+                    <Icon size={36} strokeWidth={2.5} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '13px', color: theme.textSecondary, fontWeight: 600 }}>TOTAL RESULT</span>
+                    <span style={{ fontSize: '28px', color: style.text, fontWeight: 800, lineHeight: 1.1 }}>{label}</span>
+                    <span style={{ fontSize: '13px', color: '#94A3B8', fontWeight: 500 }}>{subLabel}</span>
+                </div>
+            </div>
+
+            {/* 3. 정보 테이블 (우측 통합) */}
+            <div style={{ 
+                flex: 1, backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
+                display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: theme.shadow
+            }}>
+                {/* 헤더 Row */}
+                <div style={{ display: 'flex', width: '100%', height: '40%', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${theme.border}` }}>
+                    <InfoHeaderCell text="검사 시간" />
+                    <InfoHeaderCell text="생산 수량" />
+                    <InfoHeaderCell text="모델명 / WO" />
+                    <InfoHeaderCell text="현재 상태" isLast />
+                </div>
+                {/* 값 Row */}
+                <div style={{ display: 'flex', width: '100%', height: '60%' }}>
+                    <InfoValueCell text={timeValue} />
+                    <InfoValueCell text={`${countValue} EA`} />
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${theme.border}` }}>
+                         <span style={{fontSize: '15px', fontWeight: 700, color: theme.textPrimary}}>{modelValue}</span>
+                         <span style={{fontSize: '11px', fontWeight: 500, color: theme.textSecondary}}>{woValue}</span>
+                    </div>
+                    <InfoValueCell text="RUNNING" isLast color={theme.accent} />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const InfoHeaderCell = ({ text, isLast }: { text: string, isLast?: boolean }) => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: theme.textSecondary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
+);
+const InfoValueCell = ({ text, isLast, color }: { text: string, isLast?: boolean, color?: string }) => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: color || theme.textPrimary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
+);
+
+// 3. [카드] 이미지 확대 버튼
 const ZoomFloatingButton = ({ onClick }: { onClick: () => void }) => {
     const [isHover, setIsHover] = useState(false);
     return (
@@ -121,11 +230,9 @@ const ZoomFloatingButton = ({ onClick }: { onClick: () => void }) => {
                 color: theme.textPrimary,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer',
-                boxShadow: isHover 
-                    ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' 
-                    : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                boxShadow: isHover ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                 transform: isHover ? 'translateY(-2px)' : 'translateY(0)',
-                transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                transition: 'all 0.3s'
             }}
         >
             <ZoomIn size={20} strokeWidth={2} />
@@ -133,28 +240,17 @@ const ZoomFloatingButton = ({ onClick }: { onClick: () => void }) => {
     );
 };
 
-// 3. [모달] 주요 액션 버튼
+// 4. [모달] 주요 액션 버튼
 const PrimaryButton = ({ onClick, children, danger = false }: any) => {
-    const [isHover, setIsHover] = useState(false);
-    const [isPress, setIsPress] = useState(false);
     const baseColor = danger ? theme.danger : theme.accent;
-
     return (
         <button
             onClick={onClick}
-            onMouseEnter={() => setIsHover(true)}
-            onMouseLeave={() => { setIsHover(false); setIsPress(false); }}
-            onMouseDown={() => setIsPress(true)}
-            onMouseUp={() => setIsPress(false)}
             style={{
                 width: '100%', padding: '16px', borderRadius: '14px', border: 'none',
-                background: isHover ? baseColor : baseColor,
-                color: 'white', fontSize: '16px', fontWeight: 700,
+                background: baseColor, color: 'white', fontSize: '16px', fontWeight: 700,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                boxShadow: isHover ? `0 8px 20px -6px ${baseColor}80` : `0 4px 10px -4px ${baseColor}60`,
-                transform: isPress ? 'scale(0.98)' : (isHover ? 'translateY(-2px)' : 'translateY(0)'),
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                filter: isHover ? 'brightness(1.1)' : 'none'
+                boxShadow: `0 4px 10px -4px ${baseColor}60`,
             }}
         >
             {children}
@@ -162,105 +258,43 @@ const PrimaryButton = ({ onClick, children, danger = false }: any) => {
     );
 };
 
-// 4. [모달] 닫기 버튼
-const ModalCloseButton = ({ onClick }: any) => {
-    const [isHover, setIsHover] = useState(false);
-    return (
-        <button
-            onClick={onClick}
-            onMouseEnter={() => setIsHover(true)}
-            onMouseLeave={() => setIsHover(false)}
-            style={{
-                width: '40px', height: '40px', borderRadius: '12px', border: 'none',
-                backgroundColor: isHover ? '#F3F4F6' : 'transparent',
-                color: theme.textPrimary,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', transition: 'all 0.2s'
-            }}
-        >
-            <X size={24} />
-        </button>
-    )
-}
+// 5. [모달] 닫기 버튼
+const ModalCloseButton = ({ onClick }: any) => (
+    <button onClick={onClick} style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <X size={24} />
+    </button>
+);
 
 // ─── [SUB COMPONENTS] ───
 
-const SoundPermissionModal = ({ onConfirm }: { onConfirm: () => void }) => {
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 99999,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            animation: 'fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-        }}>
-            <div style={{
-                backgroundColor: '#FFFFFF', padding: '48px', borderRadius: '28px',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '32px',
-                maxWidth: '420px', width: '90%', textAlign: 'center',
-                border: '1px solid rgba(255,255,255,0.1)'
-            }}>
-                <div style={{
-                    width: '88px', height: '88px', borderRadius: '50%', backgroundColor: '#FEF2F2',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: `0 0 0 8px ${theme.danger}10, 0 0 0 16px ${theme.danger}05`,
-                    animation: 'pulseRed 2s infinite'
-                }}>
-                    <Siren size={44} color={theme.danger} strokeWidth={1.5} />
-                </div>
-
-                <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#111827', marginBottom: '12px', letterSpacing: '-0.5px' }}>
-                        불량 알림 권한 요청
-                    </h2>
-                    <p style={{ fontSize: '16px', color: '#6B7280', lineHeight: 1.6 }}>
-                        현재 심각한 <strong style={{color: theme.danger}}>유격 불량이 감지</strong>되었습니다.<br />
-                        관리자 알림을 위해 경고음을 켜시겠습니까?
-                    </p>
-                </div>
-
-                <PrimaryButton onClick={onConfirm} danger={true}>
-                    <Volume2 size={20} />
-                    네, 경고음 켜기
-                </PrimaryButton>
+const SoundPermissionModal = ({ onConfirm }: { onConfirm: () => void }) => (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ backgroundColor: '#FFFFFF', padding: '48px', borderRadius: '28px', width: '90%', maxWidth: '420px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <div style={{ width: '88px', height: '88px', borderRadius: '50%', backgroundColor: '#FEF2F2', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Siren size={44} color={theme.danger} />
             </div>
-            <style jsx>{`
-                @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-                @keyframes pulseRed { 0% { transform: scale(0.95); } 50% { transform: scale(1.05); } 100% { transform: scale(0.95); } }
-            `}</style>
+            <div>
+                <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px' }}>불량 알림 권한 요청</h2>
+                <p style={{ color: '#6B7280' }}>심각한 <strong style={{color: theme.danger}}>유격 불량이 감지</strong>되었습니다.<br />경고음을 켜시겠습니까?</p>
+            </div>
+            <PrimaryButton onClick={onConfirm} danger={true}><Volume2 size={20} />네, 경고음 켜기</PrimaryButton>
         </div>
-    );
-};
-
-// LoadingScreen 컴포넌트 제거됨
+    </div>
+);
 
 const ImageModal = ({ isOpen, onClose, title, imgUrl }: { isOpen: boolean, onClose: () => void, title: string, imgUrl: string }) => {
     if (!isOpen) return null;
     return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 10000,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(12px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            animation: 'fadeIn 0.2s ease-out'
-        }} onClick={onClose}>
-            <div style={{
-                width: '90vw', height: '90vh', backgroundColor: '#FFFFFF',
-                borderRadius: '24px', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-            }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+            <div style={{ width: '90vw', height: '90vh', backgroundColor: '#FFFFFF', borderRadius: '24px', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }} onClick={(e) => e.stopPropagation()}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ padding: '12px', backgroundColor: '#F9FAFB', borderRadius: '14px', border: `1px solid ${theme.border}` }}>
-                            <ZoomIn size={24} color={theme.textPrimary} />
-                        </div>
-                        <div>
-                            <span style={{ fontSize: '24px', fontWeight: 800, color: theme.textPrimary, display: 'block' }}>{title}</span>
-                            <span style={{ fontSize: '15px', color: theme.textSecondary }}>고해상도 원본 이미지 상세 보기</span>
-                        </div>
+                        <ZoomIn size={24} />
+                        <span style={{ fontSize: '24px', fontWeight: 800 }}>{title}</span>
                     </div>
                     <ModalCloseButton onClick={onClose} />
                 </div>
-                <div style={{ flex: 1, borderRadius: '16px', overflow: 'hidden', border: `1px solid ${theme.border}`, backgroundColor: '#020617', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ flex: 1, borderRadius: '16px', overflow: 'hidden', backgroundColor: '#020617', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <img src={imgUrl} alt="Detail" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                 </div>
             </div>
@@ -268,45 +302,9 @@ const ImageModal = ({ isOpen, onClose, title, imgUrl }: { isOpen: boolean, onClo
     );
 };
 
-const MetadataItem = ({ label, value, icon, layout }: any) => (
-    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px', height: '100%', backgroundColor: theme.cardBg, borderRadius: '16px', boxShadow: theme.shadow, border: `1px solid ${theme.border}`, minWidth: '160px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            {icon} <span style={{ fontSize: layout.fontSize.metaLabel, color: theme.textSecondary, fontWeight: 700 }}>{label}</span>
-        </div>
-        <div style={{ fontSize: layout.fontSize.metaValue, color: theme.textPrimary, fontWeight: 800, letterSpacing: '-0.01em' }}>{value}</div>
-    </div>
-);
-
-const Header = ({ layout, data, isSoundOn, onToggleSound }: { layout: any, data: ApiData | null, isSoundOn: boolean, onToggleSound: () => void }) => {
-    const timeValue = data ? data.TIMEVALUE : "--:--:--";
-    const woValue = data ? data.WO : "-";
-    const modelValue = data ? data.CDGITEM : "-";
-
-    return (
-        <div style={{ display: 'flex', gap: layout.gap, height: layout.headerHeight, marginBottom: layout.gap, alignItems: 'center', flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginRight: 'auto', height: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: theme.cardBg, padding: '0 24px', height: '100%', borderRadius: '16px', boxShadow: theme.shadow, border: `1px solid ${theme.border}` }}>
-                    <div style={{ padding: '10px', backgroundColor: '#EDE9FE', borderRadius: '10px' }}><Monitor size={layout.iconSize} color={theme.accent} strokeWidth={2.5} /></div>
-                    <div>
-                        <div style={{ fontWeight: 800, fontSize: layout.fontSize.title, color: theme.textPrimary, lineHeight: 1 }}>Estify<span style={{ color: theme.accent }}>Vision</span></div>
-                        <div style={{ fontSize: '12px', color: theme.textSecondary, fontWeight: 600, marginTop: '4px' }}>유리 틈새 확인 시스템</div>
-                    </div>
-                </div>
-                
-                <SoundControlButton isOn={isSoundOn} onClick={onToggleSound} />
-            </div>
-
-            <MetadataItem layout={layout} label="현재 시간" value={timeValue} icon={<Clock size={16} color={theme.accent} />} />
-            <MetadataItem layout={layout} label="작업지시번호" value={woValue} icon={<FileText size={16} color={theme.accent} />} />
-            <MetadataItem layout={layout} label="모델명" value={modelValue} icon={<Layers size={16} color={theme.accent} />} />
-        </div>
-    );
-};
-
 // ─── [MAIN COMPONENT] ───
 
 export default function GlassGapInspection() {
-    // isLoading 상태 제거됨
     const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
     const [modalInfo, setModalInfo] = useState<{ isOpen: boolean, title: string, imgUrl: string } | null>(null);
     const [apiData, setApiData] = useState<ApiData | null>(null);
@@ -417,51 +415,32 @@ export default function GlassGapInspection() {
         );
     };
 
-    // 로딩 조건문 제거됨. 바로 컨텐츠 렌더링
     return (
         <div style={{
             backgroundColor: theme.bg, boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
-            fontFamily: '"Pretendard", -apple-system, sans-serif', width: '100%', height: 'calc(100vh - 64px)', padding: layout.padding
+            fontFamily: '"Inter", -apple-system, sans-serif', width: '100%', height: 'calc(100vh - 64px)', padding: layout.padding
         }}>
+            <GlobalStyles />
             {showPermissionModal && <SoundPermissionModal onConfirm={handlePermissionConfirm} />}
             {modalInfo && <ImageModal isOpen={modalInfo.isOpen} onClose={() => setModalInfo(prev => prev ? { ...prev, isOpen: false } : null)} title={modalInfo.title} imgUrl={modalInfo.imgUrl} />}
 
-            <Header layout={layout} data={apiData} isSoundOn={audioAllowed} onToggleSound={toggleSound} />
+            {/* [CHANGE] 1. New Dashboard Header */}
+            <DashboardHeader layout={layout} data={apiData} isSoundOn={audioAllowed} onToggleSound={toggleSound} />
 
             <div style={{ flex: 1, display: 'flex', gap: layout.gap, minHeight: 0 }}>
+                {/* Left Column */}
                 <div style={{ width: layout.cornerCardWidth, display: 'flex', flexDirection: 'column', gap: layout.gap }}>
                     <CornerCard title="좌측 상단 (A1)" status={apiData ? apiData.LABEL001 : "-"} imgUrl={apiData ? apiData.FILEPATH1 : ""} />
                     <CornerCard title="좌측 하단 (A3)" status={apiData ? apiData.LABEL003 : "-"} imgUrl={apiData ? apiData.FILEPATH3 : ""} />
                 </div>
 
+                {/* Center Column - [CHANGE] 2. Removed 'Comprehensive Judgment' Box */}
                 <div style={{
                     flex: 1, display: 'flex', flexDirection: 'column',
                     backgroundColor: theme.cardBg, borderRadius: '24px',
                     boxShadow: theme.shadow, overflow: 'hidden', padding: '24px',
                     border: isDefectMode ? `2px solid ${theme.danger}` : `1px solid ${theme.border}`
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px', alignItems: 'center', gap: '12px' }}>
-                        <div style={{
-                            backgroundColor: isDefectMode ? '#FEF2F2' : '#ECFDF5',
-                            padding: '12px 32px', borderRadius: '16px',
-                            boxShadow: isDefectMode ? `0 8px 20px -4px ${theme.danger}40` : '0 8px 20px -4px rgba(16, 185, 129, 0.2)',
-                            display: 'flex', alignItems: 'center', gap: '12px',
-                            border: `1px solid ${isDefectMode ? theme.danger : theme.success}30`,
-                            animation: isDefectMode ? 'pulseBorder 2s infinite' : 'none'
-                        }}>
-                            {isDefectMode ? (
-                                <>
-                                    <AlertTriangle size={28} color={theme.danger} fill="#FEE2E2" />
-                                    <span style={{ fontSize: layout.fontSize.title, fontWeight: 800, color: theme.danger }}>종합 판정: 불량 (NG)</span>
-                                </>
-                            ) : (
-                                <>
-                                    <CheckCircle size={28} color={theme.success} fill="#DCFCE7" />
-                                    <span style={{ fontSize: layout.fontSize.title, fontWeight: 800, color: theme.textPrimary }}>종합 판정: 합격 (OK)</span>
-                                </>
-                            )}
-                        </div>
-                    </div>
                     <div style={{ flex: 1, borderRadius: '16px', overflow: 'hidden', position: 'relative', border: `1px solid ${theme.border}`, backgroundColor: '#F8FAFC' }}>
                         <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
                              <img src={guideImgUrl} alt="Main Glass Guide" style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.12))' }} />
@@ -469,12 +448,12 @@ export default function GlassGapInspection() {
                     </div>
                 </div>
 
+                {/* Right Column */}
                 <div style={{ width: layout.cornerCardWidth, display: 'flex', flexDirection: 'column', gap: layout.gap }}>
                     <CornerCard title="우측 상단 (A2)" status={apiData ? apiData.LABEL002 : "-"} imgUrl={apiData ? apiData.FILEPATH2 : ""} />
                     <CornerCard title="우측 하단 (A4)" status={apiData ? apiData.LABEL004 : "-"} imgUrl={apiData ? apiData.FILEPATH4 : ""} />
                 </div>
             </div>
-            <style jsx>{` @keyframes pulseBorder { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } } `}</style>
         </div>
     );
 }

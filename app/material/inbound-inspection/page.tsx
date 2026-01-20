@@ -25,7 +25,8 @@ import { LuMaximize, LuMinimize } from "react-icons/lu";
 const PORT = 8080;
 const API_URL_VEHICLE = "http://1.254.24.170:24828/api/DX_API000020";
 const API_URL_INVOICE = "http://1.254.24.170:24828/api/V_PurchaseIn";
-const API_URL_MATERIAL_LIST = "http://1.254.24.170:24828/api/DX_API000028";
+// [수정 1] API URL 변경
+const API_URL_MATERIAL_LIST = "http://1.254.24.170:24828/api/DX_API000034";
 
 // --- Types ---
 interface VehicleSlotDetail {
@@ -44,14 +45,19 @@ interface VehicleApiResponse {
   };
 }
 
+// [수정 2] 새로운 API 데이터 구조에 맞게 인터페이스 변경
 interface MaterialListItem {
-  key_id?: string;        
-  NmCustm: string;        // 업체정보
-  InvoiceNo: string;      // 송장번호
-  PrjCode: string;        // 프로젝트 코드
+  PrjGubun: string;
+  PrjCode: string;
+  PrjName: string;
+  NmCustm: string;        // 업체명 (표시 대상)
+  InvoiceNo: string;      // 송장번호 (표시 대상)
   NmGItem: string;        // 자재명
-  CHK_FLAG: string;       // 상태 (Y: 완료, N: 대기)
-  IN_TIME?: string;       
+  InspConf: string;       // 검사확정여부 ('Y'면 완료, 그외 대기)
+  NmInspGB: string;       // 검사구분명 (표시 대상)
+  PurInDate: string;      // 입고일시
+  // 필요시 추가 필드 정의
+  [key: string]: any;
 }
 
 type StreamStatus = "idle" | "checking" | "ok" | "error";
@@ -294,6 +300,7 @@ const ViewAllButton = styled.button`
 
 // --- Sub Components ---
 
+// [수정 4] UI 변경: 검은글씨(업체명), 파란글씨(송장번호), 배지(검사구분명)
 const MemoizedHistoryItem = React.memo(({ item }: { item: MaterialListItem }) => {
   const truncatedName = item.NmCustm.length > 12 
     ? item.NmCustm.slice(0, 12) + "..." 
@@ -302,24 +309,31 @@ const MemoizedHistoryItem = React.memo(({ item }: { item: MaterialListItem }) =>
   return (
     <BaseHistoryItem>
         <div className="left-grp">
+            {/* 상단: 업체명 (검은색) */}
             <span className="comp" title={item.NmCustm}>{truncatedName}</span>
+            {/* 하단: 송장번호 (파란색) */}
             <span style={{ 
                 fontSize: '0.85rem', 
                 color: '#3b82f6', 
                 fontWeight: 600, 
-                marginTop: '4px' 
+                marginTop: '4px',
+                fontFamily: 'monospace'
             }}>
-                {item.PrjCode || "-"}
+                {item.InvoiceNo || "-"}
             </span>
         </div>
         <div className="info">
-            <span className="status bad">대기</span>
+            {/* 우측 배지: 검사구분명 */}
+            <span className="status bad" style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #e2e8f0' }}>
+                {item.NmInspGB || "대기"}
+            </span>
         </div>
     </BaseHistoryItem>
   );
 });
 MemoizedHistoryItem.displayName = "MemoizedHistoryItem";
 
+// [수정 5] 모달 데이터 필터 및 테이블 컬럼 수정
 const MaterialListModal = ({ 
   isOpen, 
   onClose, 
@@ -334,11 +348,12 @@ const MaterialListModal = ({
 
   const filteredData = useMemo(() => {
     return data.filter(item => {
+      // InspConf 기준으로 필터링 (Y:완료, 그외:대기)
       if (filterType === 'Y') {
-         if (item.CHK_FLAG !== 'Y') return false;
+         if (item.InspConf !== 'Y') return false;
       }
       if (filterType === 'N') {
-         if (item.CHK_FLAG === 'Y') return false;
+         if (item.InspConf === 'Y') return false;
       }
       if (searchTerm) {
         const lowerTerm = searchTerm.toLowerCase();
@@ -389,8 +404,8 @@ const MaterialListModal = ({
           
           <FilterGroup>
             <FilterButton $active={filterType === 'ALL'} onClick={() => setFilterType('ALL')}>전체보기</FilterButton>
-            <FilterButton $active={filterType === 'N'} onClick={() => setFilterType('N')}>대기중 (Pending)</FilterButton>
-            <FilterButton $active={filterType === 'Y'} onClick={() => setFilterType('Y')}>완료됨 (Done)</FilterButton>
+            <FilterButton $active={filterType === 'N'} onClick={() => setFilterType('N')}>대기중</FilterButton>
+            <FilterButton $active={filterType === 'Y'} onClick={() => setFilterType('Y')}>완료됨</FilterButton>
           </FilterGroup>
         </ControlBar>
 
@@ -409,22 +424,22 @@ const MaterialListModal = ({
                 <th>송장번호</th>
                 <th>업체명</th>
                 <th>자재명</th>
-                <th>입고시간</th>
+                <th>입고일시</th>
               </tr>
             </thead>
             <tbody>
               {filteredData.length > 0 ? (
                 filteredData.map((item, idx) => (
-                  <tr key={item.key_id || idx}>
+                  <tr key={`${item.InvoiceNo || 'unknown'}-${idx}`}>
                     <td>
-                      <StatusBadge $status={item.CHK_FLAG === 'Y' ? 'Y' : 'N'}>
-                        {item.CHK_FLAG === 'Y' ? <><span>●</span>완료</> : <><span>●</span>대기</>}
+                      <StatusBadge $status={item.InspConf === 'Y' ? 'Y' : 'N'}>
+                        {item.InspConf === 'Y' ? <><span>●</span>완료</> : <><span>●</span>{item.NmInspGB || "대기"}</>}
                       </StatusBadge>
                     </td>
                     <td style={{fontFamily: 'monospace', fontWeight: 600, fontSize: '1rem'}}>{item.InvoiceNo}</td>
                     <td style={{fontWeight: 600}}>{item.NmCustm}</td>
                     <td>{item.NmGItem}</td>
-                    <td style={{color: '#64748b'}}>{item.IN_TIME || '-'}</td>
+                    <td style={{color: '#64748b'}}>{item.PurInDate || '-'}</td>
                   </tr>
                 ))
               ) : (
@@ -521,12 +536,10 @@ export default function DashboardPage() {
       const data: VehicleApiResponse = await res.json();
       const allSlots = Object.values(data).flatMap(area => area.slots_detail);
 
-      // [중요] 여기서 이미지 확장자를 체크하고 필터링합니다.
       const validSlots = allSlots.filter(slot => 
         slot.FILEPATH && slot.FILENAME && (slot.FILENAME.toLowerCase().endsWith('.jpg') || slot.FILENAME.toLowerCase().endsWith('.png'))
       );
 
-      // 최신 입차 시간 순으로 정렬하여 첫 번째(가장 최신) 이미지를 선택합니다.
       validSlots.sort((a, b) => {
         if (!a.entry_time) return 1;
         if (!b.entry_time) return -1;
@@ -534,7 +547,7 @@ export default function DashboardPage() {
       });
 
       if (validSlots.length > 0) {
-        setVehicleInfo(validSlots[0]); // 필터링된 최신 이미지 정보를 상태에 저장
+        setVehicleInfo(validSlots[0]); 
         setIsVehicleDataLoaded(true);
       } else {
         setIsVehicleDataLoaded(true); 
@@ -542,6 +555,7 @@ export default function DashboardPage() {
     } catch (err) { console.error(err); } finally { setIsVehicleLoading(false); }
   }, []);
 
+  // [수정 3] fetchMaterialData 로직 수정
   const fetchMaterialData = useCallback(async () => {
     setMaterialError(null);
     setIsMaterialLoading(true);
@@ -551,10 +565,14 @@ export default function DashboardPage() {
       const json = await res.json();
       const data: MaterialListItem[] = Array.isArray(json) ? json : [];
       setMaterialList(data);
+      
       const total = data.length;
-      const done = data.filter(item => item.CHK_FLAG === 'Y').length;
+      // InspConf가 "Y"인 데이터가 완료된 데이터
+      const done = data.filter(item => item.InspConf === 'Y').length;
       setMaterialStats({ total, done, percent: total > 0 ? Math.round((done / total) * 100) : 0 });
-      setPendingList(data.filter(item => item.CHK_FLAG !== 'Y'));
+      
+      // 대기목록: InspConf가 "Y"가 아닌 데이터들
+      setPendingList(data.filter(item => item.InspConf !== 'Y'));
     } catch (err: any) {
       setMaterialError(err.message || "데이터 로드 실패");
       setMaterialList([]);
@@ -589,7 +607,6 @@ export default function DashboardPage() {
     setShowDashboard(true); 
   }, [fetchVehicleData, fetchMaterialData]);
 
-  // 🔴 [수정 부분 1] 키보드 이벤트 핸들러 - Escape뿐만 아니라 Enter 키 감지 추가
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -598,7 +615,6 @@ export default function DashboardPage() {
             else if (showDashboard) setShowDashboard(false);
             else if (isFullScreen) setIsFullScreen(false);
         }
-        // 엔터 키를 누르면 manualTrigger 실행
         if (e.key === 'Enter') {
             manualTrigger();
         }
@@ -723,7 +739,12 @@ export default function DashboardPage() {
                                     <PinkButton onClick={fetchMaterialData} style={{height:30, fontSize:'0.8rem', padding:'0 12px'}}>재시도</PinkButton>
                                 </div>
                             ) : pendingList.length > 0 ? (
-                                pendingList.map((item, idx) => <MemoizedHistoryItem key={item.key_id || `pend-${idx}`} item={item} />)
+                                pendingList.map((item, idx) => (
+                                  <MemoizedHistoryItem 
+                                    key={`${item.InvoiceNo || 'unknown'}-${idx}`} 
+                                    item={item} 
+                                  />
+                                ))
                             ) : (
                                 <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'#94a3b8', fontSize:'0.9rem'}}>항목이 없습니다.</div>
                             )}
@@ -743,7 +764,6 @@ export default function DashboardPage() {
                             </IpInputWrapper>
                         </div>
                         <div className="btn-group">
-                            {/* 🔴 [수정 부분 2] TEST 버튼 삭제 및 D동 현황 버튼만 유지 */}
                             <PinkButton onClick={toggleMapBoard}>D동 현황</PinkButton>
                         </div>
                     </VideoHeader>

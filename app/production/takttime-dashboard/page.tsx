@@ -22,9 +22,9 @@ import {
   Maximize2,
   FileText,
   X,
-  Refrigerator,
-  Wine,
-  GlassWater,
+  Refrigerator, 
+  Settings,     
+  Layers,       
   Cpu,
   ClipboardList,
   Search,
@@ -34,7 +34,11 @@ import {
   AlertTriangle,
   Info,
   ChevronDown,
-  Check
+  Check,
+  WifiOff,
+  // [EDIT] 새로운 아이콘 추가 (와인, 물/얼음)
+  Wine,
+  GlassWater
 } from "lucide-react";
 
 // --- [1. 설정 및 데이터 상수] ---
@@ -42,13 +46,19 @@ import {
 const TARGET_TAKT = 45.0;
 const CHART_Y_MAX_LIMIT = 100;
 const REFRESH_RATE = 5000;
-const TARGET_QUANTITY = 2500;
 
+// [EDIT] 영상 링크 및 라인 정의 수정
 const VIDEO_PATHS = {
-  A: "http://1.254.24.170:24828/api/DX_API000031?videoName=223.mp4",
-  // [EDIT] 와인셀러 비디오 링크 교체 (225_2.mp4)
-  B: "http://1.254.24.170:24828/api/DX_API000031?videoName=225_2.mp4",
-  C: "http://1.254.24.170:24828/api/DX_API000031?videoName=225.mp4",
+  A: "http://1.254.24.170:24828/api/DX_API000031?videoName=223.mp4",   // 꼬모냉장고 (구 발포)
+  B: "http://1.254.24.170:24828/api/DX_API000031?videoName=224.mp4",   // 와인셀러 (구 총조립1)
+  C: "http://1.254.24.170:24828/api/DX_API000031?videoName=225_2.mp4", // 얼음정수기 (구 총조립2)
+};
+
+// [EDIT] View 모드별 KPI 데이터
+const KPI_DATA = {
+  1: { target: 36, rate: "98.7%", production: 19 },   // 꼬모냉장고
+  2: { target: 108, rate: "98.3%", production: 60 },  // 와인셀러
+  3: { target: 450, rate: "97.4%", production: 296 }  // 얼음정수기
 };
 
 const MOCK_CSV_DATA = `timestamp,message,type
@@ -104,38 +114,59 @@ const GlobalStyle = createGlobalStyle`
 const LayoutContainer = styled.div`display: flex; width: 100vw; height: calc(100vh - 64px); background-color: ${COLORS.bgPage};`;
 
 const Sidebar = styled.div`
-  width: 100px; background: ${COLORS.bgCard}; border-right: 1px solid ${COLORS.grid}; 
-  display: flex; flex-direction: column; align-items: center; padding-top: 24px; gap: 20px; z-index: 20;
+  width: 110px; // 버튼 크기에 맞춰 약간 확장
+  background: ${COLORS.bgCard}; border-right: 1px solid ${COLORS.grid}; 
+  display: flex; flex-direction: column; align-items: center; padding-top: 32px; gap: 24px; z-index: 20;
   box-shadow: 4px 0 24px rgba(0,0,0,0.02);
 `;
 
+// [EDIT] 버튼 스타일 모던하게 전면 수정
 const NavItem = styled.button<{ $active: boolean }>`
-  width: 72px; height: 72px; border-radius: 18px; 
-  border: 1px solid ${(props) => (props.$active ? "#BFDBFE" : COLORS.grid)};
-  background: ${(props) => (props.$active ? "linear-gradient(145deg, #EFF6FF 0%, #DBEAFE 100%)" : "linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 100%)")};
+  width: 80px; height: 80px; 
+  border-radius: 20px; 
+  
+  // 기본: 흰색 배경, Active: 흰색 배경 + 파란색 테두리
+  border: 2px solid ${(props) => (props.$active ? COLORS.primary : "transparent")};
+  background: #FFFFFF;
   color: ${(props) => (props.$active ? COLORS.primaryDark : COLORS.textSub)};
+  
   cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; 
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: ${(props) => props.$active ? "0 4px 12px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255,255,255,0.8)" : "0 2px 4px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,1)"};
+  transition: all 0.2s ease-in-out;
   position: relative; overflow: hidden;
 
+  // 부드러운 그림자 추가
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+
   &:hover { 
-    transform: translateY(-2px); 
-    box-shadow: 0 8px 16px rgba(0,0,0,0.08);
-    border-color: ${(props) => props.$active ? "#60A5FA" : "#CBD5E1"};
+    transform: translateY(-2px);
+    // 호버 시 배경색 및 그림자 강조
+    background: ${(props) => props.$active ? "#EFF6FF" : "#F8FAFC"};
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    color: ${COLORS.primary};
   }
   
   &:active {
-    transform: translateY(0);
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+    transform: scale(0.98);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   }
 
-  span { font-size: 11px; font-weight: 700; letter-spacing: -0.3px; text-align: center; line-height: 1.2; }
-  
-  &::after {
-    content: ''; position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; borderRadius: 50%;
-    background: ${(props) => props.$active ? COLORS.primary : "transparent"};
-    box-shadow: ${(props) => props.$active ? "0 0 6px rgba(59,130,246,0.6)" : "none"};
+  span { 
+    font-size: 12px; 
+    font-weight: 700; 
+    letter-spacing: -0.5px; 
+    text-align: center; 
+    line-height: 1.3;
+    color: ${(props) => (props.$active ? COLORS.primaryDark : COLORS.textMain)};
+  }
+
+  // 아이콘 색상 및 크기 조정
+  svg {
+    transition: all 0.2s ease;
+    color: ${(props) => (props.$active ? COLORS.primary : COLORS.textSub)};
+  }
+  &:hover svg {
+    transform: scale(1.1);
+    color: ${COLORS.primary};
   }
 `;
 
@@ -166,10 +197,26 @@ const VideoBox = styled.div<{ $isLarge?: boolean }>`
   display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; flex-shrink: 0;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
 
+  // [EDIT] 2. 비디오 라벨 개선: 왼쪽 아래 반투명 검은 박스 적용
   .label { 
-    position: absolute; bottom: 0; width: 100%; 
-    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); 
-    color: white; font-size: 0.85rem; padding: 12px 16px 8px; font-weight: 600; 
+    position: absolute; 
+    bottom: 12px; // 하단 여백
+    left: 12px;   // 좌측 여백
+    
+    // 반투명 검은색 배경 및 스타일링
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px); // (선택사항) 블러 효과로 가시성 추가 확보
+    color: white; 
+    font-size: 0.85rem; 
+    padding: 8px 16px; 
+    font-weight: 700; 
+    border-radius: 8px;
+    
+    white-space: nowrap; 
+    max-width: calc(100% - 24px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
 `;
 
@@ -353,6 +400,17 @@ const LoadingText = styled.div`
 `;
 const SubText = styled.div`font-size: 0.85rem; color: ${COLORS.textSub}; margin-top: 4px; font-weight: 500;`;
 
+// [EDIT] 데이터 없음(No Data) 컨테이너 스타일 추가
+const NoDataContainer = styled.div`
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: #F8FAFC; border-radius: 12px; border: 2px dashed ${COLORS.grid};
+  color: ${COLORS.textSub}; gap: 12px; text-align: center;
+  
+  .msg { font-size: 0.95rem; font-weight: 700; color: ${COLORS.textMain}; }
+  .sub-msg { font-size: 0.8rem; font-weight: 500; opacity: 0.8; }
+`;
+
 const modalVariants: Variants = {
   initial: { opacity: 0, scale: 0.95, y: 20 },
   animate: { opacity: 1, scale: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 30 } },
@@ -380,6 +438,19 @@ const VideoPlayer = memo(({ src }: { src: string }) => {
 }, (prev, next) => prev.src === next.src);
 
 const MonitorChart = memo(({ data }: { data: CycleData[] }) => {
+  // [EDIT] 데이터가 없을 경우 (밤, 비가동) 안내 UI 표시
+  if (!data || data.length === 0) {
+      return (
+          <NoDataContainer>
+              <WifiOff size={36} strokeWidth={1.5} color={COLORS.textSub} />
+              <div>
+                  <div className="msg">현재 데이터가 정상적으로<br/>전송되고 있지 않습니다.</div>
+                  <div className="sub-msg">(설비 비가동 또는 네트워크 연결 대기 중)</div>
+              </div>
+          </NoDataContainer>
+      );
+  }
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <ComposedChart data={data} margin={{ top: 30, right: 20, left: -20, bottom: 0 }}>
@@ -407,8 +478,7 @@ export default function ProcessDashboard() {
   const [data, setData] = useState<{A: CycleData[], B: CycleData[], C: CycleData[]}>({ A: [], B: [], C: [] });
   const [alertLogs, setAlertLogs] = useState<LogData[]>([]);
   const [showLogModal, setShowLogModal] = useState(false);
-  const [totalProduction, setTotalProduction] = useState(0);
-
+  
   // Search & Filter
   const [searchText, setSearchText] = useState("");
   const [filterType, setFilterType] = useState<'all' | 'error' | 'warning' | 'success'>('all');
@@ -421,7 +491,7 @@ export default function ProcessDashboard() {
     setTimeout(() => {
         setViewMode(newMode);
         setTimeout(() => {
-             setIsTransitioning(false);
+          setIsTransitioning(false);
         }, 800);
     }, 50);
   }, [viewMode]);
@@ -453,11 +523,10 @@ export default function ProcessDashboard() {
         const json: ApiResponse = await response.json();
         if (json.success) {
           setData({
-            A: processData(json.history_data["223"]),
-            B: processData(json.history_data["224"]),
-            C: processData(json.history_data["225"]),
+            A: processData(json.history_data["223"]), // 꼬모
+            B: processData(json.history_data["224"]), // 와인
+            C: processData(json.history_data["225"]), // 얼음
           });
-          setTotalProduction(json.recent_data.reduce((acc, cur) => acc + parseInt(cur.COUNT_NUM), 0));
         }
       } catch (error) { console.error("API Error", error); }
     };
@@ -471,7 +540,6 @@ export default function ProcessDashboard() {
   }, []);
 
   const getSlicedData = (lineData: CycleData[]) => {
-      // 이미 20% 정도 덜 보이게 수정된 상태 (0.5로 슬라이스)
       const sliceCount = Math.floor(lineData.length * 0.5); 
       return lineData.slice(-sliceCount); 
   };
@@ -484,9 +552,9 @@ export default function ProcessDashboard() {
 
   const avgTakts = useMemo(() => {
     const calcAvg = (arr: CycleData[]) => {
-       const validData = arr.filter(d => d.cycleTime < 300); 
-       if(validData.length === 0) return "0.0";
-       return (validData.reduce((acc, cur) => acc + cur.cycleTime, 0) / validData.length).toFixed(1);
+      const validData = arr.filter(d => d.cycleTime < 300); 
+      if(validData.length === 0) return "0.0";
+      return (validData.reduce((acc, cur) => acc + cur.cycleTime, 0) / validData.length).toFixed(1);
     };
     return { A: calcAvg(data.A), B: calcAvg(data.B), C: calcAvg(data.C) };
   }, [data]);
@@ -500,19 +568,22 @@ export default function ProcessDashboard() {
       }
   };
 
+  const currentKpi = KPI_DATA[viewMode];
+
   return (
     <>
       <GlobalStyle />
       <LayoutContainer>
         <Sidebar>
+          {/* [EDIT] 버튼 텍스트 및 아이콘 수정 */}
           <NavItem $active={viewMode === 1} onClick={() => handleViewChange(1)}>
-            <Refrigerator size={22} strokeWidth={2.5} /><span>꼬모<br/>냉장고</span>
+            <Refrigerator size={24} strokeWidth={2} /><span>꼬모<br/>냉장고</span>
           </NavItem>
           <NavItem $active={viewMode === 2} onClick={() => handleViewChange(2)}>
-            <Wine size={22} strokeWidth={2.5} /><span>와인<br/>셀러</span>
+            <Wine size={24} strokeWidth={2} /><span>와인<br/>셀러</span>
           </NavItem>
           <NavItem $active={viewMode === 3} onClick={() => handleViewChange(3)}>
-            <GlassWater size={22} strokeWidth={2.5} /><span>얼음<br/>정수기</span>
+            <GlassWater size={24} strokeWidth={2} /><span>얼음<br/>정수기</span>
           </NavItem>
         </Sidebar>
 
@@ -542,27 +613,29 @@ export default function ProcessDashboard() {
 
           <DashboardBody>
             <ChartSection>
+                {/* [EDIT] 원래 코드처럼 비디오 갯수 유지 (View 1, 2는 2개씩 / View 3은 3개) */}
+                
                 {viewMode === 1 && (
                   <ViewContainer key="view-1">
-                      {/* [EDIT] View 1: 와인셀러(B) + 얼음정수기(C) */}
+                      {/* View 1: 꼬모냉장고(A) 및 와인셀러(B) */}
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.B} />
-                          <div className="label">와인셀러 (라인 B)</div>
+                          <VideoPlayer src={VIDEO_PATHS.A} />
+                          <div className="label">꼬모냉장고 라인</div>
                         </VideoBox>
                         <ChartWrapper>
-                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                           <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
+                          <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.A} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.C} />
-                          <div className="label">얼음정수기 (라인 C)</div>
+                          <VideoPlayer src={VIDEO_PATHS.B} />
+                          <div className="label">와인셀러 라인</div>
                         </VideoBox>
                         <ChartWrapper>
-                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                           <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.C} /></div>
+                          <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                   </ViewContainer>
@@ -570,25 +643,25 @@ export default function ProcessDashboard() {
 
                 {viewMode === 2 && (
                   <ViewContainer key="view-2">
-                      {/* [EDIT] View 2: 와인셀러(B) + 얼음정수기(C) [View 1과 동일] */}
+                      {/* View 2: 와인셀러(B) 및 얼음정수기(C) */}
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
                           <VideoPlayer src={VIDEO_PATHS.B} />
-                          <div className="label">와인셀러 (라인 B)</div>
+                          <div className="label">와인셀러 라인</div>
                         </VideoBox>
                         <ChartWrapper>
-                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                           <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
+                          <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
                           <VideoPlayer src={VIDEO_PATHS.C} />
-                          <div className="label">얼음정수기 (라인 C)</div>
+                          <div className="label">얼음정수기 라인</div>
                         </VideoBox>
                         <ChartWrapper>
-                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                           <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.C} /></div>
+                          <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.C} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                   </ViewContainer>
@@ -596,14 +669,15 @@ export default function ProcessDashboard() {
 
                 {viewMode === 3 && (
                   <ViewContainer key="view-3">
+                      {/* View 3: 전체 보기 (A, B, C) */}
                       <MultiChartCard>
                         <VideoBox $isLarge={false}>
                           <VideoPlayer src={VIDEO_PATHS.A} />
                           <div className="label">꼬모냉장고</div>
                         </VideoBox>
                         <ChartWrapper>
-                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                           <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.A} /></div>
+                          <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.A} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                       <MultiChartCard>
@@ -612,8 +686,8 @@ export default function ProcessDashboard() {
                           <div className="label">와인셀러</div>
                         </VideoBox>
                         <ChartWrapper>
-                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                           <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
+                          <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                       <MultiChartCard>
@@ -622,8 +696,8 @@ export default function ProcessDashboard() {
                           <div className="label">얼음정수기</div>
                         </VideoBox>
                         <ChartWrapper>
-                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                           <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.C} /></div>
+                          <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.C} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                   </ViewContainer>
@@ -632,75 +706,73 @@ export default function ProcessDashboard() {
 
             <InfoSection>
               <KpiStack>
-                 <KpiCard $borderColor={COLORS.borderPurple}>
-                    <div className="text-group">
-                        <div className="label">금일 작업지시 수량</div>
-                        <div className="value">{TARGET_QUANTITY.toLocaleString()}</div>
-                    </div>
-                    <div className="icon-box"><ClipboardList size={22} strokeWidth={2.5} /></div>
-                 </KpiCard>
-                 <KpiCard $borderColor={COLORS.borderBlue}>
-                    <div className="text-group">
-                        <div className="label">종합 가동률</div>
-                        <div className="value">98.2%</div>
-                    </div>
-                    <div className="icon-box"><TrendingUp size={22} strokeWidth={2.5} /></div>
-                 </KpiCard>
-                 <KpiCard $borderColor={COLORS.borderGreen}>
-                    <div className="text-group">
-                        <div className="label">현재 총 생산량</div>
-                        <div className="value" style={{ color: COLORS.success }}>{totalProduction}</div>
-                    </div>
-                    <div className="icon-box" style={{background: '#F0FDF4', color: COLORS.success}}><Cpu size={22} strokeWidth={2.5} /></div>
-                 </KpiCard>
+                <KpiCard $borderColor={COLORS.borderPurple}>
+                  <div className="text-group">
+                      <div className="label">금일 작업지시 수량</div>
+                      <div className="value">{currentKpi.target.toLocaleString()}</div>
+                  </div>
+                  <div className="icon-box"><ClipboardList size={22} strokeWidth={2.5} /></div>
+                </KpiCard>
+                <KpiCard $borderColor={COLORS.borderBlue}>
+                  <div className="text-group">
+                      <div className="label">종합 가동률</div>
+                      <div className="value">{currentKpi.rate}</div>
+                  </div>
+                  <div className="icon-box"><TrendingUp size={22} strokeWidth={2.5} /></div>
+                </KpiCard>
+                <KpiCard $borderColor={COLORS.borderGreen}>
+                  <div className="text-group">
+                      <div className="label">현재 총 생산량</div>
+                      <div className="value" style={{ color: COLORS.success }}>{currentKpi.production}</div>
+                  </div>
+                  <div className="icon-box" style={{background: '#F0FDF4', color: COLORS.success}}><Cpu size={22} strokeWidth={2.5} /></div>
+                </KpiCard>
               </KpiStack>
 
-              <WideKpiCard $height={viewMode === 1 ? 160 : viewMode === 2 ? 160 : 200}>
-                {viewMode === 1 ? (
-                  <TaktGrid $rows={2}>
-                    {/* [EDIT] View 1 KPI: B & C */}
-                    <TaktBox $isSingle={false}>
-                      <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
-                      <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
-                    </TaktBox>
-                    <TaktBox $isSingle={false}>
-                      <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
-                      <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
-                    </TaktBox>
-                  </TaktGrid>
-                ) : (
-                  <TaktGrid $rows={viewMode}>
-                    {viewMode === 2 ? (
-                        <>
-                        {/* [EDIT] View 2 KPI: B & C (View 1과 동일하게 수정) */}
-                        <TaktBox $isSingle={false}>
-                          <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
-                          <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
-                        </TaktBox>
-                        <TaktBox $isSingle={false}>
-                          <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
-                          <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
-                        </TaktBox>
-                        </>
-                    ) : (
-                        <>
-                        {/* View 3 (All 3) */}
-                        <TaktBox $isSingle={false}>
-                          <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.primary}}/> 꼬모냉장고</span>
-                          <div className="val-group"><span className="takt-val">{avgTakts.A}s</span></div>
-                        </TaktBox>
-                        <TaktBox $isSingle={false}>
-                          <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
-                          <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
-                        </TaktBox>
-                        <TaktBox $isSingle={false}>
-                            <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
-                            <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
-                        </TaktBox>
-                        </>
-                    )}
-                  </TaktGrid>
-                )}
+              <WideKpiCard $height={viewMode === 3 ? 200 : 160}>
+                  {/* View 1: 2행 (A, B) */}
+                  {viewMode === 1 && (
+                    <TaktGrid $rows={2}>
+                      <TaktBox $isSingle={false}>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.primary}}/> 꼬모냉장고</span>
+                        <div className="val-group"><span className="takt-val">{avgTakts.A}s</span></div>
+                      </TaktBox>
+                      <TaktBox $isSingle={false}>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
+                        <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
+                      </TaktBox>
+                    </TaktGrid>
+                  )}
+                  {/* View 2: 2행 (B, C) */}
+                  {viewMode === 2 && (
+                    <TaktGrid $rows={2}>
+                      <TaktBox $isSingle={false}>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
+                        <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
+                      </TaktBox>
+                      <TaktBox $isSingle={false}>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
+                        <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
+                      </TaktBox>
+                    </TaktGrid>
+                  )}
+                  {/* View 3: 3행 (A, B, C) */}
+                  {viewMode === 3 && (
+                    <TaktGrid $rows={3}>
+                      <TaktBox $isSingle={false}>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.primary}}/> 꼬모냉장고</span>
+                        <div className="val-group"><span className="takt-val">{avgTakts.A}s</span></div>
+                      </TaktBox>
+                      <TaktBox $isSingle={false}>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
+                        <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
+                      </TaktBox>
+                      <TaktBox $isSingle={false}>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
+                        <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
+                      </TaktBox>
+                    </TaktGrid>
+                  )}
               </WideKpiCard>
 
               <AlertSection>
@@ -746,59 +818,59 @@ export default function ProcessDashboard() {
                 </div>
                 
                 <div className="modal-toolbar">
-                   <div className="search-box">
+                    <div className="search-box">
                       <Search size={16} />
                       <input 
                         placeholder="로그 검색 (예: '자재 부족', '오류')" 
                         value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
                       />
-                   </div>
-                   
-                   <div className="filter-wrapper">
-                       <button 
+                    </div>
+                    
+                    <div className="filter-wrapper">
+                        <button 
                           className={`filter-btn ${filterType !== 'all' ? 'active' : ''}`} 
                           onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
                         >
                           <Filter size={14} /> {getFilterLabel()} <ChevronDown size={14} />
-                       </button>
+                        </button>
 
-                       <AnimatePresence>
-                         {isFilterMenuOpen && (
-                           <FilterMenu 
+                        <AnimatePresence>
+                          {isFilterMenuOpen && (
+                            <FilterMenu 
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: 10 }}
                               transition={{ duration: 0.15 }}
-                           >
-                             <FilterOption 
+                            >
+                              <FilterOption 
                                 $selected={filterType === 'all'} 
                                 onClick={() => { setFilterType('all'); setIsFilterMenuOpen(false); }}
-                             >
-                               전체 보기 {filterType === 'all' && <Check size={14} />}
-                             </FilterOption>
-                             <FilterOption 
+                              >
+                                전체 보기 {filterType === 'all' && <Check size={14} />}
+                              </FilterOption>
+                              <FilterOption 
                                 $selected={filterType === 'error'} 
                                 onClick={() => { setFilterType('error'); setIsFilterMenuOpen(false); }}
-                             >
-                               오류 (Error) {filterType === 'error' && <Check size={14} />}
-                             </FilterOption>
-                             <FilterOption 
+                              >
+                                오류 (Error) {filterType === 'error' && <Check size={14} />}
+                              </FilterOption>
+                              <FilterOption 
                                 $selected={filterType === 'warning'} 
                                 onClick={() => { setFilterType('warning'); setIsFilterMenuOpen(false); }}
-                             >
-                               경고 (Warning) {filterType === 'warning' && <Check size={14} />}
-                             </FilterOption>
-                             <FilterOption 
+                              >
+                                경고 (Warning) {filterType === 'warning' && <Check size={14} />}
+                              </FilterOption>
+                              <FilterOption 
                                 $selected={filterType === 'success'} 
                                 onClick={() => { setFilterType('success'); setIsFilterMenuOpen(false); }}
-                             >
-                               정보 (Info) {filterType === 'success' && <Check size={14} />}
-                             </FilterOption>
-                           </FilterMenu>
-                         )}
-                       </AnimatePresence>
-                   </div>
+                              >
+                                정보 (Info) {filterType === 'success' && <Check size={14} />}
+                              </FilterOption>
+                            </FilterMenu>
+                          )}
+                        </AnimatePresence>
+                    </div>
                 </div>
 
                 <div className="modal-body">

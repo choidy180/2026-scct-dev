@@ -1,31 +1,48 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Layers, ZoomIn, X, RefreshCw, ImageOff, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { 
+    Layers, ZoomIn, X, RefreshCw, Monitor, Clock, 
+    CheckCircle2, XCircle, Volume2, VolumeX, Siren 
+} from 'lucide-react';
 
-// ─── [CONFIG] 디자인 테마 시스템 ───
-const THEME = {
-  bg: '#F8FAFC',          // 전체 배경
-  white: '#FFFFFF',       // 카드 배경
-  border: '#E2E8F0',      // 중립적인 테두리 색상
-  textPrimary: '#0F172A', // 진한 글씨
-  textSecondary: '#64748B', // 연한 글씨
-  
-  // 상태별 컬러 (아이콘 및 텍스트용)
-  status: {
-    ok: {
-      bg: '#ECFDF5',      // 아이콘 배경 (연한 초록)
-      text: '#059669',    // 텍스트 색상 (진한 초록)
+// ─── [CONFIG] 설정 및 테마 ───
+type ScreenMode = 'FHD' | 'QHD';
+
+const LAYOUT_CONFIGS = {
+    FHD: {
+        padding: '24px',
+        gap: '20px',
+        headerHeight: '110px',
+        fontSize: { title: '20px', sub: '14px', badge: '13px', metaLabel: '12px', metaValue: '15px' },
+        iconSize: 20,
+        borderRadius: '16px',
     },
-    ng: {
-      bg: '#FEF2F2',      // 아이콘 배경 (연한 빨강)
-      text: '#DC2626',    // 텍스트 색상 (진한 빨강)
-    },
-    wait: {
-      bg: '#F1F5F9',
-      text: '#94A3B8',
+    QHD: {
+        padding: '40px',
+        gap: '32px',
+        headerHeight: '140px',
+        fontSize: { title: '28px', sub: '18px', badge: '16px', metaLabel: '14px', metaValue: '18px' },
+        iconSize: 28,
+        borderRadius: '24px',
     }
-  }
+};
+
+const theme = {
+    bg: '#F8FAFC',
+    cardBg: '#FFFFFF',
+    textPrimary: '#1E293B',
+    textSecondary: '#64748B',
+    accent: '#3B82F6',
+    success: '#059669',
+    danger: '#DC2626',
+    border: '#E2E8F0',
+    shadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+    status: {
+        ok: { bg: '#ECFDF5', text: '#059669', border: '#10B981' },
+        ng: { bg: '#FEF2F2', text: '#DC2626', border: '#EF4444' },
+        wait: { bg: '#F1F5F9', text: '#94A3B8', border: '#CBD5E1' }
+    }
 };
 
 interface ApiData {
@@ -34,12 +51,11 @@ interface ApiData {
     FILEPATH1: string;
     CDGITEM: string | null;
     COUNT_NUM: string | null;
-    RESULT: string;       
+    RESULT: string;
     STATUS002: string;
 }
 
-// ─── [GLOBAL STYLES] ───
-// 맥박 애니메이션은 유지하되, 테두리 색상이 아닌 그림자만 은은하게 사용
+// ─── [GLOBAL STYLES] 애니메이션 ───
 const GlobalStyles = () => (
     <style jsx global>{`
         @keyframes pulse-green-soft {
@@ -53,261 +69,338 @@ const GlobalStyles = () => (
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .spin-icon { animation: spin 2s linear infinite; }
         .animate-ok { animation: pulse-green-soft 2s infinite; }
         .animate-ng { animation: pulse-red-soft 2s infinite; }
+        .animate-spin { animation: spin 2s linear infinite; }
     `}</style>
 );
 
-// ─── [COMPONENTS] ───
+// ─── [UI COMPONENTS] ───
 
-// [수정 1] 판정 박스: 두꺼운 테두리와 우측 컬러바 제거. 심플한 디자인 적용.
-const StatusCard = ({ result }: { result: string | undefined }) => {
-    const isPass = result === "정상" || result?.toUpperCase() === "OK";
-    const isFail = !isPass && !!result;
-    
-    let currentStyle = THEME.status.wait;
+const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => void }) => (
+    <button
+        onClick={onClick}
+        style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '8px 16px', borderRadius: '12px',
+            border: isOn ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
+            backgroundColor: isOn ? '#EFF6FF' : '#F1F5F9',
+            color: isOn ? theme.accent : theme.textSecondary,
+            cursor: 'pointer', outline: 'none', transition: 'all 0.2s', marginLeft: 'auto'
+        }}
+    >
+        {isOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
+        <span style={{ fontSize: '12px', fontWeight: 700 }}>{isOn ? 'ON' : 'MUTE'}</span>
+    </button>
+);
+
+const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: any, data: ApiData | null, isSoundOn: boolean, onToggleSound: () => void }) => {
+    // 판정 결과 로직 ("정상" or "OK" -> PASS)
+    const resultVal = data?.RESULT || '';
+    const isPass = resultVal === "정상" || resultVal.toUpperCase() === "OK";
+    const isFail = !isPass && !!resultVal;
+
+    let style = theme.status.wait;
     let Icon = Clock;
-    let label = "대기중";
-    let subLabel = "WAITING";
+    let label = "READY";
+    let subLabel = "SYSTEM STANDBY";
     let animClass = "";
 
     if (isPass) {
-        currentStyle = THEME.status.ok;
+        style = theme.status.ok;
         Icon = CheckCircle2;
-        label = "정상 (OK)";
+        label = "OK (정상)";
         subLabel = "PASSED";
         animClass = "animate-ok";
     } else if (isFail) {
-        currentStyle = THEME.status.ng;
+        style = theme.status.ng;
         Icon = XCircle;
-        label = "불량 (NG)";
+        label = "NG (불량)";
         subLabel = "FAILED";
         animClass = "animate-ng";
     }
 
+    const timeValue = data?.TIMEVALUE || '00:00:00';
+    const countValue = data?.COUNT_NUM || '0';
+    const modelValue = data?.CDGITEM || '-';
+    const woValue = data?.STATUS002 || '-';
+
     return (
-        <div className={animClass} style={{
-            width: '280px',
-            backgroundColor: THEME.white,
-            borderRadius: '16px',
-            // [수정] 테두리를 중립적인 색상으로 변경
-            border: `1px solid ${THEME.border}`,
-            display: 'flex', alignItems: 'center', padding: '0 24px', gap: '20px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-            flexShrink: 0,
-            position: 'relative', overflow: 'hidden'
-        }}>
-            {/* 왼쪽: 아이콘 영역 */}
-            <div style={{
-                width: '64px', height: '64px', borderRadius: '50%',
-                backgroundColor: currentStyle.bg,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: currentStyle.text, flexShrink: 0
+        <div style={{ display: 'flex', gap: layout.gap, height: layout.headerHeight, marginBottom: layout.gap, flexShrink: 0 }}>
+            {/* 1. 로고 영역 (Layers 아이콘 사용) */}
+            <div style={{ 
+                width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
+                display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
+                boxShadow: theme.shadow
             }}>
-                <Icon size={36} strokeWidth={2.5} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Layers size={28} color={theme.accent} />
+                        <span style={{ fontSize: '22px', fontWeight: 800, color: theme.textPrimary }}>Estify<span style={{color:theme.accent}}>Vision</span></span>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: theme.textSecondary, fontWeight: 600 }}>필름부착확인</span>
+                    <SoundControlButton isOn={isSoundOn} onClick={onToggleSound} />
+                </div>
             </div>
 
-            {/* 오른쪽: 텍스트 영역 */}
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <span style={{ fontSize: '13px', color: THEME.textSecondary, fontWeight: 600, letterSpacing: '0.5px', marginBottom: '4px' }}>
-                    판정 결과
-                </span>
-                <span style={{ fontSize: '26px', color: currentStyle.text, fontWeight: 800, lineHeight: 1 }}>
-                    {label}
-                </span>
-                <span style={{ fontSize: '14px', color: '#94A3B8', fontWeight: 500, marginTop: '4px' }}>
-                    {subLabel}
-                </span>
+            {/* 2. 판정 결과 박스 */}
+            <div className={animClass} style={{
+                width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
+                display: 'flex', alignItems: 'center', padding: '0 32px', gap: '24px', position: 'relative', overflow: 'hidden',
+                boxShadow: theme.shadow
+            }}>
+                <div style={{
+                    width: '64px', height: '64px', borderRadius: '50%', backgroundColor: style.bg,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: style.text, flexShrink: 0
+                }}>
+                    <Icon size={36} strokeWidth={2.5} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '13px', color: theme.textSecondary, fontWeight: 600 }}>TOTAL RESULT</span>
+                    <span style={{ fontSize: '28px', color: style.text, fontWeight: 800, lineHeight: 1.1 }}>{label}</span>
+                    <span style={{ fontSize: '13px', color: '#94A3B8', fontWeight: 500 }}>{subLabel}</span>
+                </div>
             </div>
-            {/* [수정] 우측 컬러바 제거됨 */}
+
+            {/* 3. 정보 테이블 */}
+            <div style={{ 
+                flex: 1, backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
+                display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: theme.shadow
+            }}>
+                <div style={{ display: 'flex', width: '100%', height: '40%', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${theme.border}` }}>
+                    <InfoHeaderCell text="검사 시간" />
+                    <InfoHeaderCell text="생산 수량" />
+                    <InfoHeaderCell text="모델명 / 작업지시번호" />
+                    <InfoHeaderCell text="현재 상태" isLast />
+                </div>
+                <div style={{ display: 'flex', width: '100%', height: '60%' }}>
+                    <InfoValueCell text={timeValue} />
+                    <InfoValueCell text={`${countValue} EA`} />
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${theme.border}` }}>
+                         <span style={{fontSize: '15px', fontWeight: 700, color: theme.textPrimary}}>{modelValue}</span>
+                         <span style={{fontSize: '11px', fontWeight: 500, color: theme.textSecondary}}>{woValue}</span>
+                    </div>
+                    <InfoValueCell text="RUNNING" isLast color={theme.accent} />
+                </div>
+            </div>
         </div>
     );
 };
 
-// 2. 정보 테이블 (변경 없음)
-const InfoTable = ({ data }: { data: ApiData | null }) => {
-    const tableContainerStyle: React.CSSProperties = {
-        flex: 1, backgroundColor: THEME.white,
-        borderRadius: '16px', border: `1px solid ${THEME.border}`,
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-    };
-    const headerCellStyle: React.CSSProperties = {
-        flex: 1, backgroundColor: '#F1F5F9', color: THEME.textSecondary,
-        fontSize: '14px', fontWeight: 700, textAlign: 'center', padding: '12px 0',
-        borderRight: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center'
-    };
-    const valueCellStyle: React.CSSProperties = {
-        flex: 1, backgroundColor: THEME.white, color: THEME.textPrimary,
-        fontSize: '18px', fontWeight: 600, textAlign: 'center', padding: '16px 0',
-        borderRight: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderTop: '1px solid #E2E8F0'
-    };
-    const safe = (v: any) => v || '-';
+const InfoHeaderCell = ({ text, isLast }: { text: string, isLast?: boolean }) => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: theme.textSecondary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
+);
+const InfoValueCell = ({ text, isLast, color }: { text: string, isLast?: boolean, color?: string }) => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: color || theme.textPrimary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
+);
 
-    return (
-        <div style={tableContainerStyle}>
-            <div style={{ display: 'flex', width: '100%' }}>
-                <div style={headerCellStyle}>작업지시번호</div>
-                <div style={headerCellStyle}>모델명</div>
-                <div style={{ ...headerCellStyle, borderRight: 'none' }}>No.</div>
+const AutoFitImage = ({ src, alt, onZoom }: { src: string | undefined, alt: string, onZoom: () => void }) => (
+    <div style={{ 
+        width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', 
+        backgroundColor: '#F8FAFC', borderRadius: '12px', overflow: 'hidden', position: 'relative',
+        border: `1px solid ${theme.border}`
+    }}>
+        {src ? (
+             <img src={src} alt={alt} style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', filter: 'drop-shadow(0 10px 30px rgba(0,0,0,0.05))' }} />
+        ) : (
+            <div style={{display:'flex', flexDirection:'column', alignItems:'center', color: theme.textSecondary, gap: '12px'}}>
+                 <RefreshCw className="animate-spin" size={32} color="#CBD5E1" />
+                 <span style={{fontWeight: 500, color: '#9CA3AF'}}>이미지 수신 대기 중...</span>
             </div>
-            <div style={{ display: 'flex', width: '100%', flex: 1 }}>
-                <div style={valueCellStyle}>{safe(data?.STATUS002)}</div>
-                <div style={valueCellStyle}>{safe(data?.CDGITEM)}</div>
-                <div style={{ ...valueCellStyle, borderRight: 'none' }}>{safe(data?.COUNT_NUM)}</div>
-            </div>
-        </div>
-    );
-};
+        )}
+        
+        {src && (
+            <button 
+                onClick={(e) => { e.stopPropagation(); onZoom(); }}
+                style={{
+                    position: 'absolute', bottom: '24px', right: '24px',
+                    backgroundColor: '#FFFFFF', width: '48px', height: '48px', borderRadius: '14px',
+                    border: `1px solid ${theme.border}`, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform 0.2s',
+                    color: theme.textPrimary
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+            >
+                <ZoomIn size={22} strokeWidth={2} />
+            </button>
+        )}
+    </div>
+);
 
-// [수정 2] 이미지 모달: 이미지가 박스 밖으로 튀어나가는 현상 수정
-const ImageModal = ({ isOpen, onClose, imgUrl }: any) => {
+const ModalCloseButton = ({ onClick }: any) => (
+    <button onClick={onClick} style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: '#F1F5F9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <X size={24} color={theme.textPrimary} />
+    </button>
+);
+
+const ImageModal = ({ isOpen, onClose, title, imgUrl }: { isOpen: boolean, onClose: () => void, title: string, imgUrl: string }) => {
     if (!isOpen) return null;
     return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
-        }} onClick={onClose}>
-            <div style={{ 
-                width: '100%', maxWidth: '1200px', height: '90vh', background: '#fff', borderRadius: '16px', padding: '20px', 
-                display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative'
-            }} onClick={e => e.stopPropagation()}>
-                
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+            <div style={{ width: '90vw', height: '90vh', backgroundColor: '#FFFFFF', borderRadius: '24px', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }} onClick={(e) => e.stopPropagation()}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                     <span style={{fontSize: '18px', fontWeight: 700, color: THEME.textPrimary}}>이미지 상세 보기</span>
-                    <button onClick={onClose} style={{ border: 'none', background: '#F1F5F9', padding: '8px', borderRadius: '50%', cursor: 'pointer' }}>
-                        <X size={24} color={THEME.textPrimary} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <ZoomIn size={24} />
+                        <span style={{ fontSize: '24px', fontWeight: 800 }}>{title}</span>
+                    </div>
+                    <ModalCloseButton onClick={onClose} />
                 </div>
-
-                {/* [수정] overflow: hidden 및 명확한 크기 제한 적용 */}
-                <div style={{ 
-                    flex: 1, background: '#0F172A', borderRadius: '12px', 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    overflow: 'hidden', // 중요: 이미지가 튀어나가지 않도록 함
-                    width: '100%', height: '100%'
-                }}>
-                    {imgUrl ? (
-                        <img src={imgUrl} style={{ 
-                            maxWidth: '100%', maxHeight: '100%', 
-                            objectFit: 'contain', // 비율 유지하며 컨테이너에 맞춤
-                            width: 'auto', height: 'auto' 
-                        }} alt="Full Detail" />
-                    ) : (
-                         <span style={{color: 'white'}}>이미지를 불러올 수 없습니다.</span>
-                    )}
+                <div style={{ flex: 1, borderRadius: '16px', overflow: 'hidden', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${theme.border}` }}>
+                    <img src={imgUrl} alt="Detail" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                 </div>
             </div>
         </div>
     );
 };
 
-// ─── [MAIN PAGE] ───
+const SoundPermissionModal = ({ onConfirm }: { onConfirm: () => void }) => (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ backgroundColor: '#FFFFFF', padding: '48px', borderRadius: '28px', width: '90%', maxWidth: '420px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <div style={{ width: '88px', height: '88px', borderRadius: '50%', backgroundColor: '#FEF2F2', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Siren size={44} color={theme.danger} />
+            </div>
+            <div>
+                <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px' }}>불량 알림 권한 요청</h2>
+                <p style={{ color: '#6B7280' }}>부착 불량이 감지되었습니다.<br />경고음을 켜시겠습니까?</p>
+            </div>
+            <button onClick={onConfirm} style={{ width: '100%', padding: '16px', borderRadius: '14px', border: 'none', background: theme.danger, color: 'white', fontSize: '16px', fontWeight: 700, cursor: 'pointer' }}>
+                네, 경고음 켜기
+            </button>
+        </div>
+    </div>
+);
+
+// ─── [MAIN COMPONENT] ───
+
 export default function FilmAttachmentCheck() {
-    const [apiData, setApiData] = useState<ApiData | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [apiData, setApiData] = useState<ApiData | null>(null);
+
+    // 사운드 관련 상태
+    const [isDefectMode, setIsDefectMode] = useState(false);
+    const [audioAllowed, setAudioAllowed] = useState(false);
+    const [showPermissionModal, setShowPermissionModal] = useState(false);
+    const audioCtxRef = useRef<AudioContext | null>(null);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     const fetchData = useCallback(async () => {
-        setIsLoading(true);
         try {
             const response = await fetch("http://1.254.24.170:24828/api/DX_API000027");
             const json = await response.json();
+            
             if (json.success && json.data && json.data.length > 0) {
-                setApiData(json.data[0]);
-            } else {
-                setApiData(null);
+                const data = json.data[0];
+                setApiData(data);
+
+                // 판정 로직: "정상" 또는 "OK" 가 아니면 불량으로 간주
+                const resultVal = data.RESULT;
+                const isPass = resultVal === "정상" || resultVal === "OK";
+                const hasError = !isPass && !!resultVal;
+                
+                setIsDefectMode(hasError);
+                if (hasError && !audioAllowed && !showPermissionModal && !audioCtxRef.current) {
+                    setShowPermissionModal(true);
+                }
             }
-        } catch (error) { console.error(error); } 
-        finally { setIsLoading(false); }
+        } catch (error) {
+            console.error("API Fetch Error:", error);
+        }
+    }, [audioAllowed, showPermissionModal]);
+
+    // 주기적 호출
+    useEffect(() => {
+        fetchData();
+        const id = setInterval(fetchData, 3000);
+        return () => clearInterval(id);
+    }, [fetchData]);
+
+    // 사운드 재생 로직
+    useEffect(() => {
+        if (isDefectMode && audioAllowed) {
+            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+            if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+
+            const playBeep = () => {
+                const ctx = audioCtxRef.current;
+                if (!ctx) return;
+                if (ctx.state === 'suspended') ctx.resume();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.15);
+                osc.stop(ctx.currentTime + 0.15);
+            };
+            playBeep();
+            intervalRef.current = setInterval(playBeep, 500);
+        } else {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        }
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, [isDefectMode, audioAllowed]);
+
+    useEffect(() => {
+        const handleResize = () => setScreenMode(window.innerWidth > 2200 ? 'QHD' : 'FHD');
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    const layout = LAYOUT_CONFIGS[screenMode];
+    
+    // 테두리 스타일
+    const isPass = apiData?.RESULT === "정상" || apiData?.RESULT === "OK";
+    const borderStyle = (apiData && !isPass && apiData.RESULT) ? `2px solid ${theme.danger}` : `1px solid ${theme.border}`;
 
     return (
-        <>
+        <div style={{ 
+            backgroundColor: theme.bg, boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
+            fontFamily: '"Inter", -apple-system, sans-serif', width: '100%', height: 'calc(100vh - 64px)', padding: layout.padding
+        }}>
             <GlobalStyles />
+            {showPermissionModal && <SoundPermissionModal onConfirm={() => { setAudioAllowed(true); setShowPermissionModal(false); }} />}
+            <ImageModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Film Attachment Detail" imgUrl={apiData?.FILEPATH1 || ''} />
+
+            <DashboardHeader layout={layout} data={apiData} isSoundOn={audioAllowed} onToggleSound={() => setAudioAllowed(!audioAllowed)} />
+
+            {/* 메인 콘텐츠 영역 */}
             <div style={{ 
-                width: '100%', height: 'calc(100vh - 64px)', padding: '32px', backgroundColor: THEME.bg,
-                fontFamily: '"Pretendard", -apple-system, sans-serif', boxSizing: 'border-box',
-                display: 'flex', flexDirection: 'column'
+                flex: 1, display: 'flex', flexDirection: 'column', 
+                backgroundColor: theme.cardBg, borderRadius: '24px',
+                boxShadow: theme.shadow, padding: '24px', minHeight: 0,
+                border: borderStyle,
+                transition: 'border 0.3s'
             }}>
-                <ImageModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} imgUrl={apiData?.FILEPATH1} />
-
-                {/* 헤더 */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', height: '60px', flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ padding: '12px', background: THEME.white, borderRadius: '12px', border: `1px solid ${THEME.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
-                            <Layers size={24} color="#3B82F6" />
-                        </div>
-                        <div>
-                            <h1 style={{ fontSize: '24px', fontWeight: 800, color: THEME.textPrimary, margin: 0, letterSpacing: '-0.5px' }}>필름 부착 확인</h1>
-                            <span style={{ fontSize: '14px', color: THEME.textSecondary, fontWeight: 500 }}>Vision Inspection System</span>
-                        </div>
-                    </div>
-                    <div style={{ 
-                        padding: '10px 24px', background: '#1E293B', color: '#FFF', borderRadius: '12px',
-                        fontWeight: 700, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' 
-                    }}>
-                        <RefreshCw size={18} className={isLoading ? "spin-icon" : ""} />
-                        {apiData?.TIMEVALUE || "00:00:00"}
-                    </div>
-                </div>
-
-                {/* 메인 컨텐츠 */}
-                <div style={{ 
-                    flex: 1, backgroundColor: THEME.white, borderRadius: '24px', padding: '32px',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)', border: `1px solid ${THEME.border}`,
-                    display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden'
-                }}>
+                <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                    <AutoFitImage 
+                        src={apiData?.FILEPATH1} 
+                        alt="Inspection Result" 
+                        onZoom={() => setIsModalOpen(true)} 
+                    />
                     
-                    {/* [Row 1] 판정 박스 + 정보 테이블 */}
-                    <div style={{ display: 'flex', gap: '24px', height: '120px', marginBottom: '24px', flexShrink: 0 }}>
-                        <StatusCard result={apiData?.RESULT} />
-                        <InfoTable data={apiData} />
-                    </div>
-
-                    {/* [Row 2] 이미지 뷰어 */}
-                    <div style={{ 
-                        flex: 1, backgroundColor: '#F8FAFC', borderRadius: '20px', 
-                        border: `1px solid ${THEME.border}`, position: 'relative', overflow: 'hidden',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                        {apiData?.FILEPATH1 ? (
-                            <>
-                                {/* 메인 화면 이미지도 튀어나가지 않도록 maxWidth/maxHeight 적용 */}
-                                <img src={apiData.FILEPATH1} alt="Result" style={{ maxWidth: '98%', maxHeight: '98%', objectFit: 'contain' }} />
-                                <button onClick={() => setIsModalOpen(true)} style={{
-                                    position: 'absolute', top: '24px', right: '24px',
-                                    backgroundColor: 'rgba(255, 255, 255, 0.95)', padding: '12px 20px', borderRadius: '12px',
-                                    border: `1px solid ${THEME.border}`, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                                    display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: THEME.textPrimary,
-                                    fontSize: '14px', transition: 'transform 0.2s'
-                                }}>
-                                    <ZoomIn size={18} /> 이미지 확대
-                                </button>
-                            </>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: '#94A3B8' }}>
-                                <ImageOff size={56} strokeWidth={1.5} />
-                                <span style={{ fontSize: '18px', fontWeight: 500 }}>검사 이미지가 없습니다</span>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* 하단 파일명 */}
+                    {/* 파일명 오버레이 */}
                     {apiData?.FILENAME1 && (
                         <div style={{ 
-                            marginTop: '20px', textAlign: 'center', fontSize: '14px', color: THEME.textSecondary, 
-                            fontWeight: 500, background: '#F1F5F9', padding: '12px', borderRadius: '12px', flexShrink: 0
+                            position: 'absolute', top: '24px', left: '24px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)', padding: '10px 16px', borderRadius: '12px',
+                            color: theme.textSecondary, fontSize: '13px', fontWeight: 600, backdropFilter: 'blur(8px)',
+                            display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                            border: `1px solid ${theme.border}`
                         }}>
-                            📁 파일명: {apiData.FILENAME1}
+                              <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: theme.accent }} />
+                              {apiData.FILENAME1}
                         </div>
                     )}
                 </div>
             </div>
-        </>
+        </div>
     );
 }
