@@ -450,38 +450,76 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!db) return;
+
+    // Firebase 경로 설정 (마지막 1개만 주시)
     const logsRef = ref(db, 'vuzix_log');
     const q = query(logsRef, limitToLast(1));
+
     const unsubscribe = onValue(q, async (snapshot) => {
       const dataWrapper = snapshot.val();
-      if (!dataWrapper) return;
+
+      // 1. 데이터가 없으면 초기 로드 플래그만 끄고 종료
+      if (!dataWrapper) {
+        isInitialLoadRef.current = false;
+        return;
+      }
+
+      // 현재 데이터 추출
       const key = Object.keys(dataWrapper)[0];
       const data = dataWrapper[key];
       const currentContent = JSON.stringify(data);
+
+      // 2. [초기 로드 필터] 페이지 새로고침 직후에는 대시보드를 띄우지 않고, 현재 상태만 기억함
       if (isInitialLoadRef.current) {
-          lastProcessedKeyRef.current = key;
-          lastProcessedContentRef.current = currentContent;
-          setTimeout(() => { isInitialLoadRef.current = false; }, 500);
-          return;
+        console.log("System Initialized. Waiting for events...");
+        lastProcessedKeyRef.current = key;
+        lastProcessedContentRef.current = currentContent;
+        isInitialLoadRef.current = false; // 이제부터 감지 시작
+        return;
       }
-      if (lastProcessedKeyRef.current === key && lastProcessedContentRef.current === currentContent) return;
+
+      // 3. [변화 감지] 키가 다르거나(새 데이터) OR 내용이 다르거나(수정됨)
+      const isKeyChanged = lastProcessedKeyRef.current !== key;
+      const isContentChanged = lastProcessedContentRef.current !== currentContent;
+
+      // 변화가 없다면 아무것도 안 함
+      if (!isKeyChanged && !isContentChanged) return;
+
+      // ==========================================
+      // 🔥 [이벤트 발생] 변화가 감지됨 -> 대시보드 오픈
+      // ==========================================
+      console.log("🔥 Action Triggered! Opening Dashboard...", data);
+
+      // 기준점 업데이트
       lastProcessedKeyRef.current = key;
       lastProcessedContentRef.current = currentContent;
+
+      // 1) 데이터 갱신
       fetchVehicleData();
       fetchMaterialData();
-      setShowDashboard(true); 
-      const barcode = data.barcode || data.Barcode; 
+
+      // 2) 바코드 정보가 있다면 API 조회 후 state 업데이트
+      const barcode = data.barcode || data.Barcode;
       if (barcode) {
         try {
-            const apiUrl = `${API_URL_INVOICE}?InvoiceNo=${barcode}`;
-            const res = await fetch(apiUrl);
-            if (res.ok) {
-                const json = await res.json();
-                if (Array.isArray(json)) setScannedInvoiceData(json);
+          const apiUrl = `${API_URL_INVOICE}?InvoiceNo=${barcode}`;
+          const res = await fetch(apiUrl);
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json)) {
+                // state 업데이트 (비동기)
+                setScannedInvoiceData(json);
             }
-        } catch (err) { console.error(err); }
+          }
+        } catch (err) {
+          console.error("Invoice Fetch Error:", err);
+        }
       }
+
+      // 3) 대시보드 모달 열기 (가장 중요)
+      setShowDashboard(true); 
     });
+
     return () => unsubscribe();
   }, [fetchVehicleData, fetchMaterialData]);
 
@@ -640,8 +678,14 @@ export default function DashboardPage() {
                       </div>
                       
                       <AnimatePresence>
-                          {showDashboard && connectedIp && (
-                            <AIDashboardModal onClose={closeDashboard} streamUrl={`http://${connectedIp}:${PORT}/`} streamStatus={"ok"} externalData={scannedInvoiceData} />
+                          {showDashboard && (
+                            <AIDashboardModal 
+                                onClose={closeDashboard} 
+                                // IP가 없으면 빈 문자열이나 null 전달 (Modal 내부에서 처리 필요)
+                                streamUrl={connectedIp ? `http://${connectedIp}:${PORT}/` : ""} 
+                                streamStatus={connectedIp ? "ok" : "error"} 
+                                externalData={scannedInvoiceData} 
+                            />
                           )}
                       </AnimatePresence>
                     </div>
