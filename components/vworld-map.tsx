@@ -30,6 +30,8 @@ export interface VWorldMarker {
   cargo?: string;
   eta?: string;
   vehicleNo?: string;
+  // remainingTime은 이제 내부에서 자동 계산하므로 필수는 아니지만, 오버라이드용으로 남겨둡니다.
+  remainingTime?: string; 
 }
 
 interface EtaData { toBusan: number; toLG: number; }
@@ -40,7 +42,7 @@ interface VWorldMapProps {
   onEtaUpdate?: (eta: EtaData) => void;
 }
 
-// 🟢 [고정 경로 데이터] LG전자 -> 고모텍 부산 (순방향)
+// 🟢 [고정 경로 데이터] LG전자 -> 고모텍 부산
 const FIXED_NAV_PATH = [
   [128.665967, 35.207494], [128.667333, 35.206717], [128.666675, 35.205953], [128.666686, 35.205829],
   [128.666654, 35.20562], [128.666284, 35.205149], [128.670354, 35.202816], [128.670434, 35.202671],
@@ -146,7 +148,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
       ],
       view: new View({ 
         center: fromLonLat([128.76, 35.18]), 
-        zoom: 7, minZoom: 7, maxZoom: 12
+        zoom: 9, minZoom: 9, maxZoom: 12
       }),
       controls: [], 
     });
@@ -206,7 +208,6 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
 
     if (!map || !markerSource || !remainingRouteSource || !routeGeom) return;
 
-    // 소스는 초기화하되 오버레이는 재활용합니다.
     markerSource.clear();
     remainingRouteSource.clear();
 
@@ -217,29 +218,24 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     let dynamicDotRadius = 6 * zoomFactor;
     dynamicDotRadius = Math.max(2, dynamicDotRadius);
 
-    // 현재 마커 ID 목록
     const currentMarkerIds = new Set(markers.filter(m => m.isFocused).map(m => `popup-${m.id}`));
 
-    // 더 이상 존재하지 않는 오버레이 삭제
     const existingOverlays = map.getOverlays().getArray();
-    // 복사본을 만들어 순회해야 삭제 시 문제가 안 생김
     [...existingOverlays].forEach(overlay => {
       const oid = overlay.get('id');
-      // 차량용 팝업이고(id가 popup-로 시작), 현재 마커 목록에 없으면 삭제
       if (oid && String(oid).startsWith('popup-') && !currentMarkerIds.has(String(oid))) {
         map.removeOverlay(overlay);
       }
     });
 
-    // 마커 순회 및 렌더링
     markers.filter(car => !car.isFacility).forEach((car, index) => {
       let carPos: Coordinate;
       const isTarget = car.isFocused; 
       const isLgStart = (car.startLat || 0) > 35.18;
+      
+      const progress = Math.max(0, Math.min(1, car.progress || 0));
 
       if (typeof car.progress === 'number') {
-        let progress = Math.max(0, Math.min(1, car.progress || 0));
-        
         if (isLgStart) {
             carPos = routeGeom.getCoordinateAt(progress);
         } else {
@@ -249,6 +245,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
         if (isTarget) {
           const flatCoords = routeGeom.getCoordinates();
           let remainingCoords: Coordinate[] = [];
+          
           if (isLgStart) {
             const startIndex = Math.floor((flatCoords.length - 1) * progress);
             remainingCoords = [carPos, ...flatCoords.slice(startIndex)];
@@ -263,38 +260,73 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
             remainingRouteSource.addFeature(remainingFeature);
           }
 
-          // 🟢 오버레이 처리 (생성 or 업데이트)
+          // 🟢 [남은 시간 자동 계산 로직] ----------------------
+          // 1. 전체 경로 길이 (미터)
+          const totalLengthMeters = routeGeom.getLength(); 
+          
+          // 2. 남은 거리 (미터) = 전체 * (1 - 진행률)
+          const remainingMeters = totalLengthMeters * (1 - progress);
+          const remainingKm = remainingMeters / 1000;
+
+          // 3. 평균 속도 가정 (60km/h) 및 시간 산출
+          const avgSpeedKmH = 60; 
+          const remainingHoursTotal = remainingKm / avgSpeedKmH;
+          const remainingMinutesTotal = Math.round(remainingHoursTotal * 60);
+
+          // 4. 문자열 포맷팅 (0시간 00분)
+          const hours = Math.floor(remainingMinutesTotal / 60);
+          const minutes = remainingMinutesTotal % 60;
+          
+          let computedRemainingTimeStr = "";
+          if (hours > 0) {
+            computedRemainingTimeStr = `${hours}시간 ${minutes}분`;
+          } else {
+            computedRemainingTimeStr = `${minutes}분`;
+          }
+          
+          // 만약 데이터에 0%나 100%에 가까우면 예외 처리
+          if (remainingMinutesTotal <= 1) computedRemainingTimeStr = "도착 임박";
+          // --------------------------------------------------
+
           const overlayId = `popup-${car.id || index}`;
           let overlay = map.getOverlayById(overlayId);
 
           const popupContent = `
-            <div style="background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(8px); padding: 12px 16px; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; min-width: 200px; font-family: 'Pretendard', sans-serif; pointer-events: none;">
+            <div style="z-index: 99999999;background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(8px); padding: 12px 16px; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; min-width: 200px; font-family: 'Pretendard', sans-serif; pointer-events: none;">
               <div style="position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 8px solid rgba(255,255,255,0.95);"></div>
+              
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9;">
                 <div style="display:flex; align-items:center; gap:6px;">
                   <div style="width:8px; height:8px; background:#22c55e; border-radius:50%; box-shadow:0 0 5px #22c55e;"></div>
-                  <span style="font-size: 15px; font-weight: 800; color: #1e293b;">${car.title || car.vehicleNo}</span>
+                  <span style="font-size: 15px; font-weight: 800; color: #1e293b;">${car.vehicleNo || car.title || '차량정보 없음'}</span>
                 </div>
                 <span style="font-size: 11px; font-weight: 700; color: #3b82f6; background: #eff6ff; padding: 3px 8px; border-radius: 6px;">배송중</span>
               </div>
+
               <div style="display: flex; flex-direction: column; gap: 6px;">
-                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b;"><span>기사명</span><span style="font-weight: 700; color: #334155;">${car.driver || '-'}</span></div>
-                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b;"><span>화물정보</span><span style="font-weight: 700; color: #334155;">${car.cargo || '-'}</span></div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b;">
+                    <span>기사명</span>
+                    <span style="font-weight: 700; color: #334155;">${car.driver || '-'}</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b;">
+                    <span>남은 시간</span>
+                    <span style="font-weight: 700; color: #EF4444;">${computedRemainingTimeStr}</span>
+                </div>
+
                 <div style="background: #f8fafc; padding: 8px; border-radius: 8px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
                   <span style="font-size: 11px; font-weight: 600; color: #64748b;">도착 예정</span>
-                  <span style="font-size: 14px; font-weight: 800; color: #3b82f6;">${car.eta || '--:--'}</span>
+                  <span style="font-size: 14px; font-weight: 800; color: #3b82f6;">${car.eta || '이동 중'}</span>
                 </div>
               </div>
             </div>`;
 
           if (overlay) {
-            // 이미 있으면 위치와 내용만 업데이트 (무한 렌더링 방지)
             overlay.setPosition(carPos);
             if (overlay.getElement()) {
                overlay.getElement()!.innerHTML = popupContent;
             }
           } else {
-            // 없으면 새로 생성
             const popupEl = document.createElement('div');
             popupEl.innerHTML = popupContent;
             const newOverlay = new Overlay({
@@ -315,9 +347,6 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
       const carFeature = new Feature({ geometry: new Point(carPos) });
       
       if (isTarget && car.imageUrl) {
-        // 🟢 아이콘 반전 처리 수정 (반대 방향)
-        // LG->GMT (isLgStart=true): 원래 오른쪽을 보므로, 왼쪽으로 가게 하려면 반전(-1) 필요
-        // GMT->LG (isLgStart=false): 원래 오른쪽을 보므로, 오른쪽으로 가려면 그대로(1) 필요
         const scaleX = isLgStart ? -dynamicIconScale : dynamicIconScale;
         const scaleY = dynamicIconScale;
 

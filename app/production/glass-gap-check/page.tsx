@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-    Monitor, Layers, Clock, FileText, CheckCircle, AlertTriangle, X, 
-    ZoomIn, Volume2, VolumeX, Siren, ChevronRight, CheckCircle2, XCircle 
+    Monitor, Clock, CheckCircle2, XCircle, 
+    ZoomIn, Volume2, VolumeX, Siren, X 
 } from 'lucide-react';
 
 // ─── [CONFIG] 설정 및 테마 ───
@@ -30,11 +30,17 @@ interface ApiData {
     LABEL004: string;
 }
 
+// [CHANGE] 새로운 데이터 구조를 위한 인터페이스 추가
+interface TotalData {
+    total_count: number;
+    normal_count: number;
+}
+
 const LAYOUT_CONFIGS = {
     FHD: {
         padding: '24px',
         gap: '20px',
-        headerHeight: '110px', // 헤더 높이 증가 (이전 UI 스타일 맞춤)
+        headerHeight: '110px',
         fontSize: { title: '20px', sub: '14px', badge: '13px', metaLabel: '12px', metaValue: '15px' },
         iconSize: 20,
         cornerCardWidth: '300px',
@@ -50,11 +56,11 @@ const LAYOUT_CONFIGS = {
 };
 
 const theme = {
-    bg: '#F8FAFC', // 배경색 약간 더 밝게 조정
+    bg: '#F8FAFC',
     cardBg: '#FFFFFF',
     textPrimary: '#1E293B',
     textSecondary: '#64748B',
-    accent: '#3B82F6', // 이전 UI의 파란색 톤
+    accent: '#3B82F6',
     success: '#059669',
     danger: '#DC2626',
     border: '#E2E8F0',
@@ -86,7 +92,7 @@ const GlobalStyles = () => (
 
 // ─── [UI COMPONENTS] ───
 
-// 1. [헤더] 사운드 제어 버튼 (스타일 수정됨)
+// 1. [헤더] 사운드 제어 버튼
 const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => void }) => {
     return (
         <button
@@ -99,7 +105,7 @@ const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => v
                 color: isOn ? theme.accent : theme.textSecondary,
                 cursor: 'pointer', outline: 'none',
                 transition: 'all 0.2s',
-                marginLeft: 'auto' // 우측 정렬
+                marginLeft: 'auto'
             }}
         >
             {isOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
@@ -108,8 +114,9 @@ const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => v
     );
 };
 
-// 2. [헤더] 대시보드 헤더 (New UI)
-const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: any, data: ApiData | null, isSoundOn: boolean, onToggleSound: () => void }) => {
+// 2. [헤더] 대시보드 헤더
+// [CHANGE] totalStats prop 추가
+const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }: { layout: any, data: ApiData | null, totalStats: TotalData | null, isSoundOn: boolean, onToggleSound: () => void }) => {
     // 판정 결과 로직
     const resultStr = data?.RESULT || '';
     const isPass = resultStr === '정상' || resultStr.toUpperCase() === 'OK';
@@ -137,7 +144,6 @@ const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: a
 
     // 데이터 안전 참조
     const timeValue = data?.TIMEVALUE || '00:00:00';
-    const countValue = data?.COUNT_NUM || '0';
     const modelValue = data?.CDGITEM || '-';
     const woValue = data?.WO || '-';
 
@@ -161,7 +167,7 @@ const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: a
                 </div>
             </div>
 
-            {/* 2. 판정 결과 박스 (가운데 강조) */}
+            {/* 2. 판정 결과 박스 */}
             <div className={animClass} style={{
                 width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
                 display: 'flex', alignItems: 'center', padding: '0 32px', gap: '24px', position: 'relative', overflow: 'hidden',
@@ -180,7 +186,7 @@ const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: a
                 </div>
             </div>
 
-            {/* 3. 정보 테이블 (우측 통합) */}
+            {/* 3. 정보 테이블 */}
             <div style={{ 
                 flex: 1, backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
                 display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: theme.shadow
@@ -188,17 +194,30 @@ const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: a
                 {/* 헤더 Row */}
                 <div style={{ display: 'flex', width: '100%', height: '40%', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${theme.border}` }}>
                     <InfoHeaderCell text="검사 시간" />
-                    <InfoHeaderCell text="생산 수량" />
+                    {/* [CHANGE] 생산 수량 -> 검사 수량 */}
+                    <InfoHeaderCell text="검사 수량" />
                     <InfoHeaderCell text="모델명 / WO" />
                     <InfoHeaderCell text="현재 상태" isLast />
                 </div>
                 {/* 값 Row */}
                 <div style={{ display: 'flex', width: '100%', height: '60%' }}>
                     <InfoValueCell text={timeValue} />
-                    <InfoValueCell text={`${countValue} EA`} />
+                    {/* [CHANGE] 수량 표시 방식 변경 (정상 / 전체) */}
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${theme.border}` }}>
+                        {totalStats ? (
+                             <div style={{ fontSize: '18px', fontWeight: 700, color: theme.textPrimary }}>
+                                <span style={{ color: theme.success }}>{totalStats.normal_count}</span>
+                                <span style={{ color: '#CBD5E1', margin: '0 6px' }}>/</span>
+                                <span>{totalStats.total_count}</span>
+                             </div>
+                        ) : (
+                            <span style={{ fontSize: '18px', fontWeight: 700, color: theme.textSecondary }}>-</span>
+                        )}
+                    </div>
+                    
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${theme.border}` }}>
-                         <span style={{fontSize: '15px', fontWeight: 700, color: theme.textPrimary}}>{modelValue}</span>
-                         <span style={{fontSize: '11px', fontWeight: 500, color: theme.textSecondary}}>{woValue}</span>
+                        <span style={{fontSize: '15px', fontWeight: 700, color: theme.textPrimary}}>{modelValue}</span>
+                        <span style={{fontSize: '11px', fontWeight: 500, color: theme.textSecondary}}>{woValue}</span>
                     </div>
                     <InfoValueCell text="RUNNING" isLast color={theme.accent} />
                 </div>
@@ -208,7 +227,7 @@ const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: a
 };
 
 const InfoHeaderCell = ({ text, isLast }: { text: string, isLast?: boolean }) => (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: theme.textSecondary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: theme.textSecondary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
 );
 const InfoValueCell = ({ text, isLast, color }: { text: string, isLast?: boolean, color?: string }) => (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: color || theme.textPrimary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
@@ -308,6 +327,8 @@ export default function GlassGapInspection() {
     const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
     const [modalInfo, setModalInfo] = useState<{ isOpen: boolean, title: string, imgUrl: string } | null>(null);
     const [apiData, setApiData] = useState<ApiData | null>(null);
+    // [CHANGE] 전체 수량 정보 State 추가
+    const [totalStats, setTotalStats] = useState<TotalData | null>(null);
 
     const [isDefectMode, setIsDefectMode] = useState(false); 
     const [audioAllowed, setAudioAllowed] = useState(false); 
@@ -328,6 +349,8 @@ export default function GlassGapInspection() {
             try {
                 const response = await fetch('http://1.254.24.170:24828/api/DX_API000023');
                 const json = await response.json();
+                
+                // 1. 검사 상세 데이터 파싱
                 if (json.success && json.data && json.data.length > 0) {
                     const data: ApiData = json.data[0];
                     setApiData(data);
@@ -337,6 +360,15 @@ export default function GlassGapInspection() {
                         setShowPermissionModal(true);
                     }
                 }
+
+                // 2. [CHANGE] 전체 수량/정상 수량 데이터 파싱
+                if (json.success && json.total_data) {
+                    setTotalStats({
+                        total_count: json.total_data.total_count,
+                        normal_count: json.total_data.normal_count
+                    });
+                }
+
             } catch (error) { console.error(error); }
         };
         fetchData();
@@ -424,8 +456,14 @@ export default function GlassGapInspection() {
             {showPermissionModal && <SoundPermissionModal onConfirm={handlePermissionConfirm} />}
             {modalInfo && <ImageModal isOpen={modalInfo.isOpen} onClose={() => setModalInfo(prev => prev ? { ...prev, isOpen: false } : null)} title={modalInfo.title} imgUrl={modalInfo.imgUrl} />}
 
-            {/* [CHANGE] 1. New Dashboard Header */}
-            <DashboardHeader layout={layout} data={apiData} isSoundOn={audioAllowed} onToggleSound={toggleSound} />
+            {/* [CHANGE] totalStats prop 전달 */}
+            <DashboardHeader 
+                layout={layout} 
+                data={apiData} 
+                totalStats={totalStats} 
+                isSoundOn={audioAllowed} 
+                onToggleSound={toggleSound} 
+            />
 
             <div style={{ flex: 1, display: 'flex', gap: layout.gap, minHeight: 0 }}>
                 {/* Left Column */}
@@ -434,7 +472,7 @@ export default function GlassGapInspection() {
                     <CornerCard title="좌측 하단 (A3)" status={apiData ? apiData.LABEL003 : "-"} imgUrl={apiData ? apiData.FILEPATH1 : ""} />
                 </div>
 
-                {/* Center Column - [CHANGE] 2. Removed 'Comprehensive Judgment' Box */}
+                {/* Center Column */}
                 <div style={{
                     flex: 1, display: 'flex', flexDirection: 'column',
                     backgroundColor: theme.cardBg, borderRadius: '24px',

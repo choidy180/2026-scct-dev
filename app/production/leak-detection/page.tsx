@@ -27,6 +27,12 @@ interface CamData {
   specificImageUrl?: string;
 }
 
+// [CHANGE] 전체 통계 인터페이스 추가
+interface TotalData {
+    total_count: number;
+    normal_count: number;
+}
+
 interface ApiResponse {
     success: boolean;
     data: Array<{
@@ -40,6 +46,11 @@ interface ApiResponse {
         RESULT: string;     // 전체 결과
         COUNT_NUM: string;
     }>;
+    // [CHANGE] API 응답에 total_data 포함 가정
+    total_data?: {
+        total_count: number;
+        normal_count: number;
+    };
 }
 
 // --- 2. 테마 및 스타일 설정 ---
@@ -55,7 +66,7 @@ const THEME = {
 
 const LAYOUT_CONFIGS = {
   FHD: {
-    padding: '20px', gap: '12px', cardHeight: '220px', cardPadding: '16px', // 카드 높이 약간 축소
+    padding: '20px', gap: '12px', cardHeight: '220px', cardPadding: '16px', 
     fontSize: { title: '16px', sub: '12px', badge: '11px' },
     iconSize: 20, logoSize: 20, overlap: '-60px', 
   },
@@ -98,8 +109,8 @@ const initialBottomCards: CamData[] = [
 
 // --- 4. 컴포넌트 구현 ---
 
-// [NEW] 상단 대시보드 헤더 (판정박스 + 정보테이블)
-const DashboardHeader = ({ apiData, layout }: { apiData: any, layout: any }) => {
+// [CHANGE] DashboardHeader에 totalStats prop 추가
+const DashboardHeader = ({ apiData, totalStats, layout }: { apiData: any, totalStats: TotalData | null, layout: any }) => {
     // 판정 결과 로직
     const resultStr = apiData?.RESULT || '';
     const isPass = resultStr === '정상' || resultStr.toUpperCase() === 'OK';
@@ -166,12 +177,24 @@ const DashboardHeader = ({ apiData, layout }: { apiData: any, layout: any }) => 
             }}>
                 <div style={{ display: 'flex', width: '100%', height: '40%', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.border}` }}>
                     <InfoHeaderCell text="검사 시간" />
-                    <InfoHeaderCell text="생산 수량" />
+                    {/* [CHANGE] 생산 수량 -> 검사 수량 */}
+                    <InfoHeaderCell text="검사 수량" />
                     <InfoHeaderCell text="현재 상태" isLast />
                 </div>
                 <div style={{ display: 'flex', width: '100%', height: '60%' }}>
                     <InfoValueCell text={apiData?.TIMEVALUE || '00:00:00'} />
-                    <InfoValueCell text={`${apiData?.COUNT_NUM || 0} EA`} />
+                    {/* [CHANGE] 수량 표시 방식 변경 (정상 / 전체) */}
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${THEME.border}` }}>
+                        {totalStats ? (
+                             <div style={{ fontSize: '18px', fontWeight: 700, color: THEME.textPrimary }}>
+                                <span style={{ color: THEME.status.ok.text }}>{totalStats.normal_count}</span>
+                                <span style={{ color: '#CBD5E1', margin: '0 6px' }}>/</span>
+                                <span>{totalStats.total_count}</span>
+                             </div>
+                        ) : (
+                            <span style={{ fontSize: '18px', fontWeight: 700, color: THEME.textSecondary }}>-</span>
+                        )}
+                    </div>
                     <InfoValueCell text="RUNNING" isLast color={THEME.accent} />
                 </div>
             </div>
@@ -180,7 +203,7 @@ const DashboardHeader = ({ apiData, layout }: { apiData: any, layout: any }) => 
 };
 
 const InfoHeaderCell = ({ text, isLast }: { text: string, isLast?: boolean }) => (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: THEME.textSecondary, borderRight: isLast ? 'none' : `1px solid ${THEME.border}` }}>{text}</div>
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: THEME.textSecondary, borderRight: isLast ? 'none' : `1px solid ${THEME.border}` }}>{text}</div>
 );
 const InfoValueCell = ({ text, isLast, color }: { text: string, isLast?: boolean, color?: string }) => (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: color || THEME.textPrimary, borderRight: isLast ? 'none' : `1px solid ${THEME.border}` }}>{text}</div>
@@ -245,6 +268,9 @@ const VisionDashboard = () => {
   
   // API 데이터 상태
   const [rawApiData, setRawApiData] = useState<any>(null);
+  // [CHANGE] 전체 수량 정보 State 추가
+  const [totalStats, setTotalStats] = useState<TotalData | null>(null);
+
   const [topCards, setTopCards] = useState<CamData[]>(initialTopCards);
   const [bottomCards, setBottomCards] = useState<CamData[]>(initialBottomCards);
   
@@ -253,23 +279,34 @@ const VisionDashboard = () => {
         const response = await fetch(API_URL);
         const json: ApiResponse = await response.json();
 
-        if (json.success && json.data.length > 0) {
-            const d = json.data[0];
-            setRawApiData(d); // 전체 데이터 저장 (헤더용)
+        if (json.success) {
+            // 1. 개별 검사 결과 파싱
+            if (json.data.length > 0) {
+                const d = json.data[0];
+                setRawApiData(d); // 전체 데이터 저장 (헤더용)
 
-            const getStatus = (label: string): InspectionStatus => label === '정상' ? '정상' : '점검필요';
+                const getStatus = (label: string): InspectionStatus => label === '정상' ? '정상' : '점검필요';
 
-            setTopCards([
-                { ...initialTopCards[0], status: getStatus(d.LABEL002), specificImageUrl: d.FILEPATH2 },
-                { ...initialTopCards[1], status: getStatus(d.LABEL004), specificImageUrl: d.FILEPATH4 },
-                { ...initialTopCards[2], status: getStatus(d.LABEL006), specificImageUrl: d.FILEPATH6 }
-            ]);
+                setTopCards([
+                    { ...initialTopCards[0], status: getStatus(d.LABEL002), specificImageUrl: d.FILEPATH2 },
+                    { ...initialTopCards[1], status: getStatus(d.LABEL004), specificImageUrl: d.FILEPATH4 },
+                    { ...initialTopCards[2], status: getStatus(d.LABEL006), specificImageUrl: d.FILEPATH6 }
+                ]);
 
-            setBottomCards([
-                { ...initialBottomCards[0], status: getStatus(d.LABEL001), specificImageUrl: d.FILEPATH1 },
-                { ...initialBottomCards[1], status: getStatus(d.LABEL003), specificImageUrl: d.FILEPATH3 },
-                { ...initialBottomCards[2], status: getStatus(d.LABEL005), specificImageUrl: d.FILEPATH5 }
-            ]);
+                setBottomCards([
+                    { ...initialBottomCards[0], status: getStatus(d.LABEL001), specificImageUrl: d.FILEPATH1 },
+                    { ...initialBottomCards[1], status: getStatus(d.LABEL003), specificImageUrl: d.FILEPATH3 },
+                    { ...initialBottomCards[2], status: getStatus(d.LABEL005), specificImageUrl: d.FILEPATH5 }
+                ]);
+            }
+
+            // [CHANGE] 2. 전체 수량 정보 파싱
+            if (json.total_data) {
+                setTotalStats({
+                    total_count: json.total_data.total_count,
+                    normal_count: json.total_data.normal_count
+                });
+            }
         }
     } catch (error) {
         console.error("API Fetch Error:", error);
@@ -371,8 +408,8 @@ const VisionDashboard = () => {
       {showPermissionModal && <SoundPermissionModal onConfirm={() => { setShowPermissionModal(false); setIsSoundEnabled(true); playBeep(); }} />}
       {selectedCam && <ImageModal data={selectedCam} onClose={() => setSelectedCam(null)} />}
 
-      {/* [NEW] 1. 상단 현황판 */}
-      <DashboardHeader apiData={rawApiData} layout={layout} />
+      {/* [NEW] 1. 상단 현황판 (totalStats prop 전달) */}
+      <DashboardHeader apiData={rawApiData} totalStats={totalStats} layout={layout} />
 
       {/* 2. 메인 그리드 */}
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>

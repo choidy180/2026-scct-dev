@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
     Layers, ZoomIn, X, RefreshCw, Monitor, Clock, 
-    CheckCircle2, XCircle, Volume2, VolumeX, Siren 
+    CheckCircle2, XCircle, Volume2, VolumeX, Siren,
+    FileText, ChevronRight, Info, Scan, AlertTriangle // [FIX] AlertTriangle 추가 완료
 } from 'lucide-react';
 
 // ─── [CONFIG] 설정 및 테마 ───
@@ -36,6 +37,7 @@ const theme = {
     accent: '#3B82F6',
     success: '#059669',
     danger: '#DC2626',
+    warning: '#F59E0B',
     border: '#E2E8F0',
     shadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
     status: {
@@ -55,6 +57,18 @@ interface ApiData {
     STATUS002: string;
 }
 
+interface TotalData {
+    total_count: number;
+    normal_count: number;
+}
+
+interface SystemLog {
+    id: number;
+    time: string;
+    type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+    message: string;
+}
+
 // ─── [GLOBAL STYLES] 애니메이션 ───
 const GlobalStyles = () => (
     <style jsx global>{`
@@ -63,17 +77,101 @@ const GlobalStyles = () => (
             70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
             100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
-        @keyframes pulse-red-soft {
-            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
-            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        @keyframes pulse-red-border {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4), inset 0 0 0 2px rgba(220, 38, 38, 0.1); }
+            50% { box-shadow: 0 0 10px 2px rgba(220, 38, 38, 0.2), inset 0 0 10px 2px rgba(220, 38, 38, 0.1); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4), inset 0 0 0 2px rgba(220, 38, 38, 0.1); }
         }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
         .animate-ok { animation: pulse-green-soft 2s infinite; }
         .animate-ng { animation: pulse-red-soft 2s infinite; }
         .animate-spin { animation: spin 2s linear infinite; }
+        .inspection-box { animation: pulse-red-border 2s infinite ease-in-out; }
+
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background-color: #CBD5E1; border-radius: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background-color: #94A3B8; }
     `}</style>
 );
+
+// ─── [HELPER] 로그 생성기 (필름 공정용 한글 데이터) ───
+const generateInitialLogs = (): SystemLog[] => {
+    const logs: SystemLog[] = [];
+    const messages = [
+        { type: 'INFO', msg: '필름 롤 장력(Tension) 확인됨' },
+        { type: 'SUCCESS', msg: '표면 이물질 제거 완료' },
+        { type: 'INFO', msg: '부착 위치 정밀 스캔 시작 (Cycle #802)' },
+        { type: 'SUCCESS', msg: '엣지 마감 상태 양호' },
+        { type: 'WARNING', msg: '미세 기포 감지 - 자동 보정 실행' },
+        { type: 'INFO', msg: '압착 롤러 압력 모니터링 중...' },
+        { type: 'SUCCESS', msg: '최종 부착 상태 승인 (Grade A)' },
+        { type: 'INFO', msg: '비전 센서 데이터 동기화' }
+    ];
+
+    let currentTime = new Date();
+    
+    // 5~10분 간격으로 로그 생성
+    for (let i = 0; i < 15; i++) {
+        const diffMinutes = Math.floor(Math.random() * 6) + 5; 
+        currentTime = new Date(currentTime.getTime() - diffMinutes * 60000);
+        
+        const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+        
+        logs.push({
+            id: i,
+            time: currentTime.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            type: randomMsg.type as any,
+            message: randomMsg.msg
+        });
+    }
+    return logs.sort((a, b) => a.id - b.id);
+};
+
+// ─── [COMPONENT] Inspection Overlay (필름 부착 영역) ───
+const InspectionOverlay = ({ isVisible }: { isVisible: boolean }) => {
+    if (!isVisible) return null;
+
+    // 필름 부착부(중앙)를 타겟팅하는 스타일
+    const boxStyle: React.CSSProperties = {
+        position: 'absolute',
+        top: '15%', 
+        left: '10%', 
+        width: '80%', 
+        height: '70%',
+        border: `3px solid ${theme.danger}`,
+        borderRadius: '4px',
+        boxShadow: `0 0 0 1px #fff, inset 0 0 0 1px #fff`, // 이중선 효과
+        pointerEvents: 'none',
+        zIndex: 10,
+    };
+
+    // 내부 십자선 (옵션)
+    const crossHairH: React.CSSProperties = {
+        position: 'absolute', top: '50%', left: '0', width: '100%', height: '1px', 
+        backgroundColor: theme.danger, opacity: 0.3
+    };
+    const crossHairV: React.CSSProperties = {
+        position: 'absolute', top: '0', left: '50%', width: '1px', height: '100%', 
+        backgroundColor: theme.danger, opacity: 0.3
+    };
+
+    return (
+        <div className="inspection-box" style={boxStyle}>
+            <div style={crossHairH}></div>
+            <div style={crossHairV}></div>
+            <div style={{
+                position: 'absolute', top: '-24px', left: '-2px',
+                backgroundColor: theme.danger, color: 'white',
+                fontSize: '11px', fontWeight: 'bold', padding: '3px 8px',
+                borderRadius: '4px 4px 4px 0', display: 'flex', alignItems: 'center', gap: '4px'
+            }}>
+                <Scan size={12} /> SCANNING AREA
+            </div>
+        </div>
+    );
+};
 
 // ─── [UI COMPONENTS] ───
 
@@ -94,8 +192,7 @@ const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => v
     </button>
 );
 
-const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: any, data: ApiData | null, isSoundOn: boolean, onToggleSound: () => void }) => {
-    // 판정 결과 로직 ("정상" or "OK" -> PASS)
+const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }: { layout: any, data: ApiData | null, totalStats: TotalData | null, isSoundOn: boolean, onToggleSound: () => void }) => {
     const resultVal = data?.RESULT || '';
     const isPass = resultVal === "정상" || resultVal.toUpperCase() === "OK";
     const isFail = !isPass && !!resultVal;
@@ -121,13 +218,12 @@ const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: a
     }
 
     const timeValue = data?.TIMEVALUE || '00:00:00';
-    const countValue = data?.COUNT_NUM || '0';
     const modelValue = data?.CDGITEM || '-';
     const woValue = data?.STATUS002 || '-';
 
     return (
         <div style={{ display: 'flex', gap: layout.gap, height: layout.headerHeight, marginBottom: layout.gap, flexShrink: 0 }}>
-            {/* 1. 로고 영역 (Layers 아이콘 사용) */}
+            {/* Logo */}
             <div style={{ 
                 width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
                 display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
@@ -145,7 +241,7 @@ const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: a
                 </div>
             </div>
 
-            {/* 2. 판정 결과 박스 */}
+            {/* Status Box */}
             <div className={animClass} style={{
                 width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
                 display: 'flex', alignItems: 'center', padding: '0 32px', gap: '24px', position: 'relative', overflow: 'hidden',
@@ -164,23 +260,33 @@ const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: a
                 </div>
             </div>
 
-            {/* 3. 정보 테이블 */}
+            {/* Info Table */}
             <div style={{ 
                 flex: 1, backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
                 display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: theme.shadow
             }}>
                 <div style={{ display: 'flex', width: '100%', height: '40%', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${theme.border}` }}>
                     <InfoHeaderCell text="검사 시간" />
-                    <InfoHeaderCell text="생산 수량" />
+                    <InfoHeaderCell text="검사 수량" />
                     <InfoHeaderCell text="모델명 / 작업지시번호" />
                     <InfoHeaderCell text="현재 상태" isLast />
                 </div>
                 <div style={{ display: 'flex', width: '100%', height: '60%' }}>
                     <InfoValueCell text={timeValue} />
-                    <InfoValueCell text={`${countValue} EA`} />
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${theme.border}` }}>
+                        {totalStats ? (
+                             <div style={{ fontSize: '18px', fontWeight: 700, color: theme.textPrimary }}>
+                                <span style={{ color: theme.success }}>{totalStats.normal_count}</span>
+                                <span style={{ color: '#CBD5E1', margin: '0 6px' }}>/</span>
+                                <span>{totalStats.total_count}</span>
+                             </div>
+                        ) : (
+                            <span style={{ fontSize: '18px', fontWeight: 700, color: theme.textSecondary }}>-</span>
+                        )}
+                    </div>
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${theme.border}` }}>
-                         <span style={{fontSize: '15px', fontWeight: 700, color: theme.textPrimary}}>{modelValue}</span>
-                         <span style={{fontSize: '11px', fontWeight: 500, color: theme.textSecondary}}>{woValue}</span>
+                          <span style={{fontSize: '15px', fontWeight: 700, color: theme.textPrimary}}>{modelValue}</span>
+                          <span style={{fontSize: '11px', fontWeight: 500, color: theme.textSecondary}}>{woValue}</span>
                     </div>
                     <InfoValueCell text="RUNNING" isLast color={theme.accent} />
                 </div>
@@ -190,20 +296,25 @@ const DashboardHeader = ({ layout, data, isSoundOn, onToggleSound }: { layout: a
 };
 
 const InfoHeaderCell = ({ text, isLast }: { text: string, isLast?: boolean }) => (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: theme.textSecondary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: theme.textSecondary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
 );
 const InfoValueCell = ({ text, isLast, color }: { text: string, isLast?: boolean, color?: string }) => (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: color || theme.textPrimary, borderRight: isLast ? 'none' : `1px solid ${theme.border}` }}>{text}</div>
 );
 
-const AutoFitImage = ({ src, alt, onZoom }: { src: string | undefined, alt: string, onZoom: () => void }) => (
+// [CHANGE] AutoFitImage에 Overlay prop 전달
+const AutoFitImage = ({ src, alt, onZoom, showOverlay }: { src: string, alt: string, onZoom: () => void, showOverlay: boolean }) => (
     <div style={{ 
         width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', 
         backgroundColor: '#F8FAFC', borderRadius: '12px', overflow: 'hidden', position: 'relative',
         border: `1px solid ${theme.border}`
     }}>
         {src ? (
-             <img src={src} alt={alt} style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', filter: 'drop-shadow(0 10px 30px rgba(0,0,0,0.05))' }} />
+             <div style={{ position: 'relative', width: 'auto', height: '95%', display: 'flex' }}>
+                 <img src={src} alt={alt} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', filter: 'drop-shadow(0 10px 30px rgba(0,0,0,0.05))' }} />
+                 {/* 검사 오버레이 박스 */}
+                 <InspectionOverlay isVisible={showOverlay} />
+             </div>
         ) : (
             <div style={{display:'flex', flexDirection:'column', alignItems:'center', color: theme.textSecondary, gap: '12px'}}>
                  <RefreshCw className="animate-spin" size={32} color="#CBD5E1" />
@@ -249,7 +360,9 @@ const ImageModal = ({ isOpen, onClose, title, imgUrl }: { isOpen: boolean, onClo
                     <ModalCloseButton onClick={onClose} />
                 </div>
                 <div style={{ flex: 1, borderRadius: '16px', overflow: 'hidden', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${theme.border}` }}>
-                    <img src={imgUrl} alt="Detail" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    <div style={{ position: 'relative', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        <img src={imgUrl} alt="Detail" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    </div>
                 </div>
             </div>
         </div>
@@ -273,37 +386,75 @@ const SoundPermissionModal = ({ onConfirm }: { onConfirm: () => void }) => (
     </div>
 );
 
+const LogItem = ({ log }: { log: SystemLog }) => {
+    let icon = <Info size={14} color={theme.textSecondary} />;
+    let color = theme.textSecondary;
+    
+    if (log.type === 'SUCCESS') {
+        icon = <CheckCircle2 size={14} color={theme.success} />;
+        color = theme.success;
+    } else if (log.type === 'WARNING') {
+        icon = <AlertTriangle size={14} color={theme.warning} />;
+        color = theme.warning;
+    } else if (log.type === 'ERROR') {
+        icon = <XCircle size={14} color={theme.danger} />;
+        color = theme.danger;
+    }
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: `1px solid ${theme.border}` }}>
+            <div style={{ minWidth: '70px', fontSize: '11px', color: '#94A3B8', fontFamily: 'monospace' }}>{log.time}</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
+            <div style={{ fontSize: '13px', color: theme.textPrimary, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.message}</div>
+        </div>
+    );
+}
+
 // ─── [MAIN COMPONENT] ───
 
 export default function FilmAttachmentCheck() {
     const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [apiData, setApiData] = useState<ApiData | null>(null);
+    const [totalStats, setTotalStats] = useState<TotalData | null>(null);
+    
+    // 로그 상태
+    const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
 
-    // 사운드 관련 상태
     const [isDefectMode, setIsDefectMode] = useState(false);
     const [audioAllowed, setAudioAllowed] = useState(false);
     const [showPermissionModal, setShowPermissionModal] = useState(false);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+    // 초기 로그 생성
+    useEffect(() => {
+        setSystemLogs(generateInitialLogs());
+    }, []);
+
     const fetchData = useCallback(async () => {
         try {
             const response = await fetch("http://1.254.24.170:24828/api/DX_API000027");
             const json = await response.json();
             
-            if (json.success && json.data && json.data.length > 0) {
-                const data = json.data[0];
-                setApiData(data);
-
-                // 판정 로직: "정상" 또는 "OK" 가 아니면 불량으로 간주
-                const resultVal = data.RESULT;
-                const isPass = resultVal === "정상" || resultVal === "OK";
-                const hasError = !isPass && !!resultVal;
-                
-                setIsDefectMode(hasError);
-                if (hasError && !audioAllowed && !showPermissionModal && !audioCtxRef.current) {
-                    setShowPermissionModal(true);
+            if (json.success) {
+                if (json.data && json.data.length > 0) {
+                    const data = json.data[0];
+                    setApiData(data);
+                    const resultVal = data.RESULT;
+                    const isPass = resultVal === "정상" || resultVal === "OK";
+                    const hasError = !isPass && !!resultVal;
+                    
+                    setIsDefectMode(hasError);
+                    if (hasError && !audioAllowed && !showPermissionModal && !audioCtxRef.current) {
+                        setShowPermissionModal(true);
+                    }
+                }
+                if (json.total_data) {
+                    setTotalStats({
+                        total_count: json.total_data.total_count,
+                        normal_count: json.total_data.normal_count
+                    });
                 }
             }
         } catch (error) {
@@ -311,14 +462,12 @@ export default function FilmAttachmentCheck() {
         }
     }, [audioAllowed, showPermissionModal]);
 
-    // 주기적 호출
     useEffect(() => {
         fetchData();
         const id = setInterval(fetchData, 3000);
         return () => clearInterval(id);
     }, [fetchData]);
 
-    // 사운드 재생 로직
     useEffect(() => {
         if (isDefectMode && audioAllowed) {
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -355,8 +504,6 @@ export default function FilmAttachmentCheck() {
     }, []);
 
     const layout = LAYOUT_CONFIGS[screenMode];
-    
-    // 테두리 스타일
     const isPass = apiData?.RESULT === "정상" || apiData?.RESULT === "OK";
     const borderStyle = (apiData && !isPass && apiData.RESULT) ? `2px solid ${theme.danger}` : `1px solid ${theme.border}`;
 
@@ -369,37 +516,77 @@ export default function FilmAttachmentCheck() {
             {showPermissionModal && <SoundPermissionModal onConfirm={() => { setAudioAllowed(true); setShowPermissionModal(false); }} />}
             <ImageModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Film Attachment Detail" imgUrl={apiData?.FILEPATH1 || ''} />
 
-            <DashboardHeader layout={layout} data={apiData} isSoundOn={audioAllowed} onToggleSound={() => setAudioAllowed(!audioAllowed)} />
+            <DashboardHeader layout={layout} data={apiData} totalStats={totalStats} isSoundOn={audioAllowed} onToggleSound={() => setAudioAllowed(!audioAllowed)} />
 
-            {/* 메인 콘텐츠 영역 */}
-            <div style={{ 
-                flex: 1, display: 'flex', flexDirection: 'column', 
-                backgroundColor: theme.cardBg, borderRadius: '24px',
-                boxShadow: theme.shadow, padding: '24px', minHeight: 0,
-                border: borderStyle,
-                transition: 'border 0.3s'
-            }}>
-                <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-                    <AutoFitImage 
-                        src={apiData?.FILEPATH1} 
-                        alt="Inspection Result" 
-                        onZoom={() => setIsModalOpen(true)} 
-                    />
-                    
-                    {/* 파일명 오버레이 */}
-                    {apiData?.FILENAME1 && (
-                        <div style={{ 
-                            position: 'absolute', top: '24px', left: '24px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)', padding: '10px 16px', borderRadius: '12px',
-                            color: theme.textSecondary, fontSize: '13px', fontWeight: 600, backdropFilter: 'blur(8px)',
-                            display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-                            border: `1px solid ${theme.border}`
-                        }}>
-                              <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: theme.accent }} />
-                              {apiData.FILENAME1}
-                        </div>
-                    )}
+            {/* 메인 영역 분할: 이미지(3) vs 로그(1) */}
+            <div style={{ flex: 1, display: 'flex', gap: layout.gap, minHeight: 0 }}>
+                
+                {/* 1. 이미지 뷰어 (Overlay 포함) */}
+                <div style={{ 
+                    flex: 3, display: 'flex', flexDirection: 'column', 
+                    backgroundColor: theme.cardBg, borderRadius: '24px',
+                    boxShadow: theme.shadow, padding: '24px',
+                    border: borderStyle, transition: 'border 0.3s'
+                }}>
+                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                        <AutoFitImage 
+                            src={apiData?.FILEPATH1 || ''} 
+                            alt="Inspection Result" 
+                            onZoom={() => setIsModalOpen(true)}
+                            showOverlay={!!apiData?.FILEPATH1} // 이미지가 있을 때만 오버레이 표시
+                        />
+                        {apiData?.FILENAME1 && (
+                            <div style={{ 
+                                position: 'absolute', top: '24px', left: '24px',
+                                backgroundColor: 'rgba(255, 255, 255, 0.95)', padding: '10px 16px', borderRadius: '12px',
+                                color: theme.textSecondary, fontSize: '13px', fontWeight: 600, backdropFilter: 'blur(8px)',
+                                display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                                border: `1px solid ${theme.border}`
+                            }}>
+                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: theme.accent }} />
+                                {apiData.FILENAME1}
+                            </div>
+                        )}
+                    </div>
                 </div>
+
+                {/* 2. 로그 패널 (우측) */}
+                <div style={{ 
+                    flex: 1, display: 'flex', flexDirection: 'column',
+                    backgroundColor: theme.cardBg, borderRadius: '24px',
+                    boxShadow: theme.shadow, border: `1px solid ${theme.border}`,
+                    overflow: 'hidden'
+                }}>
+                    <div style={{ padding: '20px 24px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FileText size={18} color={theme.textPrimary} />
+                            <span style={{ fontWeight: 700, fontSize: '16px', color: theme.textPrimary }}>시스템 로그</span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: theme.textSecondary, backgroundColor: '#FFFFFF', padding: '4px 8px', borderRadius: '6px', border: `1px solid ${theme.border}` }}>
+                            실시간
+                        </div>
+                    </div>
+                    
+                    <div className="custom-scroll" style={{ flex: 1, overflowY: 'auto', padding: '0 24px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column-reverse' }}>
+                            {systemLogs.map((log) => (
+                                <LogItem key={log.id} log={log} />
+                            ))}
+                        </div>
+                    </div>
+
+                    <div style={{ padding: '16px 24px', borderTop: `1px solid ${theme.border}`, backgroundColor: '#F8FAFC' }}>
+                        <button style={{ 
+                            width: '100%', padding: '12px', borderRadius: '10px', 
+                            border: `1px dashed ${theme.border}`, backgroundColor: 'transparent',
+                            color: theme.textSecondary, fontSize: '13px', fontWeight: 600,
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                        }}>
+                            전체 로그 보기 <ChevronRight size={14} />
+                        </button>
+                    </div>
+                </div>
+
             </div>
         </div>
     );

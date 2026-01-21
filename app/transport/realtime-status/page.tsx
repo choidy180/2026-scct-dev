@@ -4,17 +4,16 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import styled from "styled-components";
 import axios from "axios";
 import { 
-  Sun, Navigation, Truck, Activity, 
-  BarChart2, ArrowRight, Calendar, RefreshCw, CheckCircle,
-  PlayCircle, StopCircle
+  Sun, Cloud, CloudRain, CloudSnow, CloudLightning, Navigation, Truck, Activity, 
+  ArrowRight, Calendar, RefreshCw, CheckCircle, MapPin, AlertCircle, PlayCircle, StopCircle
 } from "lucide-react";
 import { format } from "date-fns";
 import dynamic from "next/dynamic";
 import VehicleStatusCard from "@/components/vehicle-status-card";
-import type { VWorldMarker } from "@/components/vworld-map";
+import type { VWorldMarker } from "@/components/vworld-map"; // 경로 확인 필요
 
 const VWorldMap = dynamic(
-  () => import("@/components/vworld-map"),
+  () => import("@/components/vworld-map"), // 위에서 작성한 컴포넌트 경로
   { 
     ssr: false,
     loading: () => <div style={{width: '100%', height: '100%', background: '#f8fafc'}} /> 
@@ -91,39 +90,39 @@ const fastFormatTime = (date: Date) => {
 const generateDummyData = (): SimulationVehicle[] => {
   const now = Date.now();
   
-  // LG -> GMT (약 45km, 현실적 25~30분 설정)
+  const v1_history: SimulationVehicle = {
+    id: "dummy-history-1", vehicleNo: "부산80바 1234", driver: "김철수",
+    startPos: LOCATION_MAP["GMT_부산"], destPos: LOCATION_MAP["LG1_선진화"],
+    totalDistanceKm: 45, baseDurationSec: 1600,
+    startTime: now - (1000 * 60 * 120),
+    status: 'Arrived', cargo: "빈 팔레트 회수", temp: "상온"
+  };
+
   const v1: SimulationVehicle = {
     id: "dummy-1", vehicleNo: "부산80바 1234", driver: "김철수",
     startPos: LOCATION_MAP["LG1_선진화"], destPos: LOCATION_MAP["GMT_부산"],
-    totalDistanceKm: 45, baseDurationSec: 1600, // 약 26분
-    startTime: now - (1000 * 60 * 20), // 20분 전 출발 (도착 임박)
+    totalDistanceKm: 45, baseDurationSec: 1600, 
+    startTime: now - (1000 * 60 * 20), 
     status: 'Moving', cargo: "세탁기 모터 부품", temp: "상온"
   };
+
   const v2: SimulationVehicle = {
     id: "dummy-2", vehicleNo: "부산81사 5678", driver: "이영희",
     startPos: LOCATION_MAP["LG1_선진화"], destPos: LOCATION_MAP["GMT_부산"],
-    totalDistanceKm: 45, baseDurationSec: 1800, // 30분
-    startTime: now - (1000 * 60 * 5), // 5분 전 출발
+    totalDistanceKm: 45, baseDurationSec: 1800, 
+    startTime: now - (1000 * 60 * 5), 
     status: 'Moving', cargo: "건조기 패널", temp: "상온"
   };
 
-  // GMT -> LG (약 45km)
   const v3: SimulationVehicle = {
     id: "dummy-3", vehicleNo: "경남90아 9999", driver: "박민수",
     startPos: LOCATION_MAP["GMT_부산"], destPos: LOCATION_MAP["LG1_선진화"],
-    totalDistanceKm: 45, baseDurationSec: 1700, // 약 28분
-    startTime: now - (1000 * 60 * 25), // 25분 전 출발 (도착 임박)
+    totalDistanceKm: 45, baseDurationSec: 1700, 
+    startTime: now - (1000 * 60 * 25), 
     status: 'Moving', cargo: "빈 팔레트 회수", temp: "상온"
   };
-  const v4: SimulationVehicle = {
-    id: "dummy-4", vehicleNo: "경남88자 1111", driver: "최동훈",
-    startPos: LOCATION_MAP["GMT_부산"], destPos: LOCATION_MAP["LG1_선진화"],
-    totalDistanceKm: 45, baseDurationSec: 1500, // 약 25분
-    startTime: now - (1000 * 60 * 2), // 2분 전 출발
-    status: 'Moving', cargo: "불량 반송품", temp: "상온"
-  };
-
-  return [v1, v2, v3, v4];
+  
+  return [v1_history, v1, v2, v3];
 };
 
 const useVehicleSimulation = () => {
@@ -304,16 +303,87 @@ const KpiWidget = React.memo(({ vehicleCount, movingCount }: { vehicleCount: num
 ));
 KpiWidget.displayName = "KpiWidget";
 
+// 🟢 [추가됨] 좌측 하단 실시간 운행 현황판
+const LiveRouteStatus = React.memo(({ vehicles }: { vehicles: SimulationVehicle[] }) => {
+    // 이동 중인 차량만 필터링
+    const movingVehicles = vehicles.filter(v => v.status === 'Moving');
+    
+    // LG행 (목적지에 LG 포함)
+    const toLg = movingVehicles.filter(v => v.destPos.title.includes("LG"));
+    // 고모텍행 (목적지에 GMT/고모텍 포함)
+    const toGmt = movingVehicles.filter(v => v.destPos.title.includes("GMT") || v.destPos.title.includes("고모텍"));
+
+    return (
+        <StatusPanelWrapper>
+            <StatusGroup>
+                <div className="group-header">
+                    <div className="icon-box gmt"><MapPin size={14} color="white" /></div>
+                    <span>고모텍(부산) 행</span>
+                    <span className="count-badge">{toGmt.length}</span>
+                </div>
+                <div className="vehicle-list">
+                    {toGmt.length > 0 ? (
+                        toGmt.map(v => (
+                            <div key={v.id} className="v-item">
+                                <Truck size={12} className="v-icon" />
+                                <span className="v-no">{v.vehicleNo}</span>
+                                <span className="v-driver">{v.driver}</span>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="empty-state">
+                            <AlertCircle size={12} /> 현재 운행 차량 없음
+                        </div>
+                    )}
+                </div>
+            </StatusGroup>
+
+            <div className="divider" />
+
+            <StatusGroup>
+                <div className="group-header">
+                    <div className="icon-box lg"><MapPin size={14} color="white" /></div>
+                    <span>LG전자(창원) 행</span>
+                    <span className="count-badge">{toLg.length}</span>
+                </div>
+                <div className="vehicle-list">
+                    {toLg.length > 0 ? (
+                        toLg.map(v => (
+                            <div key={v.id} className="v-item">
+                                <Truck size={12} className="v-icon" />
+                                <span className="v-no">{v.vehicleNo}</span>
+                                <span className="v-driver">{v.driver}</span>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="empty-state">
+                            <AlertCircle size={12} /> 현재 운행 차량 없음
+                        </div>
+                    )}
+                </div>
+            </StatusGroup>
+        </StatusPanelWrapper>
+    );
+});
+LiveRouteStatus.displayName = "LiveRouteStatus";
+
 // 🟢 우측 패널 (금일 운행 이력 포함)
 const RightControlPanel = React.memo(({ currentTime, weather, vehicles, markerMap, targetIds }: any) => {
-    // 🟢 구간별 평균 시간 계산 (실제 차량 데이터 기반 + 현실적 기본값)
+    
+    const tripCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        vehicles.forEach((v: SimulationVehicle) => {
+            counts[v.vehicleNo] = (counts[v.vehicleNo] || 0) + 1;
+        });
+        return counts;
+    }, [vehicles]);
+
     const calculateAvgTime = (startKeyword: string) => {
         const relevantVehicles = vehicles.filter((v: SimulationVehicle) => 
             v.startPos.title.includes(startKeyword) && v.status === 'Moving'
         );
 
         if (relevantVehicles.length === 0) {
-            // 차량이 없어도 평시 기준 시간 표시 (25~30분)
             return "약 28분"; 
         }
 
@@ -361,12 +431,13 @@ const RightControlPanel = React.memo(({ currentTime, weather, vehicles, markerMa
                     <span>금일 운행 이력 ({vehicles.length})</span>
                 </div>
                 <div className="list-container">
-                    {vehicles.map((v: any) => {
+                    {vehicles.map((v: SimulationVehicle) => {
                         const isArrived = v.status === 'Arrived';
                         const displayPct = isArrived ? 100 : Math.floor((markerMap.get(v.id)?.progress || 0) * 100);
                         const remainingSec = Math.max(0, v.baseDurationSec * (1 - (markerMap.get(v.id)?.progress || 0)));
                         const remainingMin = Math.ceil(remainingSec / 60);
                         const isActive = v.id === targetIds.lgId || v.id === targetIds.gmtId;
+                        const tripTotalCount = tripCounts[v.vehicleNo] || 1;
 
                         return (
                             <VehicleListItem 
@@ -379,6 +450,7 @@ const RightControlPanel = React.memo(({ currentTime, weather, vehicles, markerMa
                                     <div className="info">
                                         <div className="id-row">
                                             <span className="v-id">{v.vehicleNo}</span>
+                                            <span className="trip-count">({tripTotalCount}회차)</span>
                                             <span className={`status ${isArrived ? 'arrived' : 'moving'}`}>
                                                 {isArrived ? '도착' : '운행중'}
                                             </span>
@@ -438,7 +510,9 @@ TopControlPanel.displayName = "TopControlPanel";
 export default function LocalMapPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
-  const [weather] = useState({ temp: 12, desc: '맑음', icon: <Sun size={24} color="#FDB813" /> });
+  const [weather, setWeather] = useState<{ temp: number; desc: string; icon: React.ReactNode }>({ 
+      temp: 0, desc: '-', icon: <Sun size={24} color="#ccc" /> 
+  });
   
   const { vehicles, markers, targetIds, fetchData, isLoading, isDummyMode, setIsDummyMode } = useVehicleSimulation();
 
@@ -451,6 +525,40 @@ export default function LocalMapPage() {
   }, [markers]);
 
   const movingCount = vehicles.filter(v => v.status === 'Moving').length;
+
+  const fetchWeather = async () => {
+    try {
+        const res = await axios.get("https://api.open-meteo.com/v1/forecast?latitude=35.15&longitude=128.86&current_weather=true&timezone=auto");
+        const { temperature, weathercode } = res.data.current_weather;
+        
+        let desc = "맑음";
+        let icon = <Sun size={24} color="#FDB813" />;
+
+        if (weathercode >= 0 && weathercode <= 3) {
+            desc = weathercode === 0 ? "맑음" : "구름조금";
+            icon = weathercode === 0 ? <Sun size={24} color="#FDB813" /> : <Cloud size={24} color="#94a3b8" />;
+        } else if (weathercode >= 45 && weathercode <= 48) {
+            desc = "안개";
+            icon = <Cloud size={24} color="#cbd5e1" />;
+        } else if (weathercode >= 51 && weathercode <= 67) {
+            desc = "비";
+            icon = <CloudRain size={24} color="#3b82f6" />;
+        } else if (weathercode >= 71 && weathercode <= 77) {
+            desc = "눈";
+            icon = <CloudSnow size={24} color="#bfdbfe" />;
+        } else if (weathercode >= 80 && weathercode <= 82) {
+            desc = "소나기";
+            icon = <CloudRain size={24} color="#2563eb" />;
+        } else if (weathercode >= 95) {
+            desc = "뇌우";
+            icon = <CloudLightning size={24} color="#7c3aed" />;
+        }
+
+        setWeather({ temp: temperature, desc, icon });
+    } catch (e) {
+        console.error("Weather fetch failed", e);
+    }
+  };
 
   const generateCardData = useCallback((vehicleId: string | null) => {
     if (!vehicleId) return null;
@@ -488,8 +596,15 @@ export default function LocalMapPage() {
   useEffect(() => {
     setIsMounted(true);
     setCurrentTime(new Date());
+    fetchWeather();
+
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    const weatherTimer = setInterval(fetchWeather, 600000); 
+    
+    return () => {
+        clearInterval(timer);
+        clearInterval(weatherTimer);
+    };
   }, []);
 
   if (!isMounted) return null;
@@ -525,6 +640,9 @@ export default function LocalMapPage() {
             </DetailCardWrapper>
             )}
         </CardsStack>
+
+        {/* 🟢 좌측 하단 차량 현황판 */}
+        <LiveRouteStatus vehicles={vehicles} />
       </LeftControlPanel>
 
       <RightControlPanel 
@@ -535,10 +653,10 @@ export default function LocalMapPage() {
           targetIds={targetIds}
       />
 
-      {/* <DummyToggleBtn onClick={() => setIsDummyMode(!isDummyMode)} $active={isDummyMode}>
+      <DummyToggleBtn onClick={() => setIsDummyMode(!isDummyMode)} $active={isDummyMode}>
         {isDummyMode ? <StopCircle size={20} /> : <PlayCircle size={20} />}
         {isDummyMode ? "Stop Test" : "Test Mode"}
-      </DummyToggleBtn> */}
+      </DummyToggleBtn>
 
     </Container>
   );
@@ -575,6 +693,75 @@ const KpiHeader = styled.div`display: flex; align-items: center; gap: 8px; font-
 const LiveBadge = styled.span`margin-left: auto; background: #fee2e2; color: #ef4444; font-size: 13px; padding: 4px 10px; border-radius: 99px; font-weight: 800; animation: pulseRed 2s infinite; @keyframes pulseRed { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }`;
 const KpiGrid = styled.div`display: flex; justify-content: space-between; .divider { width: 1px; background: #e2e8f0; height: 44px; }`;
 const StyledKpiItem = styled.div`display: flex; flex-direction: column; gap: 4px; .label { font-size: 14px; color: #64748b; font-weight: 600; } .value { font-size: 24px; font-weight: 800; color: #0f172a; .unit { font-size: 15px; color: #64748b; margin-left: 2px; } } .trend { font-size: 13px; font-weight: 700; }`;
+
+// 🟢 [추가] 좌측 하단 현황판 스타일
+const StatusPanelWrapper = styled.div`
+  margin-top: auto; 
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+  width: 100%;
+  max-width: 340px;
+
+  .divider { height: 1px; background: #e2e8f0; width: 100%; }
+`;
+
+const StatusGroup = styled.div`
+  display: flex; flex-direction: column; gap: 8px;
+
+  .group-header {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 700; color: #1e293b;
+    
+    .icon-box {
+      width: 24px; height: 24px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .icon-box.gmt { background: #3b82f6; }
+    .icon-box.lg { background: #ef4444; }
+    
+    .count-badge {
+      margin-left: auto;
+      background: #f1f5f9; color: #64748b;
+      font-size: 11px; padding: 2px 8px; border-radius: 99px;
+    }
+  }
+
+  .vehicle-list {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+
+  .v-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: #334155;
+    background: rgba(255,255,255,0.5);
+    padding: 6px 10px; border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+
+    &:hover { background: white; border-color: #cbd5e1; }
+    
+    .v-icon { color: #94a3b8; }
+    .v-no { font-weight: 700; color: #0f172a; flex: 1; }
+    .v-driver { font-size: 11px; color: #64748b; }
+  }
+
+  .empty-state {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: #94a3b8;
+    padding: 8px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px dashed #cbd5e1;
+  }
+`;
 
 const CardsStack = styled.div`
   display: flex; flex-direction: column; gap: 12px; pointer-events: none;
@@ -616,6 +803,9 @@ const VehicleListItem = styled.div<{ $active: boolean; $isDelayed: boolean }>`
   .info { display: flex; flex-direction: column; gap: 2px; }
   .id-row { display: flex; align-items: center; gap: 8px; }
   .v-id { font-weight: 800; font-size: 15px; color: #1e293b; }
+  
+  .trip-count { font-size: 12px; color: #64748b; font-weight: 600; }
+
   .status { font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
   .status.arrived { background: #dcfce7; color: #166534; }
   .status.moving { background: #dbeafe; color: #1e40af; }
@@ -637,9 +827,6 @@ const TimeRow = styled.div`display: flex; justify-content: space-between; align-
 const WeatherRow = styled.div`display: flex; justify-content: space-between; align-items: center; background: rgba(241,245,249,0.7); padding: 12px 16px; border-radius: 12px; .temp-box { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; } .desc { font-size: 14px; color: #64748b; font-weight: 600; }`;
 const EtaBox = styled.div`background: rgba(241, 245, 249, 0.7); border-radius: 12px; padding: 14px 16px; border: 1px solid rgba(255,255,255,0.4); .box-title { font-size: 13px; font-weight: 700; color: #94a3b8; margin-bottom: 10px; } .line { height: 1px; background: rgba(0,0,0,0.05); margin: 10px 0; }`;
 const EtaRow = styled.div`display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 700; .route { display: flex; align-items: center; gap: 6px; color: #475569; } .time { color: #2563eb; background: rgba(37,99,235,0.1); padding: 4px 8px; border-radius: 6px; }`;
-const AnalyticsWidget = styled(GlassCard)`padding: 20px; display: flex; flex-direction: column; gap: 14px; pointer-events: auto; flex-shrink: 0; max-width:300px;`; 
-const WidgetTitle = styled.div`font-size: 16px; font-weight: 800; color: #334155; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; .count { background: #ef4444; color: white; font-size: 12px; padding: 2px 8px; border-radius: 99px; }`;
-const CompactTable = styled.table`width: 100%; border-collapse: collapse; font-size: 14px; th { text-align: left; color: #94a3b8; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; } td { padding: 8px 0; color: #334155; font-weight: 700; border-bottom: 1px solid #f1f5f9; } tr:last-child td { border-bottom: none; } .status { display: flex; align-items: center; gap: 8px; } .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } .dot.blue { background: #3B82F6; } .dot.green { background: #10B981; } .dot.gray { background: #E2E8F0; } .count { text-align: center; color: #0f172a; } .ratio { text-align: right; color: #64748b; font-weight: 600; }`;
 const SystemTicker = styled.div`display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #94a3b8; padding-left: 24px; border-left: 1px solid #e2e8f0; .spin { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
 
 // Modal Styles
@@ -683,15 +870,6 @@ const ModalContent = styled.div`
       border: 2px solid #e2e8f0;
       animation: ripple 2s infinite;
     }
-    
-    .status-badge {
-      position: absolute; bottom: 0; right: 0;
-      width: 32px; height: 32px;
-      background: #94a3b8;
-      border-radius: 50%;
-      border: 4px solid #fff;
-      display: flex; align-items: center; justify-content: center;
-    }
   }
 
   .text-content {
@@ -726,7 +904,7 @@ const ModalContent = styled.div`
 
 const DummyToggleBtn = styled.button<{ $active: boolean }>`
   position: absolute; bottom: 24px; right: 24px; 
-  z-index: 2000; /* 🔥 z-index를 높여서 모달 위로 올라오게 수정 */
+  z-index: 2000;
   display: flex; align-items: center; gap: 8px;
   padding: 12px 20px;
   background: ${props => props.$active ? '#3b82f6' : 'white'};
