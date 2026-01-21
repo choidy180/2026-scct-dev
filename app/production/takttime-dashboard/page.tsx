@@ -541,7 +541,7 @@ export default function ProcessDashboard() {
 
   const getSlicedData = (lineData: CycleData[]) => {
       const sliceCount = Math.floor(lineData.length * 0.5); 
-      return lineData.slice(-sliceCount); 
+      return lineData.slice(-10);
   };
 
   const displayData = useMemo(() => ({
@@ -734,11 +734,11 @@ export default function ProcessDashboard() {
                   {viewMode === 1 && (
                     <TaktGrid $rows={2}>
                       <TaktBox $isSingle={false}>
-                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.primary}}/> 꼬모냉장고</span>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.primary}}/> 발포라인</span>
                         <div className="val-group"><span className="takt-val">{avgTakts.A}s</span></div>
                       </TaktBox>
                       <TaktBox $isSingle={false}>
-                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 총조립2라인</span>
                         <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
                       </TaktBox>
                     </TaktGrid>
@@ -747,11 +747,11 @@ export default function ProcessDashboard() {
                   {viewMode === 2 && (
                     <TaktGrid $rows={2}>
                       <TaktBox $isSingle={false}>
-                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 발포라인</span>
                         <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
                       </TaktBox>
                       <TaktBox $isSingle={false}>
-                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 총조립2라인</span>
                         <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
                       </TaktBox>
                     </TaktGrid>
@@ -760,15 +760,15 @@ export default function ProcessDashboard() {
                   {viewMode === 3 && (
                     <TaktGrid $rows={3}>
                       <TaktBox $isSingle={false}>
-                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.primary}}/> 꼬모냉장고</span>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.primary}}/> 발포라인</span>
                         <div className="val-group"><span className="takt-val">{avgTakts.A}s</span></div>
                       </TaktBox>
                       <TaktBox $isSingle={false}>
-                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 와인셀러</span>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 총조립1라인</span>
                         <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
                       </TaktBox>
                       <TaktBox $isSingle={false}>
-                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 얼음정수기</span>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderPurple}}/> 총조립2라인</span>
                         <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
                       </TaktBox>
                     </TaktGrid>

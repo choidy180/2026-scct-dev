@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import styled, { createGlobalStyle, css, keyframes } from 'styled-components';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import styled, { createGlobalStyle, keyframes } from 'styled-components';
 import { 
   FiCpu, FiMoreHorizontal, FiSend, FiVideo, 
   FiActivity, FiBox, FiCheckCircle, FiLoader, 
-  FiClock, FiAlertCircle, FiList, FiFileText, FiCheckSquare, FiTag, FiLayers
+  FiClock, FiAlertCircle, FiList, FiFileText, FiCheckSquare, FiTag, FiLayers,
+  FiUser, FiCalendar, FiPackage, FiTarget
 } from 'react-icons/fi';
 
 // --- 1. Global Style ---
@@ -41,6 +42,7 @@ const theme = {
   radius: '16px',
   shadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
   fixedGreen: '#4ADE80',
+  accent: '#6366F1' // 작업정보 강조용
 };
 
 // --- API Interfaces ---
@@ -57,20 +59,40 @@ interface CameraData {
   slots_detail: SlotDetail[];
 }
 
+// [NEW] 작업 데이터 인터페이스
+interface WorkingData {
+  NoWkOrd: string;      // 작업지시번호
+  PrjName: string;      // 프로젝트명
+  ItemName: string;     // 품목명
+  OrdQty: number;       // 지시수량
+  ProdQty: number;      // 생산수량
+  NmEmplo: string;      // 작업자명
+  NmWrkState: string;   // 상태 (완료, 진행 등)
+  NmProce: string;      // 공정명
+  PlnSTime: string;     // 계획시작
+  PlnETime: string;     // 계획종료
+  WrkGongSu: number;    // 공수
+}
+
+// [UPDATED] API 전체 응답 구조
 interface ApiResult {
-  [key: string]: CameraData;
+  success: boolean;
+  recent_time: string;
+  working_data: WorkingData;
+  camData: {
+    [key: string]: CameraData;
+  };
 }
 
 interface FlattenedSlotItem extends SlotDetail {
   camId: string;
 }
 
-// [수정] 로그용 데이터 인터페이스 확장 (지시번호, 수량 추가)
 interface LogItemType extends FlattenedSlotItem {
   logType: 'start' | 'end';
   timestampObj: Date;
-  workOrderNo: string;   // 작업지시번호
-  productionQty: number; // 생산수량
+  workOrderNo: string;
+  productionQty: number;
 }
 
 // --- Animation Keyframes ---
@@ -205,18 +227,18 @@ const MiniDashboardOverlay = styled.div`
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0px;
 `;
 
 const MiniLabel = styled.div`
-  font-size: 11px;
+  font-size: 14px;
   color: #94A3B8; 
   text-transform: uppercase;
   font-weight: 700;
 `;
 
 const MiniTitle = styled.div`
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: #F1F5F9;
   margin-bottom: 4px;
@@ -235,7 +257,7 @@ const MiniValueBig = styled.span`
 `;
 
 const MiniValueSub = styled.span`
-  font-size: 11px;
+  font-size: 14px;
   color: #CBD5E1;
   padding-bottom: 2px;
 `;
@@ -313,9 +335,122 @@ const ToggleBtn = styled.button<{ $active: boolean }>`
   }
 `;
 
-const NoticeBanner = styled.div`
+// --- [NEW] Working Info Styles ---
+const WorkInfoCard = styled.div`
   margin: 16px 20px 0 20px;
-  background: #FEF3C7;
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+  animation: ${fadeIn} 0.5s ease-out;
+`;
+
+const WorkInfoTitleRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #F1F5F9;
+`;
+
+const WorkInfoMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+const WorkOrderBadge = styled.span`
+  font-size: 11px;
+  color: ${theme.textSub};
+  background: #F1F5F9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  gap: 4px;
+`;
+
+const ItemNameText = styled.div`
+  font-size: 15px;
+  font-weight: 700;
+  color: ${theme.textMain};
+  line-height: 1.3;
+`;
+
+const WorkStatusTag = styled.span`
+  background: #EEF2FF;
+  color: #4F46E5;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: fit-content;
+`;
+
+const WorkGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+`;
+
+const WorkDetailItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`;
+
+const WorkLabel = styled.span`
+  font-size: 14px;
+  color: #94A3B8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+
+const WorkValue = styled.span`
+  font-size: 16px;
+  font-weight: 600;
+  color: #334155;
+`;
+
+const ProgressContainer = styled.div`
+  margin-top: 14px;
+`;
+
+const ProgressLabelRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${theme.textSub};
+`;
+
+const ProgressBarBg = styled.div`
+  width: 100%;
+  height: 8px;
+  background: #F1F5F9;
+  border-radius: 4px;
+  overflow: hidden;
+`;
+
+const ProgressBarFill = styled.div<{ $percent: number }>`
+  height: 100%;
+  width: ${props => props.$percent}%;
+  background: linear-gradient(90deg, ${theme.primary}, ${theme.fixedGreen});
+  border-radius: 4px;
+  transition: width 0.5s ease;
+`;
+
+const NoticeBanner = styled.div`
+  margin: 12px 20px 0 20px;
+  background: #FFFBEB;
   color: #92400E;
   padding: 10px 14px;
   border-radius: 12px;
@@ -325,21 +460,6 @@ const NoticeBanner = styled.div`
   align-items: center;
   gap: 8px;
   border: 1px solid #FDE68A;
-  position: relative;
-  animation: ${fadeIn} 0.5s ease-out;
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: -6px;
-    left: 24px;
-    width: 10px;
-    height: 10px;
-    background: #FEF3C7;
-    border-top: 1px solid #FDE68A;
-    border-left: 1px solid #FDE68A;
-    transform: rotate(45deg);
-  }
 `;
 
 const ListScrollArea = styled.div`
@@ -423,7 +543,7 @@ const StatusBadge = styled.span<{ $occupied: boolean }>`
   color: ${props => props.$occupied ? 'white' : '#64748B'};
 `;
 
-// --- Log Style Components (Updated) ---
+// --- Log Style Components ---
 const LogItem = styled.div`
   display: flex;
   gap: 16px;
@@ -477,10 +597,9 @@ const LogContent = styled.div`
 const LogHeader = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px; /* 간격 조정 */
+  margin-bottom: 8px;
 `;
 
-// [NEW] 작업지시번호, 수량 표시용 메타 로우
 const LogMetaRow = styled.div`
   display: flex;
   gap: 8px;
@@ -580,31 +699,76 @@ const Input = styled.input`
   &:focus { background: #E2E8F0; }
 `;
 
-// --- Mock Data ---
+// --- Mock Data (Updated to new structure) ---
 const MOCK_DATA: ApiResult = {
-  "207": {
-    "total": 7,
-    "occupied": 6,
-    "empty_idxs": [7],
-    "slots_detail": [
-       { "slot_id": 1, "occupied": true, "entry_time": "2026-01-19T13:06:38" },
-       { "slot_id": 2, "occupied": true, "entry_time": "2026-01-19T13:27:00" },
-       { "slot_id": 3, "occupied": true, "entry_time": "2026-01-19T13:23:56" },
-       { "slot_id": 4, "occupied": true, "entry_time": "2026-01-19T13:09:41" },
-       { "slot_id": 5, "occupied": true, "entry_time": "2026-01-19T13:06:52" },
-       { "slot_id": 6, "occupied": true, "entry_time": "2026-01-19T13:06:38" },
-       { "slot_id": 7, "occupied": false, "entry_time": "" }
-    ]
-  },
-  "218": {
-    "total": 3,
-    "occupied": 2,
-    "empty_idxs": [3],
-    "slots_detail": [
-       { "slot_id": 1, "occupied": true, "entry_time": "2026-01-19T13:18:38" },
-       { "slot_id": 2, "occupied": true, "entry_time": "2026-01-19T13:33:04" },
-       { "slot_id": 3, "occupied": false, "entry_time": null }
-    ]
+  "success": true,
+  "recent_time": "2026-01-21T14:58:09.000Z",
+  "working_data": {
+    "NoWkOrd": "WO26012000019",
+    "IdWkOrd": "WO26012000019",
+    "DtWkOrd": "2026-01-21",
+    "PlnSTime": "2026-01-21 09:12:00",
+    "PlnETime": "2026-01-21 15:40:00",
+    "PrjCode": "MP-20004",
+    "PrjName": "M-Next3 DID",
+    "ItemCode": "ADD76419629",
+    "ItemName": "Door Foam Assembly,Ref.(DID)",
+    "CdGItem": "ADD76419629",
+    "NmGItem": "Door Foam Assembly,Ref.(DID)",
+    "DrwNumb": "ADD764196",
+    "OrdQty": 535,
+    "ProdQty": 535,
+    "GoodQty": 535,
+    "BadQty": 0,
+    "RemQty": 0,
+    "PackQty": "18",
+    "CdEmpol": "GMT1651",
+    "NmEmplo": "박태용",
+    "WrkState": "E",
+    "NmWrkState": "완료",
+    "CdEquip": "YMC009",
+    "NmEquip": "GR5-프레임도아",
+    "CdProce": "PRC007",
+    "NmProce": "총조립",
+    "OrdType2": "388",
+    "OrdType3": "A1",
+    "ExpTime": 43.5,
+    "WrkGongSu": 9,
+    "WrkRate": null,
+    "WrkCnt": 2,
+    "BigOper": "조립",
+    "OrderNo": null,
+    "NumSort": 2,
+    "Remarks": "",
+    "WrkSTime": "2026-01-21 09:28:26",
+    "WrkETime": "2026-01-21 16:35:34",
+    "Update_Time": "2026-01-21T16:35:34.053Z"
+  } as any, // as any to suppress loose mock data types vs strict interface if needed
+  "camData": {
+    "207": {
+      "total": 7,
+      "occupied": 0,
+      "empty_idxs": [1, 2, 3, 4, 5, 6, 7],
+      "slots_detail": [
+        { "slot_id": 1, "occupied": false, "entry_time": null },
+        { "slot_id": 2, "occupied": false, "entry_time": null },
+        { "slot_id": 3, "occupied": false, "entry_time": null },
+        { "slot_id": 4, "occupied": false, "entry_time": null },
+        { "slot_id": 5, "occupied": false, "entry_time": null },
+        { "slot_id": 6, "occupied": false, "entry_time": null },
+        { "slot_id": 7, "occupied": false, "entry_time": null }
+      ]
+    },
+    "218": {
+      "total": 3,
+      "occupied": 2,
+      "empty_idxs": [1],
+      "slots_detail": [
+        { "slot_id": 1, "occupied": false, "entry_time": null },
+        { "slot_id": 2, "occupied": true, "entry_time": "2026-01-21T23:58:09" },
+        { "slot_id": 3, "occupied": true, "entry_time": "2026-01-21T20:06:21" }
+      ]
+    }
   }
 };
 
@@ -612,17 +776,19 @@ const SmartFactoryDashboard: React.FC = () => {
   const [apiData, setApiData] = useState<ApiResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'log'>('list');
+  const [mounted, setMounted] = useState(false);
 
   // Chat State
   const [messages, setMessages] = useState([
     { id: 1, text: "시스템 가동. 실시간 공정 데이터 수신중.", user: false },
-    { id: 2, text: "설비 #207의 적재량이 80%를 초과했습니다.", user: false },
+    { id: 2, text: "현재 'Door Foam Assembly' 작업이 진행중입니다.", user: false },
   ]);
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // API Fetch
   useEffect(() => {
+    setMounted(true);
     const fetchData = async () => {
       try {
         const res = await fetch('http://1.254.24.170:24828/api/DX_API000018');
@@ -656,45 +822,66 @@ const SmartFactoryDashboard: React.FC = () => {
     if (!timeStr) return "-";
     try {
       const date = new Date(timeStr);
+      if (isNaN(date.getTime())) return "-";
       return date.toTimeString().split(' ')[0];
     } catch {
-      return timeStr;
+      return "-";
     }
   };
 
-  // --- Data Logic ---
-  const allSlots: FlattenedSlotItem[] = apiData 
-    ? Object.entries(apiData).flatMap(([key, data]) => 
-        data.slots_detail.map(slot => ({
-          camId: key,
-          ...slot
-        }))
-      )
-    : [];
+  // --- Data Logic (Updated for camData) ---
+  const allSlots: FlattenedSlotItem[] = useMemo(() => {
+    if (!apiData || !apiData.camData) return [];
 
-  // [중요] 로그 데이터 생성 (지시번호, 수량 추가됨)
-  const generateMixedLogs = () => {
-    // 1. Start 아이템 생성 (랜덤 지시번호, 수량 부여)
+    // 1. 데이터 평탄화 (기존 로직)
+    const list = Object.entries(apiData.camData).flatMap(([key, data]) => {
+      const details = data?.slots_detail || [];
+      return details.map(slot => ({
+        camId: key,
+        ...slot
+      }));
+    });
+
+    // 2. [수정] 정렬 로직 추가 (작업중인 슬롯 우선)
+    return list.sort((a, b) => {
+      // (1) 작업중(occupied: true)인 것이 우선
+      if (a.occupied !== b.occupied) {
+        return a.occupied ? -1 : 1;
+      }
+      // (2) 상태가 같다면 공정 번호(camId) 순 정렬
+      if (a.camId !== b.camId) {
+        return a.camId.localeCompare(b.camId);
+      }
+      // (3) 공정도 같다면 슬롯 번호(slot_id) 순 정렬
+      return a.slot_id - b.slot_id;
+    });
+  }, [apiData]);
+
+  // Log Data Logic (Hydration Safe)
+  const mixedLogData = useMemo(() => {
+    if (allSlots.length === 0) return [];
+
     const startItems: LogItemType[] = allSlots
       .filter(item => item.entry_time)
       .map(item => {
-        // Mock 데이터 생성
         const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        const workOrder = `WO-20240121-${randomNum}`;
-        const qty = Math.floor(Math.random() * 450) + 50; // 50~500
+        const workOrder = apiData?.working_data?.NoWkOrd || `WO-20240121-${randomNum}`;
+        const qty = Math.floor(Math.random() * 450) + 50;
+
+        const dateObj = new Date(item.entry_time!);
+        const safeDate = isNaN(dateObj.getTime()) ? new Date() : dateObj;
 
         return {
           ...item,
           logType: 'start',
-          timestampObj: new Date(item.entry_time!),
+          timestampObj: safeDate,
           workOrderNo: workOrder,
           productionQty: qty
         };
       });
 
-    // 2. End 아이템 생성 (Start 아이템의 정보를 그대로 승계)
     const endItems: LogItemType[] = startItems.map(item => {
-      const durationMin = 2 + Math.floor(Math.random() * 4); // 2~5분 후
+      const durationMin = 2 + Math.floor(Math.random() * 4);
       const endTime = new Date(item.timestampObj.getTime() + durationMin * 60000);
       
       return {
@@ -705,18 +892,20 @@ const SmartFactoryDashboard: React.FC = () => {
       };
     });
 
-    // 3. 합치고 최신순 정렬
     return [...startItems, ...endItems].sort((a, b) => 
       b.timestampObj.getTime() - a.timestampObj.getTime()
     );
-  };
+  }, [allSlots, apiData]);
 
-  const mixedLogData = generateMixedLogs();
-
-  const cam207Data = apiData ? apiData["207"] : null;
+  // [UPDATED] Cam Data References
+  const cam207Data = apiData?.camData ? apiData.camData["207"] : null;
   const cam207Ratio = cam207Data ? cam207Data.occupied / cam207Data.total : 0;
-  const cam218Data = apiData ? apiData["218"] : null;
+  const cam218Data = apiData?.camData ? apiData.camData["218"] : null;
   const cam218Ratio = cam218Data ? cam218Data.occupied / cam218Data.total : 0;
+  
+  // [NEW] Working Data
+  const wkData = apiData?.working_data;
+  const progressPercent = wkData ? Math.min((wkData.ProdQty / wkData.OrdQty) * 100, 100) : 0;
 
   return (
     <>
@@ -726,10 +915,12 @@ const SmartFactoryDashboard: React.FC = () => {
           <MainTitle>
             <FiActivity color={theme.primary} />
             스마트 공정 모니터링 시스템
-            <Badge>v2.6</Badge>
+            <Badge>v2.7</Badge>
           </MainTitle>
           <HeaderRight>
-            <span style={{ fontSize: 16, color: '#64748B' }}>{new Date().toLocaleDateString()}</span>
+            <span style={{ fontSize: 16, color: '#64748B' }}>
+              {mounted ? new Date().toLocaleDateString() : '...'}
+            </span>
           </HeaderRight>
         </Header>
 
@@ -739,7 +930,8 @@ const SmartFactoryDashboard: React.FC = () => {
           <VideoColumn>
             <VideoWrapper>
               <VideoOverlayTop>
-                <CamTag><FiVideo /> 설비 #207 (조립)</CamTag>
+                {/* [UPDATED] Video Label Changed */}
+                <CamTag><FiVideo /> GR5 가조립 자재 #1</CamTag>
                 <FiMoreHorizontal color="white" />
               </VideoOverlayTop>
               
@@ -751,7 +943,7 @@ const SmartFactoryDashboard: React.FC = () => {
               {cam207Data && (
                 <MiniDashboardOverlay>
                   <MiniLabel>실시간 적재 현황</MiniLabel>
-                  <MiniTitle>공정 #207 (조립)</MiniTitle>
+                  <MiniTitle>GR5 가조립 자재 #1</MiniTitle>
                   <MiniValueRow>
                     <MiniValueBig>{Math.round(cam207Ratio * 100)}%</MiniValueBig>
                     <MiniValueSub>{cam207Data.occupied} / {cam207Data.total} EA</MiniValueSub>
@@ -763,7 +955,7 @@ const SmartFactoryDashboard: React.FC = () => {
 
             <VideoWrapper>
               <VideoOverlayTop>
-                <CamTag><FiVideo /> 설비 #218 (포장)</CamTag>
+                <CamTag><FiVideo /> GR5 가조립 자재 #2</CamTag>
                 <FiMoreHorizontal color="white" />
               </VideoOverlayTop>
               
@@ -775,7 +967,7 @@ const SmartFactoryDashboard: React.FC = () => {
               {cam218Data && (
                 <MiniDashboardOverlay>
                   <MiniLabel>실시간 적재 현황</MiniLabel>
-                  <MiniTitle>공정 #218 (포장)</MiniTitle>
+                  <MiniTitle>GR5 가조립 자재 #2</MiniTitle>
                   <MiniValueRow>
                     <MiniValueBig>{Math.round(cam218Ratio * 100)}%</MiniValueBig>
                     <MiniValueSub>{cam218Data.occupied} / {cam218Data.total} EA</MiniValueSub>
@@ -810,6 +1002,50 @@ const SmartFactoryDashboard: React.FC = () => {
               </ViewToggle>
             </ListHeader>
             
+            {/* [NEW] Working Data UI - Detailed & Korean */}
+            {wkData && (
+              <WorkInfoCard>
+                <WorkInfoTitleRow>
+                  <WorkInfoMain>
+                    <WorkOrderBadge><FiFileText size={10}/> {wkData.NoWkOrd}</WorkOrderBadge>
+                    <ItemNameText>{wkData.ItemName}</ItemNameText>
+                  </WorkInfoMain>
+                  <WorkStatusTag>
+                    <FiActivity size={12}/> {wkData.NmWrkState}
+                  </WorkStatusTag>
+                </WorkInfoTitleRow>
+
+                <WorkGrid>
+                  <WorkDetailItem>
+                    <WorkLabel><FiUser size={10}/> 작업자</WorkLabel>
+                    <WorkValue>{wkData.NmEmplo}</WorkValue>
+                  </WorkDetailItem>
+                  <WorkDetailItem>
+                    <WorkLabel><FiTarget size={10}/> 공정명</WorkLabel>
+                    <WorkValue>{wkData.NmProce}</WorkValue>
+                  </WorkDetailItem>
+                  <WorkDetailItem>
+                    <WorkLabel><FiCalendar size={10}/> 계획 시작</WorkLabel>
+                    <WorkValue>{formatTime(wkData.PlnSTime)}</WorkValue>
+                  </WorkDetailItem>
+                  <WorkDetailItem>
+                    <WorkLabel><FiCalendar size={10}/> 계획 종료</WorkLabel>
+                    <WorkValue>{formatTime(wkData.PlnETime)}</WorkValue>
+                  </WorkDetailItem>
+                </WorkGrid>
+
+                <ProgressContainer>
+                  <ProgressLabelRow>
+                    <span>생산 진행률</span>
+                    <span style={{color: theme.primary}}>{wkData.ProdQty} / {wkData.OrdQty} EA</span>
+                  </ProgressLabelRow>
+                  <ProgressBarBg>
+                    <ProgressBarFill $percent={progressPercent} />
+                  </ProgressBarBg>
+                </ProgressContainer>
+              </WorkInfoCard>
+            )}
+
             <NoticeBanner>
               <FiAlertCircle size={16} />
               <span>알림 정책: 자재 1분 이상 미투입 / 공대차 5분 이상 대기 시 자동 경보</span>
@@ -870,7 +1106,6 @@ const SmartFactoryDashboard: React.FC = () => {
                                 <LogTime><FiClock size={10} /> {formatTime(item.entry_time)}</LogTime>
                               </LogHeader>
                               
-                              {/* [NEW] Meta Info Row */}
                               <LogMetaRow>
                                 <MetaTag><FiTag size={10} /> {item.workOrderNo}</MetaTag>
                                 <MetaTag><FiLayers size={10} /> {item.productionQty} EA</MetaTag>

@@ -32,27 +32,21 @@ import {
   Siren, 
   Octagon,
   Wrench,
-  AlertOctagon
+  AlertOctagon,
+  Pipette,
+  Info
 } from "lucide-react";
 import * as THREE from "three";
 import {
   ResponsiveContainer,
-  ComposedChart,
-  Bar,
-  Line,
   AreaChart,
   Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
-  Cell
 } from 'recharts';
 
 // -----------------------------------------------------------------------------
 // [설정 및 목업 데이터]
 
-// 연간 데이터
 const ANNUAL_DATA = [
   { name: 'Jan', inspection: 14000, error: 120, rate: 0.8 },
   { name: 'Feb', inspection: 13500, error: 98, rate: 0.7 },
@@ -100,15 +94,14 @@ const THEME = {
   dangerBg: '#FEE2E2',
 };
 
-const ERROR_REASONS = [
-    { problem: "냉각수 압력 저하", solution: "밸브 #3 개방 및 유량 체크" },
-    { problem: "서보 모터 과부하", solution: "베어링 오일 보충" },
-    { problem: "광학 센서 오작동", solution: "렌즈 이물질 제거" },
-    { problem: "입력 전압 불안정", solution: "PSU 모듈 교체" },
-    { problem: "PLC 응답 지연", solution: "통신 케이블 점검" },
-    { problem: "유압 실린더 누유", solution: "실린더 패킹 교체" },
-    { problem: "코어 온도 과열", solution: "냉각 팬 RPM 증가" },
-    { problem: "위치 제어 편차", solution: "서보 모터 영점 조정" }
+// [수정 완료] 공정별 색상 정의
+// 닫힘(Close) 색상을 제공해주신 붉은빛 주황색(#e55039)으로 변경했습니다.
+const PROCESS_CONFIG = [
+  { name: "오픈", color: "#6ab04c" },   // 녹색 계열
+  { name: "취출", color: "#f0932b" },   // 주황 계열
+  { name: "삽입", color: "#f9ca24" },   // 노란 계열
+  { name: "닫힘", color: "#72adb3" },   // [수정] 이미지와 유사한 붉은 주황색
+  { name: "주입", color: "#22a6b3" },   // 청록 계열
 ];
 
 // -----------------------------------------------------------------------------
@@ -173,24 +166,23 @@ const slideUp = keyframes` from { opacity: 0; transform: translateY(20px); } to 
 const slideDown = keyframes` from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } `;
 const float = keyframes` 0% { transform: translateY(0px) translateX(-50%); } 50% { transform: translateY(-5px) translateX(-50%); } 100% { transform: translateY(0px) translateX(-50%); } `;
 const blink = keyframes` 50% { opacity: 0; } `;
-const emergencyBlink = keyframes` 
-  0%, 100% { box-shadow: inset 0 0 50px rgba(239, 68, 68, 0.2); background-color: rgba(50, 0, 0, 0.3); } 
-  50% { box-shadow: inset 0 0 150px rgba(239, 68, 68, 0.6); background-color: rgba(50, 0, 0, 0.6); } 
-`;
-const textGlow = keyframes` 0%, 100% { text-shadow: 0 0 10px rgba(255, 0, 0, 0.5); } 50% { text-shadow: 0 0 20px rgba(255, 0, 0, 1), 0 0 40px rgba(255, 0, 0, 0.8); } `;
 const soundWave = keyframes` 0% { height: 10%; } 50% { height: 100%; } 100% { height: 10%; } `;
 const modalPop = keyframes` from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } `;
+const emergencyBlink = keyframes` 0%, 100% { box-shadow: inset 0 0 50px rgba(239, 68, 68, 0.2); background-color: rgba(50, 0, 0, 0.3); } 50% { box-shadow: inset 0 0 150px rgba(239, 68, 68, 0.6); background-color: rgba(50, 0, 0, 0.6); } `;
+const textGlow = keyframes` 0%, 100% { text-shadow: 0 0 10px rgba(255, 0, 0, 0.5); } 50% { text-shadow: 0 0 20px rgba(255, 0, 0, 1), 0 0 40px rgba(255, 0, 0, 0.8); } `;
 
 const PageContainer = styled.div` display: flex; flex-direction: column; width: 100%; height: calc(100vh - 64px); background-image: url('${FACTORY_BG_IMAGE}'); background-size: cover; background-position: center; background-repeat: no-repeat; background-color: #0f172a; color: #f8fafc; font-family: 'Pretendard', sans-serif; overflow: hidden; position: relative; &::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 15, 30, 0.85); z-index: 0; pointer-events: none; } `;
 const MainContent = styled.main` flex: 1; width: 100%; height: 100%; position: relative; z-index: 10; `;
 const ViewerContainer = styled.div` width: 100%; height: 100%; padding-top: 4rem; position: relative; isolation: isolate; `;
 const GlassPanel = styled.div` position: fixed; background: ${THEME.whiteCard}; backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; z-index: 20; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events: auto; color: ${THEME.textMain}; font-family: 'Pretendard', sans-serif; will-change: transform; `;
-const TopRightPanel = styled(GlassPanel)` top: 5rem; right: 1.5rem; width: 320px; height: 280px; animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; `;
-const DefectStatusPanel = styled(GlassPanel)` top: calc(5rem + 280px + 15px); right: 1.5rem; width: 320px; min-height: 160px; animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards; border-left: 4px solid ${THEME.danger}; `;
+
+const DefectStatusPanel = styled(GlassPanel)` top: 5rem; right: 1.5rem; width: 320px; min-height: 160px; animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards; `;
+const InjectionStatusPanel = styled(GlassPanel)` bottom: 1.5rem; right: 1.5rem; width: 320px; animation: ${slideInRight} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards; `;
 const BottomLeftPanel = styled(GlassPanel)` bottom: 1.5rem; left: 1.5rem; width: 320px; height: 260px; animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards; opacity: 0; animation-fill-mode: forwards; `;
 const VisionAnalysisPanel = styled(GlassPanel)` bottom: 1.5rem; left: calc(1.5rem + 320px + 15px); width: 240px; animation: ${slideInLeft} 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards; opacity: 0; animation-fill-mode: forwards; padding: 0; overflow: hidden; `;
 const HoverInfoPanel = styled(GlassPanel)` top: 5rem; left: 1.5rem; width: 260px; padding: 14px; animation: ${slideDown} 0.3s cubic-bezier(0.16, 1, 0.3, 1); border-left: 4px solid transparent; transition: border-color 0.3s ease, box-shadow 0.3s ease; will-change: transform, border-color; `;
 const AIAdvisorPanel = styled.div` position: fixed; bottom: calc(1.5rem + 260px + 15px); left: 1.5rem; width: 320px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(24px); border-radius: 20px; box-shadow: 0 20px 50px rgba(99, 102, 241, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05); border: 1px solid rgba(255, 255, 255, 0.8); padding: 0; overflow: hidden; z-index: 25; animation: ${slideUp} 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); display: flex; flex-direction: column; font-family: 'Pretendard', sans-serif; will-change: transform; `;
+
 const AIHeader = styled.div` background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%); padding: 12px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(0, 0, 0, 0.03); `;
 const AIBody = styled.div` padding: 16px; position: relative; `;
 const AIMessage = styled.div` font-size: 14px; line-height: 1.6; color: ${THEME.textMain}; font-weight: 500; `;
@@ -249,8 +241,76 @@ const ErrorBubble = styled.div`
 const BubbleTitle = styled.div` font-size: 11px; font-weight: 800; color: ${THEME.danger}; display: flex; align-items: center; gap: 4px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; `;
 const BubbleText = styled.div` font-size: 10px; color: #e2e8f0; margin-bottom: 3px; line-height: 1.3; span.label { color: #94a3b8; font-weight: 600; display: block; font-size: 9px; margin-bottom: 1px; } `;
 
+// [수정] 가로 배치 및 깔끔한 스타일 적용된 3D 라벨
+const ProcessLabelContainer = styled.div<{ $color: string }>`
+  background: rgba(255, 255, 255, 0.95);
+  padding: 6px 12px; 
+  border-radius: 8px; 
+  border: 1px solid ${(p) => p.$color}; 
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); 
+  display: flex;
+  align-items: center;
+  gap: 8px; 
+  backdrop-filter: blur(6px);
+  transform: translate(25px, -25px); 
+  white-space: nowrap; 
+  flex-direction: row; 
+`;
+
+const ProcessDot = styled.div<{ $color: string }>`
+  width: 10px; height: 10px; 
+  border-radius: 50%; 
+  background-color: ${(p) => p.$color};
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); 
+`;
+
+const ProcessText = styled.div`
+  font-size: 12px; 
+  font-weight: 800; 
+  color: #1e293b; 
+  font-family: 'Pretendard', sans-serif;
+  letter-spacing: -0.2px;
+`;
+
 // -----------------------------------------------------------------------------
 // [Helpers]
+
+// [신규] API가 없거나 로딩 중일 때 사용할 가상 데이터 생성 함수
+const generateMockApiData = () => {
+  return Array.from({ length: 12 }, (_, i) => ({
+    대차번호: (i + 1).toString(),
+    INTCART: i + 1,
+    시리얼번호: `SN-${20240000 + i}`,
+    모델번호: `MD-${100 + i}`,
+    TIMEVALUE: new Date().toISOString(),
+    "R액 압력(kg/㎥)": (150 + Math.random() * 10).toFixed(1), 
+    "P액 압력(kg/㎥)": (148 + Math.random() * 10).toFixed(1),
+    "R액 유량(g)": (300 + Math.random() * 50).toFixed(1),
+    "P액 유량(g)": (300 + Math.random() * 50).toFixed(1),
+    "유량 비율(P/R)": "1.0",
+    "R액 탱크온도(℃)": (40 + Math.random() * 5).toFixed(1),
+    "P액 탱크온도(℃)": (40 + Math.random() * 5).toFixed(1),
+    "R액 헤드온도(℃)": (45 + Math.random() * 5).toFixed(1),
+    "P액 헤드온도(℃)": (45 + Math.random() * 5).toFixed(1),
+    "온조#1리턴온도(℃)": "30.0",
+    "온조#2리턴온도(℃)": "30.0",
+    "온조#1공급수압력(kg/㎥)": "3.5",
+    "온조#2공급수압력(kg/㎥)": "3.5",
+    "발포시간(초)": "15",
+    "가조립무게(g)": "1200",
+    "가조립온도(℃)": (50 + Math.random() * 10).toFixed(1),
+    "삽입주변온도(℃)": "25.0",
+    "지그상판온도(℃)": "55.0",
+    "지그하판온도(℃)": "55.0",
+    "취출경화시간(초)": "120",
+    "취출무게(g)": "1250",
+    "취출주변온도(℃)": "26.0",
+    FILENAME1: "",
+    AI_TIME_STR: "",
+    AI_LABEL: "정상",
+    FILEPATH1: "",
+  })) as ApiDataItem[];
+};
 
 function TransitionLoader({ onFinished }: { onFinished: () => void }) {
   const [val, setVal] = useState(0);
@@ -352,6 +412,7 @@ interface JigModelProps {
   url: string;
   onHoverChange: (data: UnitData | null) => void;
   apiData: ApiDataItem[];
+  setInjectUnit: (unit: ApiDataItem | null) => void;
 }
 
 const MovingLabel = ({ labelIndex, locations, errorIndices, apiData }: { labelIndex: number, locations: any[], errorIndices: number[], apiData: ApiDataItem[] }) => {
@@ -450,15 +511,27 @@ const MovingLabel = ({ labelIndex, locations, errorIndices, apiData }: { labelIn
     );
 };
 
+const ProcessLabel = ({ position, name, color }: { position: THREE.Vector3, name: string, color: string }) => {
+  return (
+    <Html position={position} center zIndexRange={[50, 0]} style={{ pointerEvents: 'none' }}>
+      <ProcessLabelContainer $color={color}>
+        <ProcessDot $color={color} />
+        <ProcessText>{name}</ProcessText>
+      </ProcessLabelContainer>
+    </Html>
+  );
+};
+
 // [API 데이터 기반 인터랙티브 모델]
-function InteractiveJigModel({ url, onHoverChange, apiData }: JigModelProps) {
+function InteractiveJigModel({ url, onHoverChange, apiData, setInjectUnit }: JigModelProps) {
   const { scene } = useGLTF(url);
   const activeIdRef = useRef<string | null>(null);
   const highlightColor = useMemo(() => new THREE.Color("#38bdf8"), []);
   const errorColor = useMemo(() => new THREE.Color("#ff0000"), []);
   
   const [meshLocations, setMeshLocations] = useState<{ id: string, position: THREE.Vector3, mesh: THREE.Mesh }[]>([]);
-  
+  const [processLabelLocs, setProcessLabelLocs] = useState<{ position: THREE.Vector3, name: string, color: string }[]>([]);
+
   const activeErrorIndices = useMemo(() => {
       return apiData
           .filter(item => item.AI_LABEL !== "정상")
@@ -505,6 +578,7 @@ function InteractiveJigModel({ url, onHoverChange, apiData }: JigModelProps) {
     meshes.forEach(m => { centerX += m.position.x; centerZ += m.position.z; });
     centerX /= meshes.length; centerZ /= meshes.length;
 
+    // 반시계 방향 정렬
     meshes.sort((a, b) => {
         let angleA = Math.atan2(a.position.z - centerZ, a.position.x - centerX);
         let angleB = Math.atan2(b.position.z - centerZ, b.position.x - centerX);
@@ -520,6 +594,24 @@ function InteractiveJigModel({ url, onHoverChange, apiData }: JigModelProps) {
     ];
 
     if (sortedMeshes.length > 12) sortedMeshes.splice(12, 1);
+
+    const labels: { position: THREE.Vector3, name: string, color: string }[] = [];
+    
+    sortedMeshes.forEach((item, index) => {
+      // 5개 공정에 대해 색상 적용 및 라벨 위치 저장
+      if (index < PROCESS_CONFIG.length) {
+        const config = PROCESS_CONFIG[index];
+        const mat = item.mesh.material as THREE.MeshPhysicalMaterial;
+        mat.color.set(config.color);
+        
+        labels.push({
+          position: item.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 
+          name: config.name,
+          color: config.color
+        });
+      }
+    });
+    setProcessLabelLocs(labels);
 
     const locations = sortedMeshes.map(item => ({
        id: item.mesh.uuid,
@@ -558,6 +650,22 @@ function InteractiveJigModel({ url, onHoverChange, apiData }: JigModelProps) {
                  mat.emissiveIntensity = flashIntensity;
              }
         });
+
+        // [수정: 주입 공정 모니터링 데이터 매칭]
+        // 현재 주입 위치(Index 4)에 도달한 대차를 계산하여 부모 컴포넌트에 전달
+        const total = meshLocations.length;
+        const INJECT_STATION_INDEX = 4;
+        
+        // 역계산: (대차Index - 1 + Cycle) % Total = StationIndex
+        // 대차Index - 1 = (StationIndex - Cycle) % Total
+        let targetCartIndex = (INJECT_STATION_INDEX - cycleIndex) % total;
+        if (targetCartIndex < 0) targetCartIndex += total; // 음수 방지
+
+        // targetCartIndex는 0부터 시작하므로 +1 하여 실제 대차번호(1~)와 매칭
+        const matchedUnit = apiData.find(d => parseInt(d.대차번호) === targetCartIndex + 1);
+        
+        // 매칭된 유닛이 있으면 업데이트 (없으면 null)
+        setInjectUnit(matchedUnit || null);
     }
   });
 
@@ -617,6 +725,7 @@ function InteractiveJigModel({ url, onHoverChange, apiData }: JigModelProps) {
   return (
     <group>
       <primitive object={scene} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} />
+      
       {meshLocations.length > 0 && Array.from({ length: meshLocations.length }).map((_, i) => (
           <MovingLabel 
             key={i} 
@@ -625,6 +734,10 @@ function InteractiveJigModel({ url, onHoverChange, apiData }: JigModelProps) {
             errorIndices={activeErrorIndices}
             apiData={apiData}
           />
+      ))}
+
+      {processLabelLocs.map((loc, i) => (
+        <ProcessLabel key={`proc-${i}`} position={loc.position} name={loc.name} color={loc.color} />
       ))}
     </group>
   );
@@ -684,10 +797,7 @@ const AIAdvisor = React.memo(({ errors }: { errors: UnitData[] }) => {
 });
 AIAdvisor.displayName = "AIAdvisor";
 
-// ... 기존 import 생략 ...
-
-// Panels 컴포넌트 수정
-const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: UnitData | null, errorUnits: UnitData[], apiData: ApiDataItem[] }) => {
+const Panels = React.memo(({ hoveredInfo, errorUnits, apiData, injectUnit }: { hoveredInfo: UnitData | null, errorUnits: UnitData[], apiData: ApiDataItem[], injectUnit: ApiDataItem | null }) => {
   const activeUnit = hoveredInfo || (errorUnits.length > 0 ? errorUnits[0] : null) || { name: 'M-01', status: 'normal' };
   const isError = activeUnit.status === 'error';
   const statusColor = isError ? THEME.danger : THEME.success;
@@ -696,24 +806,20 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
   const activeNumber = activeUnit && activeUnit.name ? parseInt(activeUnit.name.replace("M-", ""), 10) : 1;
   const matchedData = apiData.find(item => parseInt(item.대차번호) === activeNumber);
   
-  // 호버용 데이터 매칭
   const hoverMatchedData = hoveredInfo 
     ? apiData.find(item => parseInt(item.대차번호) === parseInt(hoveredInfo.name.replace("M-", ""), 10))
     : null;
 
   const displayImage = matchedData?.FILEPATH1 || "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
   
-  // [수정 포인트] Hydration Error 방지를 위한 State 사용
-  // 초기값은 서버/클라이언트 동일하게 "-" 혹은 고정값으로 설정
   const [randomStats, setRandomStats] = useState({ val1: "-", val2: "-" });
 
-  // [수정 포인트] 클라이언트 마운트 후(useEffect)에만 랜덤값 생성
   useEffect(() => {
     setRandomStats({
       val1: (Math.random() * (1.02 - 0.94) + 0.94).toFixed(7),
       val2: (Math.random() * (1.02 - 0.94) + 0.94).toFixed(7)
     });
-  }, [activeNumber]); // activeNumber가 변경될 때마다 재생성
+  }, [activeNumber]);
 
   const displayValue1 = randomStats.val1;
   const displayValue2 = randomStats.val2;
@@ -729,7 +835,6 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
           borderLeftColor: hoveredInfo.status === 'error' ? THEME.danger : THEME.primary,
           boxShadow: hoveredInfo.status === 'error' ? `0 8px 32px ${THEME.danger}30` : undefined
         }}>
-          {/* ... HoverInfoPanel 내부 내용은 그대로 유지 ... */}
           <ChartHeader>
             <div>
               <ChartTitle style={{ color: hoveredInfo.status === 'error' ? THEME.danger : THEME.textMain }}>
@@ -771,7 +876,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
         </HoverInfoPanel>
       )}
 
-      {/* ... DefectStatusPanel, TopRightPanel, BottomLeftPanel 내용 유지 ... */}
+      {/* 불량 오브젝트 현황 */}
       <DefectStatusPanel>
         <ChartHeader>
           <div>
@@ -804,39 +909,55 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
         </div>
       </DefectStatusPanel>
       
-      <TopRightPanel>
-        {/* ... TopRightPanel 내용 유지 ... */}
-        <ChartHeader>
-          <div><ChartTitle><Activity size={16} color={THEME.primary} /> 실시간 검사 현황</ChartTitle><ChartSubtitle>Real-time Monitor</ChartSubtitle></div>
-          <div style={{ padding: '2px 8px', background: 'rgba(16, 185, 129, 0.1)', color: THEME.primary, borderRadius: '12px', fontSize: 10, fontWeight: 700 }}>LIVE</div>
-        </ChartHeader>
-        <div style={{ marginBottom: 16 }}><BigNumber style={{fontSize: 28}}>14,480</BigNumber><TrendBadge $isUp={true}><TrendingUp size={12} /> 전일 대비 2.4% 증가</TrendBadge></div>
-        <ChartWrapper>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={ANNUAL_DATA.slice(0, 7)} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={0} />
-              <YAxis yAxisId="L" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} />
-              <YAxis yAxisId="R" orientation="right" tick={{ fontSize: 10, fill: THEME.danger, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.02)' }} />
-              <Bar yAxisId="L" dataKey="inspection" barSize={10} radius={[4, 4, 4, 4]}>{ANNUAL_DATA.map((entry, index) => (<Cell key={`cell-${index}`} fill={index === 6 ? THEME.primary : "#cbd5e1"} />))}</Bar>
-              <Line yAxisId="R" type="monotone" dataKey="error" stroke={THEME.danger} strokeWidth={2} dot={false} activeDot={{ r: 4, stroke: '#fff' }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </ChartWrapper>
-      </TopRightPanel>
+      {/* 주입 공정 모니터링 패널 */}
+      <InjectionStatusPanel>
+         <ChartHeader>
+            <div>
+              <ChartTitle style={{ color: '#22a6b3' }}>
+                <Pipette size={16} color="#22a6b3" /> 주입 공정 모니터링
+              </ChartTitle>
+              <ChartSubtitle>Injection Process Status</ChartSubtitle>
+            </div>
+             <div style={{ padding: '2px 8px', background: 'rgba(34, 166, 179, 0.1)', color: '#22a6b3', borderRadius: '12px', fontSize: 10, fontWeight: 700 }}>ACTIVE</div>
+          </ChartHeader>
+
+          {injectUnit ? (
+            <>
+              <div style={{ marginBottom: '10px', padding: '8px', background: '#f1f5f9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b' }}>Target Unit</span>
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>M-{injectUnit.대차번호.padStart(2, '0')}</span>
+              </div>
+              <InfoRow>
+                <div className="label">P액 유량</div>
+                <div className="value">{injectUnit["P액 유량(g)"]} <span style={{fontSize: 10, color: THEME.textSub}}>g</span></div>
+              </InfoRow>
+              <InfoRow>
+                <div className="label">R액 유량</div>
+                <div className="value">{injectUnit["R액 유량(g)"]} <span style={{fontSize: 10, color: THEME.textSub}}>g</span></div>
+              </InfoRow>
+               <InfoRow>
+                <div className="label">헤드 온도(P)</div>
+                <div className="value">{injectUnit["P액 헤드온도(℃)"]} <span style={{fontSize: 10, color: THEME.textSub}}>°C</span></div>
+              </InfoRow>
+               <InfoRow>
+                <div className="label">헤드 온도(R)</div>
+                <div className="value">{injectUnit["R액 헤드온도(℃)"]} <span style={{fontSize: 10, color: THEME.textSub}}>°C</span></div>
+              </InfoRow>
+            </>
+          ) : (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
+                대기 중... (데이터 수신 확인 필요)
+            </div>
+          )}
+      </InjectionStatusPanel>
 
       <BottomLeftPanel>
-        {/* ... BottomLeftPanel 내용 유지 ... */}
         <ChartHeader><div><ChartTitle><Zap size={16} fill={THEME.textMain} stroke="none" /> 연간 데이터 추이</ChartTitle><ChartSubtitle>Annual Data Trend</ChartSubtitle></div></ChartHeader>
         <div style={{ marginBottom: 8, display: 'flex', alignItems: 'baseline', gap: 8 }}><BigNumber style={{fontSize: 28}}>0.8%</BigNumber><TrendBadge $isUp={true} style={{ color: THEME.primary }}>안정권 유지 중</TrendBadge></div>
         <ChartWrapper>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={ANNUAL_DATA} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
               <defs><linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={THEME.primary} stopOpacity={0.3} /><stop offset="100%" stopColor={THEME.primary} stopOpacity={0} /></linearGradient></defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} tickLine={false} axisLine={false} interval={2} />
-              <YAxis tick={{ fontSize: 10, fill: THEME.textSub, fontFamily: 'Pretendard' }} unit="%" tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1' }} />
               <Area type="monotone" dataKey="rate" stroke={THEME.primary} strokeWidth={2} fill="url(#areaGradient)" />
             </AreaChart>
@@ -968,43 +1089,46 @@ export default function GlbViewerPage() {
 
   const [hoveredInfo, setHoveredInfo] = useState<UnitData | null>(null);
   const [apiData, setApiData] = useState<ApiDataItem[]>([]);
+  const [injectUnit, setInjectUnit] = useState<ApiDataItem | null>(null);
 
-  // API 데이터 기반 에러 유닛 계산
   const errorUnits = useMemo(() => {
       return apiData
         .filter(item => item.AI_LABEL !== '정상')
         .map(item => ({
             name: `M-${item.대차번호.padStart(2, '0')}`,
             temp: parseFloat(item["가조립온도(℃)"]),
-            load: parseFloat(item["R액 압력(kg/㎥)"]), // 부하 대신 압력 임시 매핑
+            load: parseFloat(item["R액 압력(kg/㎥)"]), 
             status: 'error' as const,
             problem: item.AI_LABEL,
             solution: "관리자 확인 필요"
         }));
   }, [apiData]);
 
-  // Critical Error Check (M-01 ~ M-04)
   const criticalUnit = useMemo(() => {
     const criticalTargets = ['M-01', 'M-02', 'M-03', 'M-04'];
     return errorUnits.find(u => criticalTargets.includes(u.name));
   }, [errorUnits]);
 
-  // API Polling Logic
   useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await fetch(API_URL);
         const json = await response.json();
-        if (json.success) {
+        if (json.success && json.data && json.data.length > 0) {
             setApiData(json.data);
+        } else {
+            // API가 비어있거나 실패하면 Mock 데이터 사용
+            console.warn("Using Mock Data due to empty API response");
+            setApiData(generateMockApiData());
         }
       } catch (error) {
-        console.error("Failed to fetch API:", error);
+        console.error("Failed to fetch API, using Mock Data:", error);
+        setApiData(generateMockApiData());
       }
     };
 
-    fetchData(); // 초기 실행
-    const interval = setInterval(fetchData, 5000); // 5초마다 갱신
+    fetchData(); 
+    const interval = setInterval(fetchData, 5000); 
 
     return () => clearInterval(interval);
   }, []);
@@ -1059,13 +1183,13 @@ export default function GlbViewerPage() {
         </NavContainer>
 
         <ViewerContainer>
-          
           <AIAdvisor errors={errorUnits} />
 
           <Panels 
             hoveredInfo={hoveredInfo} 
             errorUnits={errorUnits} 
             apiData={apiData}
+            injectUnit={injectUnit}
           />
 
           <Canvas
@@ -1102,6 +1226,7 @@ export default function GlbViewerPage() {
                         url={JIG_MODEL_PATH}
                         onHoverChange={setHoveredInfo}
                         apiData={apiData}
+                        setInjectUnit={setInjectUnit}
                       />
                     </ModelErrorBoundary>
                   </group>
