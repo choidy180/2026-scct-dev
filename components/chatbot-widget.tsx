@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import styled, { css } from "styled-components";
-import { Send, Bot, X, Sparkles, MessageSquare, ChevronRight, BarChart3, Factory } from "lucide-react";
+import { Send, Bot, X, Sparkles, MessageSquare, ChevronRight, BarChart3 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 // --- Mock Data ---
@@ -274,10 +274,13 @@ export default function AIAgentSystem() {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // 현재 경로가 마스터 대시보드인지 확인 (포함 여부로 체크)
+  const isMasterDashboard = currentPath.includes("/master-dashboard");
+
   const ctx = useMemo(() => {
-    if (currentPath.includes("/master-dashboard")) return AGENT_DATA["/master-dashboard"];
+    if (isMasterDashboard) return AGENT_DATA["/master-dashboard"];
     return AGENT_DATA["default"];
-  }, [currentPath]);
+  }, [isMasterDashboard]);
 
   // 페이지 이동시 리셋
   useEffect(() => {
@@ -367,13 +370,18 @@ export default function AIAgentSystem() {
 
   return (
     <>
-      <NavbarTrigger 
-        onClick={() => setIsOpen(true)}
-        whileTap={{ scale: 0.95 }}
-      >
-        <Bot size={20} />
-        <span>AI Advisor</span>
-      </NavbarTrigger>
+      {/* 마스터 대시보드가 아닐 때만 버튼을 렌더링합니다.
+        조건: !isMasterDashboard 
+      */}
+      {!isMasterDashboard && (
+        <NavbarTrigger 
+          onClick={() => setIsOpen(true)}
+          whileTap={{ scale: 0.95 }}
+        >
+          <Bot size={20} />
+          <span>AI Advisor</span>
+        </NavbarTrigger>
+      )}
 
       <Portal>
         <AnimatePresence>
