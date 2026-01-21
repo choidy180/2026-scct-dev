@@ -399,16 +399,16 @@ const VisionDashboard = () => {
 
       {/* 우측 하단 소리 버튼 및 심플 위젯 */}
       <div style={{ position: 'absolute', bottom: '32px', right: '32px', display: 'flex', gap: '12px', zIndex: 100 }}>
-           <div style={{ backgroundColor: 'rgba(255,255,255,0.9)', padding: '12px 20px', borderRadius: '12px', border: `1px solid ${THEME.border}`, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-               <Eye size={16} /> <span style={{fontSize: '14px', fontWeight: 600}}>Live Mode (x{ZOOM_LEVEL})</span>
-           </div>
-           <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} style={{ 
-               backgroundColor: isSoundEnabled ? THEME.accent : '#fff', color: isSoundEnabled ? '#fff' : '#64748B', 
-               border: `1px solid ${THEME.border}`, borderRadius: '12px', width: '46px', height: '46px', 
-               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' 
-           }}>
-               {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-           </button>
+        <div style={{ backgroundColor: 'rgba(255,255,255,0.9)', padding: '12px 20px', borderRadius: '12px', border: `1px solid ${THEME.border}`, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+            <Eye size={16} /> <span style={{fontSize: '14px', fontWeight: 600}}>Live Mode (x{ZOOM_LEVEL})</span>
+        </div>
+        <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} style={{ 
+            backgroundColor: isSoundEnabled ? THEME.accent : '#fff', color: isSoundEnabled ? '#fff' : '#64748B', 
+            border: `1px solid ${THEME.border}`, borderRadius: '12px', width: '46px', height: '46px', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' 
+        }}>
+            {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+        </button>
       </div>
     </div>
   );

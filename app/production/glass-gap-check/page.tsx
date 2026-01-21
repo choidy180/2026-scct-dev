@@ -430,8 +430,8 @@ export default function GlassGapInspection() {
             <div style={{ flex: 1, display: 'flex', gap: layout.gap, minHeight: 0 }}>
                 {/* Left Column */}
                 <div style={{ width: layout.cornerCardWidth, display: 'flex', flexDirection: 'column', gap: layout.gap }}>
-                    <CornerCard title="좌측 상단 (A1)" status={apiData ? apiData.LABEL001 : "-"} imgUrl={apiData ? apiData.FILEPATH1 : ""} />
-                    <CornerCard title="좌측 하단 (A3)" status={apiData ? apiData.LABEL003 : "-"} imgUrl={apiData ? apiData.FILEPATH3 : ""} />
+                    <CornerCard title="좌측 상단 (A1)" status={apiData ? apiData.LABEL001 : "-"} imgUrl={apiData ? apiData.FILEPATH3 : ""} />
+                    <CornerCard title="좌측 하단 (A3)" status={apiData ? apiData.LABEL003 : "-"} imgUrl={apiData ? apiData.FILEPATH1 : ""} />
                 </div>
 
                 {/* Center Column - [CHANGE] 2. Removed 'Comprehensive Judgment' Box */}
@@ -443,7 +443,7 @@ export default function GlassGapInspection() {
                 }}>
                     <div style={{ flex: 1, borderRadius: '16px', overflow: 'hidden', position: 'relative', border: `1px solid ${theme.border}`, backgroundColor: '#F8FAFC' }}>
                         <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-                             <img src={guideImgUrl} alt="Main Glass Guide" style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.12))' }} />
+                            <img src={guideImgUrl} alt="Main Glass Guide" style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.12))' }} />
                         </div>
                     </div>
                 </div>

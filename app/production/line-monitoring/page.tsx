@@ -790,11 +790,11 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData }: { hoveredInfo: 
               <DefectItem key={idx}>
                 <DefectName><span>{unit.name}</span></DefectName>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 'bold', color: THEME.danger, fontFamily: 'Pretendard', fontVariantNumeric: 'tabular-nums' }}>{unit.temp}°C</span>
-                      <DefectTag>CHECK</DefectTag>
-                   </div>
-                   <span style={{ fontSize: '10px', color: THEME.textSub, marginTop: '2px' }}>{unit.problem}</span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: THEME.danger, fontFamily: 'Pretendard', fontVariantNumeric: 'tabular-nums' }}>{unit.temp}°C</span>
+                    <DefectTag>CHECK</DefectTag>
+                  </div>
+                  <span style={{ fontSize: '10px', color: THEME.textSub, marginTop: '2px' }}>{unit.problem}</span>
                 </div>
               </DefectItem>
             ))
