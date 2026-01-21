@@ -181,7 +181,7 @@ const Card = styled.div<{ $color: string; $index: number }>`
   display: flex; flex-direction: column; justify-content: space-between;
   padding: 28px; border-radius: 24px;
   background: rgba(20, 20, 20, 0.45); 
-  backdrop-filter: blur(12px); 
+  /* backdrop-filter: blur(12px);  */
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
   
@@ -208,10 +208,10 @@ const IconBox = styled.div<{ $color: string }>`
 `;
 
 const CardHeader = styled.div` display: flex; align-items: flex-start; gap: 18px; `;
-const TextContent = styled.div` display: flex; flex-direction: column; gap: 8px; padding-top: 2px; `;
-const Title = styled.h2` font-size: 20px; font-weight: 700; color: #ffffff; margin: 0; `;
+const TextContent = styled.div` display: flex; flex-direction: column; gap: 0px; padding-top: 2px; `;
+const Title = styled.h2` font-size: 28px; font-weight: 700; color: #ffffff; margin: 0; `;
 const Description = styled.p` 
-  font-size: 15px; color: rgba(255, 255, 255, 0.6); margin: 0; word-break: keep-all; transition: color 0.3s;
+  font-size: 20px; color: rgba(255, 255, 255, 0.6); margin: 0; word-break: keep-all; transition: color 0.3s;
   ${Card}:hover & { color: rgba(255, 255, 255, 0.85); }
 `;
 const CardFooter = styled.div` display: flex; justify-content: flex-end; `;
