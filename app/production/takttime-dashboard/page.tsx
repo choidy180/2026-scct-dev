@@ -51,7 +51,7 @@ const REFRESH_RATE = 5000;
 const VIDEO_PATHS = {
   A: "http://1.254.24.170:24828/api/DX_API000031?videoName=223.mp4",   // 꼬모냉장고 (구 발포)
   B: "http://1.254.24.170:24828/api/DX_API000031?videoName=224.mp4",   // 와인셀러 (구 총조립1)
-  C: "http://1.254.24.170:24828/api/DX_API000031?videoName=225_2.mp4", // 얼음정수기 (구 총조립2)
+  C: "http://1.254.24.170:24828/api/DX_API000031?videoName=225.mp4", // 얼음정수기 (구 총조립2)
 };
 
 // [EDIT] View 모드별 KPI 데이터
@@ -432,7 +432,7 @@ const CustomBarLabel = memo((props: any) => {
 const VideoPlayer = memo(({ src }: { src: string }) => {
     return (
         <>
-            <video src={src} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <video src={src} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.15)' }} />
         </>
     )
 }, (prev, next) => prev.src === next.src);
@@ -621,7 +621,7 @@ export default function ProcessDashboard() {
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
                           <VideoPlayer src={VIDEO_PATHS.A} />
-                          <div className="label">꼬모냉장고 라인</div>
+                          <div className="label">발포라인</div>
                         </VideoBox>
                         <ChartWrapper>
                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
@@ -630,12 +630,12 @@ export default function ProcessDashboard() {
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.B} />
-                          <div className="label">와인셀러 라인</div>
+                          <VideoPlayer src={'http://1.254.24.170:24828/api/DX_API000031?videoName=225.mp4'} />
+                          <div className="label">총조립2라인</div>
                         </VideoBox>
                         <ChartWrapper>
                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.C} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                   </ViewContainer>
@@ -646,18 +646,18 @@ export default function ProcessDashboard() {
                       {/* View 2: 와인셀러(B) 및 얼음정수기(C) */}
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.B} />
-                          <div className="label">와인셀러 라인</div>
+                          <VideoPlayer src={VIDEO_PATHS.A} />
+                          <div className="label">발포라인</div>
                         </VideoBox>
                         <ChartWrapper>
                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.A} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.C} />
-                          <div className="label">얼음정수기 라인</div>
+                          <VideoPlayer src={'http://1.254.24.170:24828/api/DX_API000031?videoName=225_2.mp4'} />
+                          <div className="label">총조립2라인</div>
                         </VideoBox>
                         <ChartWrapper>
                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
@@ -673,7 +673,7 @@ export default function ProcessDashboard() {
                       <MultiChartCard>
                         <VideoBox $isLarge={false}>
                           <VideoPlayer src={VIDEO_PATHS.A} />
-                          <div className="label">꼬모냉장고</div>
+                          <div className="label">발포라인</div>
                         </VideoBox>
                         <ChartWrapper>
                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
@@ -683,7 +683,7 @@ export default function ProcessDashboard() {
                       <MultiChartCard>
                         <VideoBox $isLarge={false}>
                           <VideoPlayer src={VIDEO_PATHS.B} />
-                          <div className="label">와인셀러</div>
+                          <div className="label">총조립1라인</div>
                         </VideoBox>
                         <ChartWrapper>
                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
@@ -693,7 +693,7 @@ export default function ProcessDashboard() {
                       <MultiChartCard>
                         <VideoBox $isLarge={false}>
                           <VideoPlayer src={VIDEO_PATHS.C} />
-                          <div className="label">얼음정수기</div>
+                          <div className="label">총조립2라인</div>
                         </VideoBox>
                         <ChartWrapper>
                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>

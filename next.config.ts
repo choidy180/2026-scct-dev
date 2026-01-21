@@ -1,11 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // 👇 개발 인디케이터 숨김 설정 (강제 적용)
+  devIndicators: {
+    buildActivity: false,
+    appIsrStatus: false,
+  } as any, // 타입 오류 방지용
+
   compiler: {
-    // ✅ 이 설정이 없으면 페이지 이동 시 스타일 불일치로 새로고침이 발생합니다.
-    styledComponents: true, 
+    styledComponents: true,
   },
-  /* config options here */
+  
   images: {
     remotePatterns: [
       {
