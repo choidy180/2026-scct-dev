@@ -685,6 +685,12 @@ const InputArea = styled.form`
   border-top: 1px solid #F1F5F9;
   display: flex;
   gap: 8px;
+
+  button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
 `;
 
 const Input = styled.input`
