@@ -136,7 +136,7 @@ const InspectionOverlay = ({ isVisible }: { isVisible: boolean }) => {
         top: '11%', 
         left: '20%', 
         width: '32%', 
-        height: '75%',
+        height: '85%',
         border: `3px solid ${theme.danger}`,
         borderRadius: '2px',
         boxShadow: `0 0 0 1px #fff, inset 0 0 0 1px #fff`,

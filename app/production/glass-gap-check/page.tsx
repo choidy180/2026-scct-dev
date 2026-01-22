@@ -368,7 +368,6 @@ export default function GlassGapInspection() {
                         normal_count: json.total_data.normal_count
                     });
                 }
-
             } catch (error) { console.error(error); }
         };
         fetchData();
