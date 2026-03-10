@@ -1,384 +1,2312 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
-import styled, { css } from "styled-components";
-import { Send, Bot, X, Sparkles, MessageSquare, ChevronRight, BarChart3 } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import styled, { css, keyframes } from "styled-components";
+import { AnimatePresence, LazyMotion, domAnimation, m } from "framer-motion";
+import type {
+  ChatCompletionMessageParam,
+  InitProgressReport,
+  MLCEngineInterface,
+} from "@mlc-ai/web-llm";
+import {
+  Bot,
+  X,
+  Send,
+  Sparkles,
+  MessageSquare,
+  ChevronRight,
+  BarChart3,
+  Download,
+  Loader2,
+  Square,
+  RotateCcw,
+  Zap,
+  AlertTriangle,
+  ArrowDown,
+  Cpu,
+} from "lucide-react";
 
-// --- Mock Data ---
-const AGENT_DATA: Record<string, any> = {
+/** -----------------------------
+ * WebLLM / Model
+ * ------------------------------*/
+const MODEL_ID = "Phi-3.5-mini-instruct-q4f16_1-MLC";
+const MODEL_LABEL = "Phi-3.5 mini";
+
+/** -----------------------------
+ * Types
+ * ------------------------------*/
+type AgentKey = "/master-dashboard" | "default";
+type AgentRole = "manager" | "specialist";
+type ChatRole = "assistant" | "user";
+
+type KPI = {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "good" | "warn" | "bad";
+};
+
+type MessageMeta = {
+  kpis?: KPI[];
+  table?: { headers: string[]; rows: (string | number)[][] };
+  download?: { filename: string; mime: string; content: string };
+};
+
+type ChatMessage = {
+  id: string;
+  role: ChatRole;
+  text: string;
+  suggestions?: string[];
+  meta?: MessageMeta;
+};
+
+type Reply = {
+  handled: boolean;
+  message: Omit<ChatMessage, "id">;
+  sideEffect?: () => void;
+};
+
+type EngineStatus = "idle" | "loading" | "ready" | "error";
+
+type EngineUIState = {
+  status: EngineStatus;
+  progress: number; // 0..100
+  text: string;
+  error?: string;
+  cached?: boolean;
+  gpuVendor?: string;
+};
+
+const GARBLED_KO_MARKERS = ["알랑", "셧셷", "압렌", "정상으0", "hidden("];
+
+function looksGarbledKorean(s: string) {
+  if (!s) return false;
+  if (s.includes(REPLACEMENT_CHAR)) return true;
+  if (GARBLED_KO_MARKERS.some((m) => s.includes(m))) return true;
+  if (/[가-힣]0[가-힣]/.test(s)) return true; // 정상으0로 같은 형태
+  return false;
+}
+/** -----------------------------
+ * Design Tokens (Apple-ish)
+ * ------------------------------*/
+const ACCENT = "#D31145";
+const BG = "#F5F5F7";
+const TEXT = "#0B0B0C";
+const MUTED = "#6B7280";
+const BORDER = "rgba(17, 17, 17, 0.10)";
+
+/** -----------------------------
+ * Agent Context
+ * ------------------------------*/
+const AGENT_DATA: Record<
+  AgentKey,
+  {
+    role: AgentRole;
+    name: string;
+    description: string;
+    guide: string;
+    suggestions: string[];
+  }
+> = {
   "/master-dashboard": {
     role: "manager",
     name: "GMT 공장장 AI",
-    description: "전체 공장 현황 총괄 브리핑",
-    guide: "반갑습니다. 현재 전체 공장 가동률은 98%입니다. 핵심 지표 리포트가 준비되었습니다.",
+    description: "공장 KPI · 라인 상태 · 에너지",
+    guide:
+      "현재 공장 핵심 지표를 요약했습니다.\n아래에서 보고서를 선택하거나 질문을 입력하세요.",
     suggestions: ["가동률 상세 보고", "금일 생산 목표", "에너지 효율 분석"],
-    answers: {}
   },
-  "default": {
+  default: {
     role: "specialist",
     name: "파트장 AI",
-    description: "시스템 가이드 및 지원",
-    guide: "현재 페이지를 분석 중입니다. 궁금한 점이 있으시면 언제든 말씀해주세요.",
+    description: "페이지 사용 · 데이터 추출 · 이슈 대응",
+    guide:
+      "필요한 기능을 빠르게 안내해드릴게요.\n아래 버튼으로 시작해보세요.",
     suggestions: ["이 페이지 사용법", "데이터 내보내기", "오류 리포트"],
-    answers: {}
-  }
+  },
 };
 
-// --- Portal ---
-const Portal = ({ children }: { children: React.ReactNode }) => {
+/** -----------------------------
+ * Mock Data
+ * ------------------------------*/
+type ExportRow = {
+  [key: string]: string | number;
+  time: string;
+  line: string;
+  product: string;
+  planned: number;
+  actual: number;
+  defect_pct: number;
+  energy_kwh: number;
+};
+
+const MOCK_PRODUCTION_LOG: ExportRow[] = [
+  { time: "2026-02-20 08:00", line: "A", product: "AX-21", planned: 1200, actual: 1188, defect_pct: 0.6, energy_kwh: 310 },
+  { time: "2026-02-20 10:00", line: "A", product: "AX-21", planned: 1200, actual: 1215, defect_pct: 0.5, energy_kwh: 318 },
+  { time: "2026-02-20 12:00", line: "B", product: "BX-04", planned: 1050, actual: 1032, defect_pct: 0.9, energy_kwh: 295 },
+  { time: "2026-02-20 14:00", line: "B", product: "BX-04", planned: 1050, actual: 1068, defect_pct: 0.8, energy_kwh: 302 },
+  { time: "2026-02-20 16:00", line: "C", product: "CX-11", planned: 980, actual: 942, defect_pct: 1.2, energy_kwh: 288 },
+  { time: "2026-02-20 18:00", line: "C", product: "CX-11", planned: 980, actual: 990, defect_pct: 1.0, energy_kwh: 291 },
+];
+
+const MOCK_ALARM_LOG = [
+  { time: "15:12", equip: "Press-2", code: "ALM-17", message: "압력 편차", status: "해결" },
+  { time: "14:48", equip: "Robot-1", code: "ALM-08", message: "그리퍼 정렬", status: "모니터링" },
+  { time: "13:05", equip: "Oven-3", code: "ALM-21", message: "온도 상승 지연", status: "조치 필요" },
+  { time: "10:22", equip: "CNC-4", code: "ALM-04", message: "윤활 부족", status: "해결" },
+];
+
+/** -----------------------------
+ * Utilities
+ * ------------------------------*/
+function escapeCSV(value: unknown) {
+  const s = String(value ?? "");
+  if (s.includes('"') || s.includes(",") || s.includes("\n") || s.includes("\r")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function toCSV(rows: Array<{ [key: string]: string | number }>) {
+  if (!rows.length) return "";
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(","), ...rows.map((r) => headers.map((h) => escapeCSV(r[h])).join(","))];
+  return lines.join("\n");
+}
+
+function downloadTextFile(filename: string, content: string, mime = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function normalize(s: string) {
+  return s.trim().toLowerCase();
+}
+
+function isGreetingLike(t: string) {
+  return (
+    t === "hi" ||
+    t === "hello" ||
+    t === "hey" ||
+    t.includes("안녕") ||
+    t.includes("반갑") ||
+    t.includes("하이") ||
+    t.includes("헬로") ||
+    t === "ㅎㅇ"
+  );
+}
+
+const REPLACEMENT_CHAR = "\uFFFD";
+function sanitizeForDisplay(s: string) {
+  return (s ?? "").replace(/\uFFFD/g, "");
+}
+
+function extractLine(text: string) {
+  const m = text.match(/라인\s*([a-z])/i);
+  if (m?.[1]) return m[1].toUpperCase();
+  const m2 = text.match(/\b([ABC])\b/);
+  if (m2?.[1]) return m2[1].toUpperCase();
+  return null;
+}
+
+type LineSummary = {
+  line: string;
+  avgDefect: number;
+  planned: number;
+  actual: number;
+  energy: number;
+  samples: number;
+};
+
+function summarizeByLine(rows: ExportRow[]): LineSummary[] {
+  const map = new Map<string, { defectSum: number; planned: number; actual: number; energy: number; samples: number }>();
+  for (const r of rows) {
+    const key = String(r.line);
+    const cur = map.get(key) ?? { defectSum: 0, planned: 0, actual: 0, energy: 0, samples: 0 };
+    cur.defectSum += Number(r.defect_pct ?? 0);
+    cur.planned += Number(r.planned ?? 0);
+    cur.actual += Number(r.actual ?? 0);
+    cur.energy += Number(r.energy_kwh ?? 0);
+    cur.samples += 1;
+    map.set(key, cur);
+  }
+  const out: LineSummary[] = Array.from(map.entries()).map(([line, v]) => ({
+    line,
+    avgDefect: v.samples ? v.defectSum / v.samples : 0,
+    planned: v.planned,
+    actual: v.actual,
+    energy: v.energy,
+    samples: v.samples,
+  }));
+  out.sort((a, b) => b.avgDefect - a.avgDefect);
+  return out;
+}
+
+function fmtPct(n: number) {
+  return `${(Math.round(n * 100) / 100).toFixed(2)}%`;
+}
+
+/** -----------------------------
+ * Korean Polish (2-pass)
+ * ------------------------------*/
+const UI_TERMS = [
+  "기간",
+  "라인",
+  "품목",
+  "KPI 카드",
+  "데이터 내보내기",
+  "오류 리포트",
+  "조치 필요",
+  "모니터링",
+  "해결",
+].join(", ");
+
+async function polishKoreanAnswer(
+  engine: MLCEngineInterface,
+  agentKey: AgentKey,
+  agentName: string,
+  raw: string
+) {
+  const input = (raw ?? "").trim();
+  if (!input) return "";
+
+  const focus =
+    agentKey === "/master-dashboard"
+      ? "공장 KPI/생산/에너지/라인 알람 요약"
+      : "대시보드 사용법/데이터 내보내기/오류 리포트 안내";
+
+  try {
+    const res: any = await engine.chat.completions.create({
+      stream: false,
+      temperature: 0.05,
+      top_p: 0.9,
+      max_tokens: 700,
+      messages: [
+        {
+          role: "system",
+          content:
+            `너는 한국어 문장 교정/정리 편집기다.\n` +
+            `목표: 입력 텍스트를 자연스럽고 전문적인 한국어(일관된 존댓말)로 고친다.\n\n` +
+            `규칙:\n` +
+            `- 의미는 유지하되 어색한 표현/오탈자/띄어쓰기/어순/말투만 교정한다.\n` +
+            `- 단어 뜻 풀이(예: "~는 ~를 의미") 같은 사족을 붙이지 않는다.\n` +
+            `- 없는 기능/버튼/데이터를 새로 만들지 않는다.\n` +
+            `- UI 용어는 아래 목록 밖을 절대 만들어내지 않는다: ${UI_TERMS}\n` +
+            `- 버튼명이 확실치 않으면 "상단 메뉴", "필터", "버튼"처럼 일반 명칭으로 쓴다.\n` +
+            `- 불필요한 과장/감탄사 금지.\n` +
+            `- 출력은 6~10줄 이내로 짧게 정리한다.\n\n` +
+            `문맥: ${focus}\n` +
+            `에이전트 이름: ${agentName}\n\n` +
+            `출력: 교정된 텍스트만.`,
+        },
+        { role: "user", content: `[원문]\n${input}\n\n[요청]\n위 규칙대로 자연스럽게 교정해줘.` },
+      ],
+    });
+
+    const out = (res?.choices?.[0]?.message?.content ?? "").trim();
+    return sanitizeForDisplay(out || input);
+  } catch {
+    return sanitizeForDisplay(input);
+  }
+}
+
+/** -----------------------------
+ * Local Tool Reply Builder
+ * - "품질/불량" 같은 현업 질문은 LLM을 타면 버튼 발명/번역투가 심해질 수 있어 로컬로 처리
+ * ------------------------------*/
+function buildReply(inputText: string, agentKey: AgentKey, history?: ChatMessage[]): Reply {
+  const t = normalize(inputText);
+  const lineStats = summarizeByLine(MOCK_PRODUCTION_LOG);
+  const topLine = lineStats[0]?.line ?? "C";
+  const topDefect = lineStats[0]?.avgDefect ?? 1.1;
+
+  // 0) 인사/짧은 입력은 로컬로 처리 (Phi의 번역투/어색함 방지)
+  if (isGreetingLike(t)) {
+    const sug =
+      agentKey === "/master-dashboard"
+        ? ["가동률 상세 보고", "금일 생산 목표", "에너지 효율 분석", "라인별 불량률 요약"]
+        : ["이 페이지 사용법", "데이터 내보내기", "오류 리포트", "라인별 불량률 요약"];
+
+    return {
+      handled: true,
+      message: {
+        role: "assistant",
+        text: "반갑습니다. 어떤 내용을 확인해드릴까요?\n아래에서 선택하거나 원하는 내용을 그대로 입력해 주세요.",
+        suggestions: sug,
+      },
+    };
+  }
+
+    // ✅ "원인" 단독 입력도 문맥으로 해석해서 로컬 처리
+  const isCauseAsk =
+    t === "원인" ||
+    t.endsWith("원인") ||
+    t.includes("원인 알려") ||
+    t.includes("원인 뭐") ||
+    t.includes("왜") ||
+    t.includes("cause");
+
+  if (isCauseAsk) {
+    const prevUser =
+      history?.slice(0, -1).reverse().find((m) => m.role === "user")?.text ?? "";
+    const prevAssistant =
+      history?.slice(0, -1).reverse().find((m) => m.role === "assistant")?.text ?? "";
+
+    const ctxNorm = normalize(`${prevUser}\n${prevAssistant}`);
+
+    const ctxLooksLikeDefect =
+      ctxNorm.includes("불량") ||
+      ctxNorm.includes("품질") ||
+      ctxNorm.includes("defect") ||
+      ctxNorm.includes("quality") ||
+      ctxNorm.includes("불량체크");
+
+    if (ctxLooksLikeDefect || t.includes("불량") || t.includes("품질")) {
+      const line = extractLine(inputText) || extractLine(prevUser) || extractLine(prevAssistant);
+
+      const rows = line
+        ? MOCK_PRODUCTION_LOG.filter((r) => String(r.line).toUpperCase() === line)
+        : MOCK_PRODUCTION_LOG;
+
+      const avg =
+        rows.length > 0
+          ? rows.reduce((s, r) => s + Number(r.defect_pct ?? 0), 0) / rows.length
+          : 0;
+
+      const times = rows
+        .map((r) => String(r.time).split(" ")[1] ?? String(r.time))
+        .slice(0, 6)
+        .join(" / ");
+
+      const needs = MOCK_ALARM_LOG.filter((a) => a.status === "조치 필요");
+      const needsText = needs.length
+        ? `조치 필요 알람: ${needs.map((n) => `${n.equip}(${n.message})`).join(", ")}`
+        : `조치 필요 알람: 없음(샘플 기준)`;
+
+      return {
+        handled: true,
+        message: {
+          role: "assistant",
+          text:
+            `${line ? `라인 ${line}` : "불량"} 원인 점검을 대시보드 흐름에 맞춰 정리해드릴게요. (샘플 데이터 기준)\n\n` +
+            `요약: 평균 불량률 ${avg.toFixed(2)}%${times ? ` · 기록 시각 ${times}` : ""}\n` +
+            `${needsText}\n\n` +
+            `가능성 우선순위(체크리스트)\n` +
+            `1) 열처리/온도: Oven-3 “온도 상승 지연” → 예열/히터 출력/PID/센서 교정\n` +
+            `2) 압력/성형: Press-2 “압력 편차” → 압력 설정/유압/누설 점검\n` +
+            `3) 정렬/이송: Robot-1 “그리퍼 정렬” → 위치 보정/지그/비전 튜닝\n` +
+            `4) 자재/LOT: LOT 변경 구간 비교 → LOT별 불량률/검수 기준 확인\n` +
+            `5) 셋업 전환: 전환 직후 편차 → 초반 샘플 집중 확인\n\n` +
+            `다음 액션: (1) 오류 리포트에서 “조치 필요”부터 확인 (2) CSV 내보내기로 시간대/품목별 비교`,
+          suggestions: ["오류 리포트", "조치 필요 항목만", "데이터 내보내기"],
+        },
+      };
+    }
+
+    // 문맥이 없으면 선택지로 안내
+    return {
+      handled: true,
+      message: {
+        role: "assistant",
+        text:
+          "어떤 항목의 ‘원인’을 말씀하시는지 선택해 주세요.\n" +
+          "• 불량(품질) 원인\n" +
+          "• 알람(오류) 원인\n" +
+          "• 에너지 이상 원인",
+        suggestions: ["라인 B 불량률 원인", "오류 리포트", "에너지 효율 분석"],
+      },
+    };
+  }
+
+  // 1) 범위 밖 질문(날씨/뉴스 등)은 로컬 가드
+  if (t.includes("날씨") || t.includes("weather") || t.includes("뉴스") || t.includes("주가") || t.includes("stock")) {
+    return {
+      handled: true,
+      message: {
+        role: "assistant",
+        text:
+          "이 챗봇은 **공장 대시보드(생산/KPI/에너지/알람)** 범위에서만 안내할 수 있어요.\n" +
+          "대신 아래처럼 질문해주시면 바로 도와드릴게요.\n" +
+          "• 라인 B 불량률 원인\n" +
+          "• 조치 필요 알람만 보기\n" +
+          "• 생산 로그 CSV 내보내기",
+        suggestions:
+          agentKey === "/master-dashboard"
+            ? ["라인별 불량률 요약", "가동률 상세 보고", "에너지 효율 분석"]
+            : ["오류 리포트", "데이터 내보내기", "이 페이지 사용법"],
+      },
+    };
+  }
+
+  // 2) 공통 기능(사용법/내보내기/오류리포트/조치필요)은 어디서든 로컬
+  if (t.includes("사용법") || t.includes("help") || t.includes("가이드")) {
+    return {
+      handled: true,
+      message: {
+        role: "assistant",
+        text:
+          "이 페이지에서 자주 쓰는 흐름만 깔끔하게 정리해드릴게요.\n\n" +
+          "1) 상단 필터에서 **기간 / 라인 / 품목**을 먼저 선택해 범위를 좁혀요.\n" +
+          "2) KPI 카드를 클릭하면 상세(추세/원인)로 내려가서 볼 수 있어요.\n" +
+          "3) 원본 데이터가 필요하면 **데이터 내보내기**로 CSV를 받으세요.\n" +
+          "4) 설비 이슈는 **오류 리포트**에서 최근 알람과 상태(조치 필요/모니터링/해결)를 확인합니다.",
+        suggestions: ["데이터 내보내기", "오류 리포트", "라인별 불량률 요약"],
+      },
+    };
+  }
+
+  if (t.includes("내보내기") || t.includes("export") || t.includes("다운로드")) {
+    const csv = toCSV(MOCK_PRODUCTION_LOG);
+    const filename = `MES_export_production_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    return {
+      handled: true,
+      message: {
+        role: "assistant",
+        text:
+          "생산 로그(샘플) CSV를 준비했습니다.\n" +
+          `• 파일명: ${filename}\n` +
+          "• 컬럼: time / line / product / planned / actual / defect_pct / energy_kwh\n\n" +
+          "아래 버튼으로 다시 다운로드할 수도 있어요.",
+        suggestions: ["오류 리포트", "라인별 불량률 요약", "이 페이지 사용법"],
+        meta: {
+          download: { filename, mime: "text/csv;charset=utf-8", content: csv },
+          table: {
+            headers: ["time", "line", "product", "planned", "actual", "defect(%)"],
+            rows: MOCK_PRODUCTION_LOG.slice(0, 4).map((r) => [
+              r.time,
+              r.line,
+              r.product,
+              r.planned,
+              r.actual,
+              r.defect_pct,
+            ]),
+          },
+        },
+      },
+      sideEffect: () => downloadTextFile(filename, csv, "text/csv;charset=utf-8"),
+    };
+  }
+
+  if (t.includes("오류") || t.includes("에러") || t.includes("버그") || t.includes("report") || t.includes("알람")) {
+    return {
+      handled: true,
+      message: {
+        role: "assistant",
+        text:
+          "최근 알람(샘플)입니다.\n" +
+          "• 조치 필요: Oven-3 (온도 상승 지연)\n" +
+          "• 모니터링: Robot-1 (그리퍼 정렬)\n\n" +
+          "원하시면 “조치 필요 항목만”처럼 필터링해서 보여드릴게요.",
+        suggestions: ["조치 필요 항목만", "라인별 불량률 요약", "데이터 내보내기"],
+        meta: {
+          table: {
+            headers: ["시간", "설비", "코드", "내용", "상태"],
+            rows: MOCK_ALARM_LOG.map((a) => [a.time, a.equip, a.code, a.message, a.status]),
+          },
+        },
+      },
+    };
+  }
+
+  if (t.includes("조치 필요")) {
+    const needs = MOCK_ALARM_LOG.filter((a) => a.status === "조치 필요");
+    return {
+      handled: true,
+      message: {
+        role: "assistant",
+        text:
+          needs.length
+            ? "조치 필요 항목만 추렸습니다. (샘플)\n• 우선순위: Oven-3 → 온도 상승 지연"
+            : "현재 조치 필요 항목이 없습니다. (샘플 데이터 기준)",
+        suggestions: ["오류 리포트", "라인별 불량률 요약", "데이터 내보내기"],
+        meta: needs.length
+          ? {
+              table: {
+                headers: ["시간", "설비", "코드", "내용", "상태"],
+                rows: needs.map((a) => [a.time, a.equip, a.code, a.message, a.status]),
+              },
+            }
+          : undefined,
+      },
+    };
+  }
+
+  // 3) ✅ 불량/품질 관련 질문은 로컬로 강제 (여기가 스샷 문제의 핵심 해결)
+  if (t.includes("불량") || t.includes("defect") || t.includes("quality") || t.includes("결함")) {
+    const line = extractLine(inputText);
+    const selected = line ? lineStats.find((s) => s.line === line) : null;
+
+    const tableRows = lineStats.map((s) => [
+      `라인 ${s.line}`,
+      fmtPct(s.avgDefect),
+      s.actual,
+      s.planned,
+      s.samples,
+    ]);
+
+    // 원인 요청
+    if (t.includes("원인") || t.includes("왜") || t.includes("cause")) {
+      const target = selected ?? lineStats[0];
+      return {
+        handled: true,
+        message: {
+          role: "assistant",
+          text:
+            `${line ? `라인 ${line}` : "라인별"} 불량 이슈를 점검할 때는 아래 순서가 가장 깔끔합니다.\n\n` +
+            `1) **기간/품목/라인 필터**로 구간을 먼저 좁혀요.\n` +
+            `2) 불량률이 튀는 시점에 **알람(조치 필요/모니터링)**이 같이 있었는지 확인합니다.\n` +
+            `3) 그 다음은 원인 체크리스트예요:\n` +
+            `   • 공정 조건: 온도/압력/속도 변경\n` +
+            `   • 자재: LOT 변경/공급 품질\n` +
+            `   • 설비: 센서/정렬/윤활(알람 로그 참고)\n` +
+            `   • 작업: 셋업 전환 직후 변동\n\n` +
+            `샘플 데이터 기준으로는 **라인 ${target.line}**의 평균 불량률이 가장 높습니다(${fmtPct(
+              target.avgDefect
+            )}).`,
+          suggestions: ["조치 필요 항목만", "오류 리포트", "데이터 내보내기"],
+          meta: {
+            table: {
+              headers: ["라인", "평균 불량(%)", "실적", "계획", "표본 수"],
+              rows: tableRows,
+            },
+          },
+        },
+      };
+    }
+
+    // 단순 체크 요청
+    return {
+      handled: true,
+      message: {
+        role: "assistant",
+        text:
+          "불량(품질) 체크는 아래 흐름으로 보면 가장 빠릅니다.\n\n" +
+          "1) 상단 필터에서 **기간 → 라인 → 품목** 순으로 범위를 줄이세요.\n" +
+          "2) KPI 카드에서 **불량률(%)**을 확인하고 라인/품목을 바꿔 비교해요.\n" +
+          "3) 불량률이 높은 구간이면 **오류 리포트**에서 ‘조치 필요’ 알람이 있었는지도 같이 보세요.\n" +
+          "4) 원본 데이터가 필요하면 **데이터 내보내기**로 CSV를 내려받으면 됩니다.\n\n" +
+          `샘플 데이터 기준으로는 **라인 ${topLine}**의 평균 불량률이 가장 높습니다(${fmtPct(topDefect)}).`,
+        suggestions: ["라인 B 불량률 원인", "오류 리포트", "데이터 내보내기"],
+        meta: {
+          table: {
+            headers: ["라인", "평균 불량(%)", "실적", "계획", "표본 수"],
+            rows: tableRows,
+          },
+        },
+      },
+    };
+  }
+
+  /** --- Manager (master-dashboard) specific --- */
+  if (agentKey === "/master-dashboard") {
+    if (t.includes("가동률") || t.includes("util")) {
+      return {
+        handled: true,
+        message: {
+          role: "assistant",
+          text:
+            "가동률 상세 보고입니다.\n" +
+            "• 전체: 98.0% (목표 97.0% 대비 +1.0p)\n" +
+            "• 정지 Top 원인: 자재 대기 / 미세정지 / 셋업 전환",
+          suggestions: ["금일 생산 목표", "에너지 효율 분석", "라인별 불량률 요약"],
+          meta: {
+            kpis: [
+              { label: "전체 가동률", value: "98.0%", sub: "목표 대비 +1.0p", tone: "good" },
+              { label: "라인 A", value: "99.2%", sub: "정상", tone: "good" },
+              { label: "라인 B", value: "97.5%", sub: "단기 변동", tone: "warn" },
+              { label: "라인 C", value: "96.8%", sub: "미세정지 ↑", tone: "warn" },
+            ],
+            table: {
+              headers: ["라인", "상태", "비가동(분)", "주요 원인"],
+              rows: [
+                ["A", "RUN", 18, "자재 대기"],
+                ["B", "RUN", 42, "셋업 전환"],
+                ["C", "ATTN", 55, "센서 튜닝"],
+              ],
+            },
+          },
+        },
+      };
+    }
+
+    if (t.includes("생산") || t.includes("목표") || t.includes("target")) {
+      return {
+        handled: true,
+        message: {
+          role: "assistant",
+          text:
+            "금일 생산 목표 현황입니다.\n" +
+            "• 계획: 32,000 EA\n" +
+            "• 실적: 25,600 EA (진도율 80%)\n" +
+            "• 예상 완료: 18:40 (현재 속도 기준)",
+          suggestions: ["가동률 상세 보고", "에너지 효율 분석", "라인별 불량률 요약"],
+          meta: {
+            kpis: [
+              { label: "계획", value: "32,000 EA" },
+              { label: "실적", value: "25,600 EA", sub: "진도율 80%", tone: "good" },
+              { label: "잔여", value: "6,400 EA" },
+              { label: "예상 완료", value: "18:40", sub: "속도 유지 시", tone: "warn" },
+            ],
+            table: {
+              headers: ["라인", "계획(EA)", "실적(EA)", "불량(%)"],
+              rows: [
+                ["A", 12000, 9800, 0.6],
+                ["B", 11000, 9000, 0.8],
+                ["C", 9000, 6800, 1.1],
+              ],
+            },
+          },
+        },
+      };
+    }
+
+    if (t.includes("에너지") || t.includes("효율") || t.includes("energy")) {
+      return {
+        handled: true,
+        message: {
+          role: "assistant",
+          text:
+            "에너지 효율 분석 결과입니다.\n" +
+            "• kWh/EA: 0.82 (전일 대비 -2.4%)\n" +
+            "• 피크 부하: 14:00 ~ 15:00\n" +
+            "• 권장: Oven-3 예열 타이밍 최적화, Press-2 압력 튜닝",
+          suggestions: ["가동률 상세 보고", "금일 생산 목표", "라인별 불량률 요약"],
+          meta: {
+            kpis: [
+              { label: "kWh / EA", value: "0.82", sub: "전일 -2.4%", tone: "good" },
+              { label: "피크 구간", value: "14~15시", sub: "부하 집중", tone: "warn" },
+              { label: "CO₂ 추정", value: "↓ 1.8%", sub: "가정치", tone: "good" },
+              { label: "이상 설비", value: "Oven-3", sub: "예열 지연", tone: "warn" },
+            ],
+            table: {
+              headers: ["항목", "현재", "전일", "변화"],
+              rows: [
+                ["kWh/EA", 0.82, 0.84, "-2.4%"],
+                ["피크(kW)", 3120, 3250, "-4.0%"],
+                ["유휴전력(kW)", 220, 260, "-15.4%"],
+              ],
+            },
+          },
+        },
+      };
+    }
+  }
+
+  // fallback -> LLM
+  return {
+    handled: false,
+    message: {
+      role: "assistant",
+      text:
+        "원하시는 내용을 조금만 더 구체적으로 알려주시면 정확히 도와드릴게요.\n" +
+        "예) “라인 B 불량률 원인”, “조치 필요 알람만”, “생산 로그 CSV 내보내기”",
+      suggestions:
+        agentKey === "/master-dashboard"
+          ? ["가동률 상세 보고", "금일 생산 목표", "에너지 효율 분석", "라인 B 불량률 원인"]
+          : ["이 페이지 사용법", "데이터 내보내기", "오류 리포트", "라인 B 불량률 원인"],
+    },
+  };
+}
+
+/** -----------------------------
+ * System Prompt (tight + anti-hallucination)
+ * ------------------------------*/
+function makeSystemPrompt(agentKey: AgentKey, name: string) {
+  const roleBlock =
+    agentKey === "/master-dashboard"
+      ? [
+          `너는 스마트공장용 대시보드 "Gomotec AI Control Center"의 "${name}"다.`,
+          `역할: 생산/KPI/에너지/알람을 빠르게 요약하고 다음 액션을 제시한다.`,
+        ].join("\n")
+      : [
+          `너는 스마트공장용 대시보드 "Gomotec AI Control Center"의 "${name}"다.`,
+          `역할: 페이지 사용법/데이터 내보내기/오류 리포트를 짧고 명확하게 안내한다.`,
+        ].join("\n");
+
+  const uiRules = [
+    `중요: UI/기능 용어는 아래 목록 밖을 절대 만들어내지 마라.`,
+    `허용 용어: ${UI_TERMS}`,
+    `버튼명이 확실치 않으면 "상단 메뉴", "필터", "버튼"처럼 일반 명칭으로 말한다.`,
+  ].join("\n");
+
+  const styleRules = [
+    `스타일 규칙:`,
+    `- 반드시 자연스러운 한국어 + 일관된 존댓말로 답한다.`,
+    `- 번역투/쓸데없는 감탄/단어 뜻 풀이 금지.`,
+    `- 답변 구조: 요약 → 근거(주어진 데이터 기준) → 다음 액션`,
+    `- 답변은 6~10줄 이내로 끝낸다.`,
+    `- 실시간 외부 정보(날씨/뉴스/주가/웹검색)는 제공하지 않는다.`,
+    `- "곧 알려주겠다/잠시만/시간 내 제공" 같은 약속을 하지 않는다.`,
+  ].join("\n");
+
+  const dataBlock = [
+    `참고용 샘플 데이터(실데이터 아님, 범위 밖 추정 금지):`,
+    `- 생산 로그 컬럼: time, line, product, planned, actual, defect_pct, energy_kwh`,
+    `- 알람 로그 컬럼: time, equip, code, message, status`,
+  ].join("\n");
+
+  return [roleBlock, uiRules, styleRules, dataBlock].join("\n\n");
+}
+
+/** -----------------------------
+ * Portal
+ * ------------------------------*/
+function Portal({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (typeof window === "undefined" || !mounted) return null;
+  if (!mounted || typeof window === "undefined") return null;
   return createPortal(children, document.body);
-};
+}
 
-// --- Styled Components (Modern White & Red Theme) ---
-
-// 네비게이션 바 트리거 버튼
-const NavbarTrigger = styled(motion.button)`
-  display: flex;
+/** -----------------------------
+ * Styled
+ * ------------------------------*/
+const NavbarTrigger = styled(m.button)`
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 18px;
+  gap: 10px;
   height: 42px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  background: white;
-  color: #374151;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
-  font-family: 'Pretendard', sans-serif;
-  
-  /* 미세한 그림자 */
-  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid ${BORDER};
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 
-  &:hover {
-    background: #FFF0F3; /* 아주 연한 레드 배경 */
-    border-color: #FECDD3;
-    color: #D31145; /* GMT 레드 */
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(211, 17, 69, 0.1); /* 레드 빛 그림자 */
-  }
+  color: ${TEXT};
+  font-weight: 650;
+  font-size: 14px;
+  letter-spacing: -0.2px;
+  cursor: pointer;
+
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 
   svg {
-    color: #D31145;
-    transition: transform 0.2s;
+    color: ${ACCENT};
   }
-  
-  &:hover svg {
-    transform: scale(1.1);
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.12);
+    border-color: rgba(211, 17, 69, 0.25);
   }
 `;
 
-// [디자인 변경] 어두운 배경 대신 -> 밝은 블러 배경
-const ModalOverlay = styled(motion.div)`
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  width: 100vw; height: 100vh;
-  /* 밝은 반투명 배경 + 강한 블러 */
-  background: rgba(255, 255, 255, 0.4); 
-  backdrop-filter: blur(12px); 
+const ModalOverlay = styled(m.div)`
+  position: fixed;
+  inset: 0;
   z-index: 999999;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: radial-gradient(1200px 600px at 80% 20%, rgba(211, 17, 69, 0.18), transparent 60%),
+    rgba(0, 0, 0, 0.35);
+
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 `;
 
-// [디자인 변경] 그림자를 깊게 주어 흰 배경에서도 뜨게 만듦
-const ModalPanel = styled(motion.div)`
-  width: 500px; 
-  height: 720px; 
-  background: #ffffff;
-  border-radius: 28px; 
-  /* 부드럽고 깊은 그림자 */
-  box-shadow: 
-    0 10px 40px -10px rgba(0, 0, 0, 0.1),
-    0 0 0 1px rgba(0,0,0,0.05); /* 미세한 테두리 */
-  display: flex; flex-direction: column; overflow: hidden;
+const ModalPanel = styled(m.div)`
+  /* ✅ Tablet-like wide card */
+  width: min(920px, calc(100vw - 32px));
+  height: min(620px, calc(100vh - 32px));
+
+  border-radius: 24px;
+  overflow: hidden;
   position: relative;
+
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(245, 245, 247, 0.78));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.35);
+
+  display: flex;
+  flex-direction: column;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, ${ACCENT}, transparent);
+    opacity: 0.9;
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(600px 260px at 20% 10%, rgba(255, 255, 255, 0.55), transparent 60%),
+      radial-gradient(500px 220px at 90% 40%, rgba(255, 255, 255, 0.35), transparent 62%);
+    opacity: 0.55;
+    mix-blend-mode: overlay;
+  }
+
+  /* ✅ Phone fallback (세로형) */
+  @media (max-width: 520px) {
+    width: min(560px, calc(100vw - 28px));
+    height: min(760px, calc(100vh - 28px));
+    border-radius: 20px;
+  }
 `;
 
 const ChatContainer = styled.div`
-  display: flex; flex-direction: column; height: 100%; 
-  font-family: 'Pretendard', sans-serif; 
-  background: #fff;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+
+  font-family: "Pretendard Variable", "Pretendard", ui-sans-serif, system-ui, -apple-system,
+    Segoe UI, Roboto, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  color: ${TEXT};
 `;
 
-// 헤더: 그라데이션 대신 깔끔한 화이트 + 하단 보더
 const Header = styled.div`
-  padding: 24px 28px;
-  background: #fff;
-  border-bottom: 1px solid #f3f4f6;
-  display: flex; justify-content: space-between; align-items: flex-start;
-  flex-shrink: 0;
+  padding: 16px 18px 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 
-  .header-content {
-    display: flex; gap: 16px; align-items: center;
-    
-    .avatar-box {
-      width: 52px; height: 52px;
-      border-radius: 16px;
-      background: #FFF0F3; /* 연한 레드 */
-      color: #D31145;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 24px;
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
-    }
-    
-    .text-box {
-      display: flex; flex-direction: column; gap: 4px;
-      h2 { 
-        margin: 0; font-size: 18px; font-weight: 700; color: #111; 
-        display: flex; align-items: center; gap: 6px;
-      }
-      p { margin: 0; font-size: 13px; color: #6b7280; font-weight: 400; }
-    }
+  background: rgba(255, 255, 255, 0.70);
+  border-bottom: 1px solid ${BORDER};
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+`;
+
+const HeaderLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+`;
+
+const HeaderRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+`;
+
+const Avatar = styled.div`
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 245, 247, 0.9));
+  border: 1px solid ${BORDER};
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10);
+
+  svg {
+    color: ${ACCENT};
+  }
+`;
+
+const HeaderText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  .title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 16px;
+    font-weight: 760;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .close-btn {
-    background: #f3f4f6;
-    border: none;
-    color: #9ca3af;
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s;
-    
-    &:hover {
-      background: #e5e7eb;
-      color: #374151;
-    }
+  .desc {
+    font-size: 13px;
+    color: ${MUTED};
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+`;
+
+const IconButton = styled.button<{ $danger?: boolean }>`
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid ${BORDER};
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  color: rgba(17, 17, 17, 0.72);
+
+  &:hover {
+    transform: scale(1.03);
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  ${(p) =>
+    p.$danger
+      ? css`
+          border-color: rgba(239, 68, 68, 0.22);
+          color: rgba(239, 68, 68, 0.92);
+          &:hover {
+            border-color: rgba(239, 68, 68, 0.35);
+          }
+        `
+      : ""}
+
+  svg {
+    color: currentColor;
+  }
+`;
+
+const Dot = styled.span<{ $tone?: "good" | "warn" | "bad" }>`
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(107, 114, 128, 0.6);
+
+  ${(p) =>
+    p.$tone === "good"
+      ? css`background: rgba(16, 185, 129, 0.95);`
+      : p.$tone === "warn"
+      ? css`background: rgba(245, 158, 11, 0.95);`
+      : p.$tone === "bad"
+      ? css`background: rgba(239, 68, 68, 0.95);`
+      : ""}
+`;
+
+const StatusChip = styled.div<{ $tone?: "good" | "warn" | "bad" }>`
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+
+  border: 1px solid ${BORDER};
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: rgba(17, 17, 17, 0.76);
+
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  ${(p) =>
+    p.$tone === "good"
+      ? css`border-color: rgba(16, 185, 129, 0.25);`
+      : p.$tone === "warn"
+      ? css`border-color: rgba(245, 158, 11, 0.28);`
+      : p.$tone === "bad"
+      ? css`border-color: rgba(239, 68, 68, 0.28);`
+      : ""}
+`;
+
+const ModelChip = styled.div`
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+
+  border: 1px solid ${BORDER};
+  background: rgba(255, 255, 255, 0.60);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+  color: rgba(17, 17, 17, 0.70);
+
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (max-width: 430px) {
+    display: none;
   }
 `;
 
 const MessageList = styled.div`
-  flex: 1; 
-  padding: 28px; 
-  overflow-y: auto; 
-  display: flex; flex-direction: column; gap: 20px; 
-  background: #fff;
-  
-  /* 스크롤바 숨김 */
-  &::-webkit-scrollbar { display: none; }
+  flex: 1;
+  padding: 18px 18px 14px;
+  overflow: auto;
+  background: linear-gradient(180deg, ${BG} 0%, rgba(255, 255, 255, 0.98) 55%, ${BG} 100%);
+
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    width: 0px;
+    height: 0px;
+  }
 `;
 
-// 말풍선 디자인 개선
-const Bubble = styled(motion.div)<{ $isUser: boolean }>`
-  max-width: 82%; 
-  padding: 14px 18px; 
-  font-size: 15px; 
+const Row = styled.div<{ $role: ChatRole }>`
+  display: flex;
+  flex-direction: column;
+  align-items: ${(p) => (p.$role === "user" ? "flex-end" : "flex-start")};
+  gap: 8px;
+`;
+
+const Bubble = styled(m.div)<{ $role: ChatRole }>`
+  max-width: min(78%, 720px);
+  padding: 14px 16px;
+  border-radius: 18px;
+  font-size: 15px;
   line-height: 1.6;
-  border-radius: 20px;
-  position: relative;
-  
-  ${props => props.$isUser ? css`
-    align-self: flex-end;
-    background: #D31145; /* 브랜드 레드 */
-    color: white;
-    border-bottom-right-radius: 4px;
-    box-shadow: 0 4px 12px rgba(211, 17, 69, 0.2);
-  ` : css`
-    align-self: flex-start;
-    background: #f8f9fa; /* 아주 연한 그레이 */
-    color: #1f2937;
-    border-top-left-radius: 4px;
-    border: 1px solid #f3f4f6;
-  `}
+  letter-spacing: -0.2px;
+  white-space: pre-wrap;
+  word-break: keep-all;
+
+  ${(p) =>
+    p.$role === "user"
+      ? css`
+          background: linear-gradient(180deg, rgba(17, 17, 17, 0.94), rgba(17, 17, 17, 0.88));
+          color: white;
+          border: 1px solid rgba(255, 255, 255, 0.10);
+          border-bottom-right-radius: 8px;
+          box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
+        `
+      : css`
+          background: rgba(255, 255, 255, 0.88);
+          color: ${TEXT};
+          border: 1px solid ${BORDER};
+          border-bottom-left-radius: 8px;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+        `}
 `;
 
-// 추천 질문 칩 (Chips)
 const SuggestionArea = styled.div`
-  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 `;
 
 const Chip = styled.button`
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  padding: 8px 14px;
-  border-radius: 20px;
+  appearance: none;
+  border: 1px solid ${BORDER};
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  padding: 9px 12px;
+  border-radius: 999px;
   font-size: 13px;
-  color: #4b5563;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+  color: rgba(17, 17, 17, 0.82);
   cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  font-weight: 500;
-  display: flex; align-items: center; gap: 4px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 
   &:hover {
-    border-color: #D31145;
-    color: #D31145;
-    background: #FFF0F3;
+    transform: translateY(-1px);
+    border-color: rgba(211, 17, 69, 0.35);
+    background: rgba(255, 255, 255, 0.96);
+  }
+
+  svg {
+    opacity: 0.85;
   }
 `;
 
-const InputArea = styled.form`
-  padding: 20px 28px;
-  background: #fff;
-  /* 상단에 옅은 그라데이션 그림자 */
-  box-shadow: 0 -10px 30px rgba(0,0,0,0.02); 
-  display: flex; gap: 12px;
+const MetaBlock = styled.div`
+  max-width: min(78%, 720px);
+`;
+
+const KPIGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+`;
+
+const KPICard = styled.div<{ $tone?: KPI["tone"] }>`
+  padding: 12px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.90);
+  border: 1px solid ${BORDER};
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
+
+  .label {
+    font-size: 12px;
+    color: ${MUTED};
+    letter-spacing: -0.2px;
+  }
+  .value {
+    margin-top: 6px;
+    font-size: 16px;
+    font-weight: 820;
+    letter-spacing: -0.3px;
+  }
+  .sub {
+    margin-top: 2px;
+    font-size: 12px;
+    color: ${MUTED};
+    letter-spacing: -0.2px;
+  }
+
+  ${(p) =>
+    p.$tone === "good"
+      ? css`border-color: rgba(16, 185, 129, 0.25);`
+      : p.$tone === "warn"
+      ? css`border-color: rgba(245, 158, 11, 0.28);`
+      : p.$tone === "bad"
+      ? css`border-color: rgba(239, 68, 68, 0.28);`
+      : ""}
+`;
+
+const TableWrap = styled.div`
+  margin-top: 10px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid ${BORDER};
+  background: rgba(255, 255, 255, 0.90);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead th {
+    text-align: left;
+    padding: 10px 12px;
+    color: rgba(17, 17, 17, 0.78);
+    background: rgba(245, 245, 247, 0.95);
+    border-bottom: 1px solid ${BORDER};
+    font-weight: 780;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(17, 17, 17, 0.06);
+    color: rgba(17, 17, 17, 0.78);
+    letter-spacing: -0.2px;
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+`;
+
+const DownloadButton = styled.button`
+  margin-top: 10px;
+  width: fit-content;
+
+  appearance: none;
+  border: 1px solid rgba(211, 17, 69, 0.25);
+  background: rgba(211, 17, 69, 0.08);
+  color: rgba(211, 17, 69, 0.95);
+
+  padding: 10px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+
+  display: inline-flex;
   align-items: center;
+  gap: 8px;
 
-  .input-wrapper {
-    flex: 1;
-    position: relative;
-    display: flex; align-items: center;
-    
-    input {
-      width: 100%;
-      padding: 14px 20px;
-      padding-right: 48px;
-      border-radius: 24px;
-      border: 1px solid #e5e7eb;
-      background: #f9fafb;
-      font-size: 15px;
-      outline: none;
-      transition: all 0.2s;
-      font-family: inherit;
-      
-      &:focus {
-        background: #fff;
-        border-color: #D31145;
-        box-shadow: 0 0 0 3px rgba(211, 17, 69, 0.1);
-      }
-      
-      &::placeholder { color: #9ca3af; }
-    }
-  }
+  font-weight: 780;
+  letter-spacing: -0.2px;
 
-  button { 
-    width: 48px; height: 48px; 
-    border-radius: 50%; 
-    background: #111; /* 전송 버튼은 블랙으로 무게감 */
-    color: white; 
-    border: none; 
-    cursor: pointer; 
-    display: flex; align-items: center; justify-content: center;
-    transition: transform 0.2s, background 0.2s;
-    
-    &:hover { 
-      transform: scale(1.05); 
-      background: #D31145; /* 호버시 레드로 변경 */
-    } 
+  transition: transform 0.12s ease, background 0.12s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(211, 17, 69, 0.12);
   }
 `;
 
+const Composer = styled.form`
+  padding: 14px 16px 16px;
+  background: rgba(255, 255, 255, 0.70);
+  border-top: 1px solid ${BORDER};
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+
+  display: flex;
+  gap: 10px;
+  align-items: center;
+`;
+
+const Input = styled.input<{ disabled?: boolean }>`
+  flex: 1;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid ${BORDER};
+  background: rgba(245, 245, 247, 0.92);
+  padding: 0 14px;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+  color: ${TEXT};
+  outline: none;
+
+  &:focus {
+    background: rgba(255, 255, 255, 0.98);
+    border-color: rgba(211, 17, 69, 0.35);
+    box-shadow: 0 0 0 4px rgba(211, 17, 69, 0.10);
+  }
+
+  &::placeholder {
+    color: rgba(107, 114, 128, 0.85);
+  }
+
+  ${(p) =>
+    p.disabled
+      ? css`
+          opacity: 0.70;
+          cursor: not-allowed;
+        `
+      : ""}
+`;
+
+const SendButton = styled.button<{ disabled?: boolean }>`
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 17, 17, 0.12);
+  background: rgba(17, 17, 17, 0.92);
+  color: white;
+  cursor: pointer;
+
+  display: grid;
+  place-items: center;
+
+  transition: transform 0.12s ease, background 0.12s ease, opacity 0.12s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(211, 17, 69, 0.92);
+  }
+
+  ${(p) =>
+    p.disabled
+      ? css`
+          opacity: 0.4;
+          cursor: not-allowed;
+          &:hover {
+            transform: none;
+            background: rgba(17, 17, 17, 0.92);
+          }
+        `
+      : ""}
+`;
+
+const NoticeCard = styled.div`
+  border: 1px solid rgba(17, 17, 17, 0.10);
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 18px;
+  padding: 12px 12px;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`;
+
+const NoticeTop = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+`;
+
+const NoticeTitle = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  font-size: 13px;
+  font-weight: 820;
+  letter-spacing: -0.2px;
+`;
+
+const NoticeBody = styled.div`
+  font-size: 12px;
+  color: rgba(17, 17, 17, 0.70);
+  letter-spacing: -0.2px;
+  line-height: 1.45;
+`;
+
+const Track = styled.div`
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(17, 17, 17, 0.06);
+  overflow: hidden;
+`;
+
+const Fill = styled.div<{ $pct: number }>`
+  height: 100%;
+  width: ${(p) => `${Math.max(0, Math.min(100, p.$pct))}%`};
+  background: linear-gradient(90deg, rgba(211, 17, 69, 0.25), rgba(211, 17, 69, 0.85));
+  border-radius: 999px;
+  transition: width 0.18s ease;
+`;
+
+const NoticeActions = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+`;
+
+const NoticeButton = styled.button`
+  appearance: none;
+  border: 1px solid ${BORDER};
+  background: rgba(255, 255, 255, 0.80);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 740;
+  letter-spacing: -0.2px;
+  color: rgba(17, 17, 17, 0.84);
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba(211, 17, 69, 0.35);
+    background: rgba(255, 255, 255, 0.98);
+  }
+`;
+
+const floatIn = keyframes`
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0px); opacity: 1; }
+`;
+
+const ScrollFab = styled.button`
+  position: absolute;
+  right: 16px;
+  bottom: 78px;
+
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+
+  border: 1px solid rgba(17, 17, 17, 0.12);
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.14);
+
+  animation: ${floatIn} 0.18s ease both;
+  transition: transform 0.12s ease, background 0.12s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  svg {
+    color: rgba(17, 17, 17, 0.72);
+  }
+`;
+
+const dotPulse = keyframes`
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+  40% { transform: translateY(-2px); opacity: 0.95; }
+`;
+
+const TypingDots = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  span {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(17, 17, 17, 0.35);
+    animation: ${dotPulse} 1.1s infinite ease-in-out;
+  }
+  span:nth-child(2) {
+    animation-delay: 0.12s;
+  }
+  span:nth-child(3) {
+    animation-delay: 0.24s;
+  }
+`;
+
+/** -----------------------------
+ * Memoized Message Item
+ * ------------------------------*/
+const MessageItem = React.memo(function MessageItem({
+  message,
+  onChipClick,
+  onDownload,
+  isStreaming,
+}: {
+  message: ChatMessage;
+  onChipClick: (s: string) => void;
+  onDownload: (payload: NonNullable<MessageMeta["download"]>) => void;
+  isStreaming: boolean;
+}) {
+  const isAssistant = message.role === "assistant";
+  const showTyping = isAssistant && isStreaming && message.text.trim().length === 0;
+
+  return (
+    <Row $role={message.role}>
+      <Bubble
+        $role={message.role}
+        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.18 }}
+      >
+        {showTyping ? (
+          <TypingDots aria-label="Generating">
+            <span />
+            <span />
+            <span />
+          </TypingDots>
+        ) : (
+          message.text
+        )}
+      </Bubble>
+
+      {isAssistant && message.meta && (
+        <MetaBlock>
+          {message.meta.kpis && message.meta.kpis.length > 0 && (
+            <KPIGrid>
+              {message.meta.kpis.map((k) => (
+                <KPICard key={`${k.label}-${k.value}`} $tone={k.tone}>
+                  <div className="label">{k.label}</div>
+                  <div className="value">{k.value}</div>
+                  {k.sub && <div className="sub">{k.sub}</div>}
+                </KPICard>
+              ))}
+            </KPIGrid>
+          )}
+
+          {message.meta.table && (
+            <TableWrap>
+              <table>
+                <thead>
+                  <tr>
+                    {message.meta.table.headers.map((h) => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {message.meta.table.rows.map((row, idx) => (
+                    <tr key={idx}>
+                      {row.map((cell, cidx) => (
+                        <td key={cidx}>{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
+          )}
+
+          {message.meta.download && (
+            <DownloadButton type="button" onClick={() => onDownload(message.meta!.download!)}>
+              <Download size={16} />
+              {message.meta.download.filename}
+            </DownloadButton>
+          )}
+        </MetaBlock>
+      )}
+
+      {isAssistant && message.suggestions && message.suggestions.length > 0 && (
+        <SuggestionArea>
+          {message.suggestions.map((s) => (
+            <Chip key={s} type="button" onClick={() => onChipClick(s)}>
+              <MessageSquare size={14} />
+              {s}
+              <ChevronRight size={14} style={{ opacity: 0.45 }} />
+            </Chip>
+          ))}
+        </SuggestionArea>
+      )}
+    </Row>
+  );
+});
+
+/** -----------------------------
+ * Main Component
+ * ------------------------------*/
 export default function AIAgentSystem() {
-  const pathname = usePathname();
-  const currentPath = pathname || "";
+
+  const pathname = usePathname() || "";
+  const isMasterDashboard = pathname.includes("/master-dashboard");
+
+  const agentKey: AgentKey = isMasterDashboard ? "/master-dashboard" : "default";
+  const ctx = useMemo(() => AGENT_DATA[agentKey], [agentKey]);
+
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 현재 경로가 마스터 대시보드인지 확인 (포함 여부로 체크)
-  const isMasterDashboard = currentPath.includes("/master-dashboard");
-
-  const ctx = useMemo(() => {
-    if (isMasterDashboard) return AGENT_DATA["/master-dashboard"];
-    return AGENT_DATA["default"];
-  }, [isMasterDashboard]);
-
-  // 페이지 이동시 리셋
   useEffect(() => {
-    setMessages([{ 
-      id: Date.now(), 
-      text: ctx.guide, 
-      isUser: false,
-      suggestions: ctx.suggestions 
-    }]);
-  }, [ctx, isOpen]);
+    if (!isOpen) return;
+    const id = "pretendard-css";
+    if (document.getElementById(id)) return;
 
-  // 자동 스크롤
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href =
+      "https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css";
+    document.head.appendChild(link);
+  }, [isOpen]);
+
+  const [engineUI, setEngineUI] = useState<EngineUIState>({
+    status: "idle",
+    progress: 0,
+    text: "모델 준비 전",
+  });
+
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isPolishing, setIsPolishing] = useState(false);
+  const [hasPending, setHasPending] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const scrollEndRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const idSeq = useRef(0);
+  const nextId = useCallback(() => `m_${Date.now()}_${++idSeq.current}`, []);
+
+  const mountedRef = useRef(true);
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isOpen]);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-  const handleSend = (text: string) => {
-    if(!text.trim()) return;
-    setMessages(prev => [...prev, { id: Date.now(), text, isUser: true }]);
-    setInput("");
-    
-    // AI 응답 시뮬레이션
-    setTimeout(() => {
-      setMessages(prev => [...prev, { 
-        id: Date.now() + 1, 
-        text: "요청하신 내용을 확인했습니다. 관련 데이터를 분석하여 결과를 표시합니다.", 
-        isUser: false 
-      }]);
-    }, 600);
-  };
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
-  const ChatUI = () => (
+  /** --- WebLLM engine refs --- */
+  const engineRef = useRef<MLCEngineInterface | null>(null);
+  const initPromiseRef = useRef<Promise<MLCEngineInterface> | null>(null);
+
+  /** streaming update throttle */
+  const streamRef = useRef<{ id: string | null; text: string }>({ id: null, text: "" });
+  const rafRef = useRef<number | null>(null);
+
+  /** pending request when model is still loading */
+  const pendingRef = useRef<{ history: ChatMessage[]; assistantId: string } | null>(null);
+
+  const hasWebGPU = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+    return !!(navigator as any).gpu;
+  }, []);
+
+  // Init / reset when page context changes
+  useEffect(() => {
+    const first = {
+      id: nextId(),
+      role: "assistant" as const,
+      text: ctx.guide,
+      suggestions: ctx.suggestions,
+    };
+    setMessages([first]);
+  }, [ctx, nextId]);
+
+  // Auto-scroll (only if user is already near bottom)
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!isAtBottom) return;
+    scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, isOpen, isAtBottom]);
+
+  const onScrollList = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const threshold = 120;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    setIsAtBottom(atBottom);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, []);
+
+  // Lock body scroll when open
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
+
+  // Focus input when open
+  useEffect(() => {
+    if (!isOpen) return;
+    const raf = window.requestAnimationFrame(() => inputRef.current?.focus());
+    return () => window.cancelAnimationFrame(raf);
+  }, [isOpen]);
+
+  // ESC to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (isGenerating) engineRef.current?.interruptGenerate();
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, isGenerating]);
+
+  // Cleanup rAF
+  useEffect(() => {
+    return () => {
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, []);
+
+  const runDownload = useCallback((payload: NonNullable<MessageMeta["download"]>) => {
+    downloadTextFile(payload.filename, payload.content, payload.mime);
+  }, []);
+
+  const scheduleStreamFlush = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (rafRef.current != null) return;
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null;
+      const { id, text } = streamRef.current;
+      if (!id) return;
+      setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: sanitizeForDisplay(text) } : m)));
+    });
+  }, []);
+
+  const flushStreamNow = useCallback(() => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    const { id, text } = streamRef.current;
+    if (!id) return;
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: sanitizeForDisplay(text) } : m)));
+  }, []);
+
+  /** -----------------------------
+   * WebLLM: ensure engine loaded
+   * ------------------------------*/
+  const ensureEngine = useCallback(async (): Promise<MLCEngineInterface> => {
+    if (engineRef.current) return engineRef.current;
+    if (initPromiseRef.current) return initPromiseRef.current;
+
+    initPromiseRef.current = (async () => {
+      if (typeof window === "undefined") {
+        throw new Error("브라우저 환경에서만 WebLLM을 초기화할 수 있습니다.");
+      }
+      if (!hasWebGPU) {
+        throw new Error("이 브라우저는 WebGPU를 지원하지 않습니다. (Chrome/Edge 최신 버전 권장)");
+      }
+      if (!window.isSecureContext) {
+        throw new Error("WebGPU는 HTTPS(또는 localhost)에서만 동작합니다.");
+      }
+
+      if (mountedRef.current) {
+        setEngineUI((prev) => ({
+          ...prev,
+          status: "loading",
+          progress: 0,
+          text: "WebLLM 엔진 준비 중…",
+          error: undefined,
+        }));
+      }
+
+      const webllm = await import("@mlc-ai/web-llm");
+
+      const cached = await webllm.hasModelInCache(MODEL_ID).catch(() => false);
+      if (mountedRef.current) {
+        setEngineUI((prev) => ({
+          ...prev,
+          status: "loading",
+          cached,
+          text: cached ? "캐시된 모델 확인됨. 초기화 중…" : "모델 다운로드/초기화 중…",
+        }));
+      }
+
+      const initProgressCallback = (r: InitProgressReport) => {
+        if (!mountedRef.current) return;
+        const raw = typeof r.progress === "number" ? r.progress : 0;
+        const pct = raw <= 1 ? raw * 100 : raw;
+        const clamped = Math.max(0, Math.min(100, pct));
+        setEngineUI((prev) => ({
+          ...prev,
+          status: "loading",
+          progress: Math.max(prev.progress ?? 0, clamped),
+          text: r.text || prev.text,
+        }));
+      };
+
+      const engine = new webllm.MLCEngine({ initProgressCallback });
+      engine.setLogLevel("WARN");
+      await engine.reload(MODEL_ID);
+
+      let gpuVendor = "";
+      try {
+        gpuVendor = await engine.getGPUVendor();
+      } catch {
+        gpuVendor = "";
+      }
+
+      engineRef.current = engine;
+
+      if (mountedRef.current) {
+        setEngineUI((prev) => ({
+          ...prev,
+          status: "ready",
+          progress: 100,
+          text: "Ready",
+          gpuVendor,
+        }));
+      }
+
+      return engine;
+    })().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (mountedRef.current) {
+        setEngineUI((prev) => ({
+          ...prev,
+          status: "error",
+          error: msg,
+          text: "초기화 실패",
+        }));
+      }
+      initPromiseRef.current = null;
+      throw err;
+    });
+
+    return initPromiseRef.current;
+  }, [hasWebGPU]);
+
+  // Auto start loading when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    void ensureEngine();
+  }, [isOpen, ensureEngine]);
+
+  /** -----------------------------
+   * WebLLM: streaming generation + final polish
+   * ------------------------------*/
+  const streamLLM = useCallback(
+    async (history: ChatMessage[], assistantId?: string) => {
+      const systemPrompt = makeSystemPrompt(agentKey, ctx.name);
+
+      const base = history
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map<ChatCompletionMessageParam>((m) =>
+          m.role === "user"
+            ? { role: "user", content: m.text }
+            : { role: "assistant", content: m.text }
+        );
+
+      const MAX_TURNS = 18; // 품질 안정: 컨텍스트 과다로 번역투/잡문 증가 방지
+      const trimmed = base.length <= MAX_TURNS ? base : [base[0], ...base.slice(-MAX_TURNS + 1)];
+
+      const llmMessages: ChatCompletionMessageParam[] = [
+        { role: "system", content: systemPrompt },
+        ...trimmed,
+      ];
+
+      const id = assistantId ?? nextId();
+
+      if (!assistantId) {
+        setMessages((prev) => [...prev, { id, role: "assistant", text: "" }]);
+      } else {
+        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: "" } : m)));
+      }
+
+      streamRef.current = { id, text: "" };
+
+      setIsGenerating(true);
+      try {
+        const engine = await ensureEngine();
+
+        // ✅ 한국어 자연스러움: temperature 낮춤
+        const temperature = agentKey === "/master-dashboard" ? 0.12 : 0.20;
+
+        const chunks = await engine.chat.completions.create({
+          messages: llmMessages,
+          stream: true,
+          stream_options: { include_usage: true },
+          temperature,
+          top_p: 0.9,
+          max_tokens: 850,
+        });
+
+        let finishReason: string | null = null;
+
+        for await (const chunk of chunks as AsyncIterable<any>) {
+          const choice = chunk?.choices?.[0];
+          if (!choice) continue;
+
+          const delta: string = choice?.delta?.content ?? "";
+          if (delta) {
+            streamRef.current.text += delta;
+            scheduleStreamFlush();
+          }
+          if (choice.finish_reason) finishReason = choice.finish_reason;
+        }
+
+        flushStreamNow();
+
+        // ✅ 스트리밍 종료 후 "정본" 덮어쓰기 (깨짐/조합 문제 완화)
+        let finalText = streamRef.current.text;
+        try {
+          const full = await engine.getMessage();
+          if (typeof full === "string" && full.trim().length > 0) finalText = full;
+        } catch {
+          // ignore
+        }
+
+        // ✅ 마지막 2-pass: 한국어 교정(말투/맞춤법/번역투 정리)
+        if (finishReason !== "abort") {
+          setIsPolishing(true);
+          finalText = await polishKoreanAnswer(engine, agentKey, ctx.name, finalText);
+          const lastUser = [...history].reverse().find((m) => m.role === "user")?.text ?? "";
+          if (finishReason !== "abort" && looksGarbledKorean(finalText)) {
+            const safe = buildReply(lastUser, agentKey, history);
+            if (safe.handled) finalText = safe.message.text;
+          }
+          setIsPolishing(false);
+        }
+
+        if (finishReason === "abort") {
+          finalText = finalText.trimEnd() + "\n\n⏹ 생성이 중지되었습니다.";
+        } else if (finishReason === "length") {
+          finalText =
+            finalText.trimEnd() +
+            "\n\n(길이 제한으로 일부가 잘렸을 수 있어요 — “요약만”이라고 요청하면 더 안정적입니다.)";
+        }
+
+        streamRef.current.text = finalText;
+        flushStreamNow();
+      } catch (err) {
+        setIsPolishing(false);
+        const msg = err instanceof Error ? err.message : String(err);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  text:
+                    "⚠️ 답변 생성 중 오류가 발생했습니다.\n" +
+                    msg +
+                    "\n\n(필요하면 모델을 다시 로드하거나, max_tokens/context를 낮춰주세요.)",
+                }
+              : m
+          )
+        );
+      } finally {
+        setIsGenerating(false);
+        streamRef.current.id = null;
+      }
+    },
+    [agentKey, ctx.name, ensureEngine, flushStreamNow, nextId, scheduleStreamFlush]
+  );
+
+  /** -----------------------------
+   * Actions
+   * ------------------------------*/
+  const stopGenerating = useCallback(() => {
+    engineRef.current?.interruptGenerate();
+  }, []);
+
+  const resetChat = useCallback(() => {
+    if (isGenerating) engineRef.current?.interruptGenerate();
+
+    const first: ChatMessage = {
+      id: nextId(),
+      role: "assistant",
+      text: ctx.guide,
+      suggestions: ctx.suggestions,
+    };
+    setMessages([first]);
+    messagesRef.current = [first];
+    setHasPending(false);
+    pendingRef.current = null;
+
+    void engineRef.current?.resetChat(true).catch(() => {});
+  }, [ctx.guide, ctx.suggestions, isGenerating, nextId]);
+
+  const handleSend = useCallback(
+    (raw: string) => {
+      const text = raw.trim();
+      if (!text) return;
+      if (isGenerating) return;
+      if (isPolishing) return;
+      if (hasPending) return;
+
+      const userMsg: ChatMessage = { id: nextId(), role: "user", text };
+      const historySnapshot = [...messagesRef.current, userMsg];
+
+      setMessages(historySnapshot);
+      messagesRef.current = historySnapshot;
+      setInput("");
+
+      // 1) 로컬 먼저
+      const reply = buildReply(text, agentKey, historySnapshot);
+      if (reply.handled) {
+        reply.sideEffect?.();
+        const assistantMsg: ChatMessage = { id: nextId(), ...reply.message };
+        window.setTimeout(() => setMessages((prev) => [...prev, assistantMsg]), 120);
+        return;
+      }
+
+      // 2) LLM
+      if (engineUI.status === "error") {
+        const assistantMsg: ChatMessage = {
+          id: nextId(),
+          role: "assistant",
+          text:
+            "WebLLM 엔진 초기화에 실패한 상태예요.\n" +
+            (engineUI.error ? `• 원인: ${engineUI.error}\n\n` : "\n") +
+            "상단의 다시 시도로 모델을 로드한 뒤 다시 질문해 주세요.",
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+        return;
+      }
+
+      if (engineUI.status !== "ready") {
+        const assistantId = nextId();
+        setMessages((prev) => [...prev, { id: assistantId, role: "assistant", text: "" }]);
+
+        pendingRef.current = { history: historySnapshot, assistantId };
+        setHasPending(true);
+
+        void ensureEngine()
+          .then(() => {
+            const pending = pendingRef.current;
+            if (!pending || pending.assistantId !== assistantId) return;
+            pendingRef.current = null;
+            setHasPending(false);
+            return streamLLM(pending.history, pending.assistantId);
+          })
+          .catch((err) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            pendingRef.current = null;
+            setHasPending(false);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      text:
+                        "⚠️ 모델 로드에 실패했습니다.\n" +
+                        msg +
+                        "\n\n(Chrome/Edge 최신 + HTTPS/localhost + WebGPU 활성화를 확인해 주세요.)",
+                    }
+                  : m
+              )
+            );
+          });
+
+        return;
+      }
+
+      void streamLLM(historySnapshot);
+    },
+    [
+      agentKey,
+      engineUI.error,
+      engineUI.status,
+      ensureEngine,
+      hasPending,
+      isGenerating,
+      isPolishing,
+      nextId,
+      streamLLM,
+    ]
+  );
+
+  const onChipClick = useCallback((s: string) => handleSend(s), [handleSend]);
+
+  const canSend = useMemo(() => {
+    if (isGenerating) return false;
+    if (isPolishing) return false;
+    if (hasPending) return false;
+    return input.trim().length > 0;
+  }, [hasPending, input, isGenerating, isPolishing]);
+
+  /** -----------------------------
+   * Header status chips
+   * ------------------------------*/
+  const tone: "good" | "warn" | "bad" = useMemo(() => {
+    if (!hasWebGPU) return "bad";
+    if (engineUI.status === "ready") return "good";
+    if (engineUI.status === "error") return "bad";
+    return "warn";
+  }, [engineUI.status, hasWebGPU]);
+
+  const statusLabel = useMemo(() => {
+    if (!hasWebGPU) return "WebGPU Off";
+    if (engineUI.status === "ready") return "Ready";
+    if (engineUI.status === "error") return "Error";
+    if (engineUI.status === "loading") return `Loading ${Math.round(engineUI.progress || 0)}%`;
+    return "Idle";
+  }, [engineUI.progress, engineUI.status, hasWebGPU]);
+
+  const statusTooltip = useMemo(() => {
+    const parts = [
+      `Model: ${MODEL_ID}`,
+      `Status: ${engineUI.status}`,
+      engineUI.cached != null ? `Cache: ${engineUI.cached ? "hit" : "miss"}` : "",
+      engineUI.gpuVendor ? `GPU: ${engineUI.gpuVendor}` : "",
+      `Secure: ${typeof window !== "undefined" && window.isSecureContext ? "Yes" : "No"}`,
+    ].filter(Boolean);
+    return parts.join(" | ");
+  }, [engineUI.cached, engineUI.gpuVendor, engineUI.status]);
+
+  const ChatUI = (
     <ChatContainer>
       <Header>
-        <div className="header-content">
-          <div className="avatar-box">
-            {ctx.role === 'manager' ? <BarChart3 size={26}/> : <Bot size={26}/>}
-          </div>
-          <div className="text-box">
-            <h2>{ctx.name} <Sparkles size={14} fill="#FFD700" color="#FFD700"/></h2>
-            <p>{ctx.description}</p>
-          </div>
-        </div>
-        <button className="close-btn" onClick={() => setIsOpen(false)}><X size={18}/></button>
+        <HeaderLeft>
+          <Avatar>{ctx.role === "manager" ? <BarChart3 size={22} /> : <Bot size={22} />}</Avatar>
+          <HeaderText>
+            <div className="title">
+              {ctx.name} <Sparkles size={14} color="#FFD700" fill="#FFD700" />
+            </div>
+            <div className="desc">{ctx.description}</div>
+          </HeaderText>
+        </HeaderLeft>
+
+        <HeaderRight>
+          <ModelChip title={MODEL_ID}>
+            <Cpu size={14} />
+            <span>{MODEL_LABEL}</span>
+          </ModelChip>
+
+          <StatusChip $tone={tone} title={statusTooltip}>
+            <Dot $tone={tone} />
+            {engineUI.status === "loading" ? (
+              <Loader2 size={14} style={{ animation: "spin 1s linear infinite" } as any} />
+            ) : engineUI.status === "ready" ? (
+              <Zap size={14} />
+            ) : engineUI.status === "error" ? (
+              <AlertTriangle size={14} />
+            ) : (
+              <Bot size={14} />
+            )}
+            <span className="label">{statusLabel}</span>
+          </StatusChip>
+
+          <IconButton onClick={resetChat} aria-label="Reset chat" title="대화 초기화" disabled={hasPending}>
+            <RotateCcw size={16} />
+          </IconButton>
+
+          <IconButton $danger onClick={stopGenerating} aria-label="Stop generating" title="생성 중지" disabled={!isGenerating}>
+            <Square size={16} />
+          </IconButton>
+
+          <IconButton
+            onClick={() => {
+              if (isGenerating) engineRef.current?.interruptGenerate();
+              setIsOpen(false);
+            }}
+            aria-label="Close"
+            title="닫기"
+          >
+            <X size={18} />
+          </IconButton>
+        </HeaderRight>
       </Header>
 
-      <MessageList>
-        {messages.map((m, i) => (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.isUser ? 'flex-end' : 'flex-start' }}>
-            <Bubble 
-              $isUser={m.isUser}
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.3 }}
-            >
-              {m.text}
-            </Bubble>
-            {/* AI 답변에만 추천 칩 표시 */}
-            {!m.isUser && m.suggestions && (
-              <SuggestionArea>
-                {m.suggestions.map((sug: string) => (
-                  <Chip key={sug} onClick={() => handleSend(sug)}>
-                    <MessageSquare size={13} />
-                    {sug}
-                    <ChevronRight size={13} style={{opacity: 0.5}}/>
-                  </Chip>
-                ))}
-              </SuggestionArea>
-            )}
-          </div>
+      <MessageList ref={listRef} onScroll={onScrollList}>
+        {engineUI.status !== "ready" && (
+          <NoticeCard>
+            <NoticeTop>
+              <NoticeTitle>
+                {engineUI.status === "loading" ? (
+                  <>
+                    <Loader2 size={16} style={{ animation: "spin 1s linear infinite" } as any} />
+                    모델 로딩 중
+                  </>
+                ) : engineUI.status === "error" ? (
+                  <>
+                    <AlertTriangle size={16} />
+                    초기화 실패
+                  </>
+                ) : (
+                  <>
+                    <Bot size={16} />
+                    모델 준비
+                  </>
+                )}
+              </NoticeTitle>
+
+              <div style={{ fontSize: 11, color: "rgba(17,17,17,0.55)", fontWeight: 650 }}>
+                {MODEL_LABEL}
+              </div>
+            </NoticeTop>
+
+            <NoticeBody>
+              {!hasWebGPU ? (
+                <>
+                  이 환경은 WebGPU를 사용할 수 없어요. <br />
+                  Chrome/Edge 최신 버전에서 WebGPU가 활성화되어 있는지 확인해 주세요.
+                </>
+              ) : engineUI.status === "error" ? (
+                <>
+                  {engineUI.error ?? "알 수 없는 오류"} <br />
+                  (HTTPS/localhost, WebGPU, 브라우저 확장 프로그램 충돌 등을 확인해 주세요.)
+                </>
+              ) : engineUI.status === "loading" ? (
+                <>
+                  {engineUI.text}
+                  {engineUI.cached ? " (cache hit)" : ""} <br />
+                  처음 한 번만 다운로드가 오래 걸릴 수 있어요.
+                </>
+              ) : (
+                <>
+                  모델을 로드하면 서버 없이 브라우저에서 바로 답변을 생성합니다. <br />
+                  (WebGPU + 로컬 실행)
+                </>
+              )}
+            </NoticeBody>
+
+            <Track aria-label="Loading progress">
+              <Fill $pct={engineUI.status === "loading" ? engineUI.progress : 0} />
+            </Track>
+
+            <NoticeActions>
+              <NoticeButton type="button" onClick={() => void ensureEngine()} disabled={!hasWebGPU}>
+                <Zap size={16} />
+                다시 시도
+              </NoticeButton>
+
+              <NoticeButton
+                type="button"
+                onClick={() => {
+                  const info = statusTooltip.replace(/\s\|\s/g, "\n");
+                  navigator.clipboard?.writeText(info).catch(() => {});
+                }}
+              >
+                <MessageSquare size={16} />
+                상태 복사
+              </NoticeButton>
+            </NoticeActions>
+          </NoticeCard>
+        )}
+
+        {messages.map((m) => (
+          <MessageItem
+            key={m.id}
+            message={m}
+            onChipClick={onChipClick}
+            onDownload={runDownload}
+            isStreaming={isGenerating && streamRef.current.id === m.id}
+          />
         ))}
-        <div ref={scrollRef}/>
+        <div ref={scrollEndRef} />
       </MessageList>
 
-      <InputArea onSubmit={(e) => { e.preventDefault(); handleSend(input); }}>
-        <div className="input-wrapper">
-          <input 
-            value={input} 
-            onChange={e=>setInput(e.target.value)} 
-            placeholder="무엇이든 물어보세요..." 
-          />
-        </div>
-        <button type="submit"><Send size={20}/></button>
-      </InputArea>
+      {!isAtBottom && (
+        <ScrollFab type="button" onClick={scrollToBottom} aria-label="Scroll to bottom">
+          <ArrowDown size={18} />
+        </ScrollFab>
+      )}
+
+      <Composer
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (canSend) handleSend(input);
+        }}
+      >
+        <Input
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={
+            isPolishing ? "답변 문장 정리 중…" : "예) 라인 B 불량률 원인 / 데이터 내보내기 / 오류 리포트"
+          }
+          disabled={hasPending || isPolishing}
+        />
+        <SendButton type="submit" disabled={!canSend} aria-disabled={!canSend}>
+          <Send size={18} />
+        </SendButton>
+      </Composer>
     </ChatContainer>
   );
 
   return (
-    <>
-      {/* 마스터 대시보드가 아닐 때만 버튼을 렌더링합니다.
-        조건: !isMasterDashboard 
-      */}
+    <LazyMotion features={domAnimation}>
       {!isMasterDashboard && (
-        <NavbarTrigger 
-          onClick={() => setIsOpen(true)}
-          whileTap={{ scale: 0.95 }}
-        >
-          <Bot size={20} />
+        <NavbarTrigger onClick={() => setIsOpen(true)} whileTap={{ scale: 0.98 }}>
+          <Bot size={18} />
           <span>AI Advisor</span>
         </NavbarTrigger>
       )}
@@ -390,21 +2318,37 @@ export default function AIAgentSystem() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsOpen(false)}
+              onClick={() => {
+                if (isGenerating) engineRef.current?.interruptGenerate();
+                setIsOpen(false);
+              }}
             >
               <ModalPanel
+                role="dialog"
+                aria-modal="true"
                 onClick={(e) => e.stopPropagation()}
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+                initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 260, damping: 24 }}
               >
-                <ChatUI />
+                {ChatUI}
               </ModalPanel>
             </ModalOverlay>
           )}
         </AnimatePresence>
       </Portal>
-    </>
+
+      <style jsx global>{`
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
+    </LazyMotion>
   );
 }

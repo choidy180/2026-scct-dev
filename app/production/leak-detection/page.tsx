@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Scan, CheckCircle, AlertCircle, Activity, Box, Layers, Monitor, Cpu, Eye, X, Volume2, VolumeX, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Scan, CheckCircle, AlertCircle, Activity, Box, Layers, Monitor, Cpu, Eye, X, Volume2, VolumeX, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, ClipboardX, Home } from 'lucide-react';
 
-// --- 1. 상수 및 타입 ---
+// --- 1. 상수 및 타입 (기존과 동일) ---
 const SCOPE_SIZE = 250;
 const ZOOM_LEVEL = 6;
 const API_URL = "http://1.254.24.170:24828/api/DX_API000025";
@@ -27,7 +28,6 @@ interface CamData {
   specificImageUrl?: string;
 }
 
-// [CHANGE] 전체 통계 인터페이스 추가
 interface TotalData {
     total_count: number;
     normal_count: number;
@@ -43,17 +43,16 @@ interface ApiResponse {
         FILEPATH4: string; FILEPATH5: string; FILEPATH6: string;
         LABEL001: string; LABEL002: string; LABEL003: string; 
         LABEL004: string; LABEL005: string; LABEL006: string;
-        RESULT: string;     // 전체 결과
+        RESULT: string;     
         COUNT_NUM: string;
     }>;
-    // [CHANGE] API 응답에 total_data 포함 가정
     total_data?: {
         total_count: number;
         normal_count: number;
     };
 }
 
-// --- 2. 테마 및 스타일 설정 ---
+// --- 2. 테마 및 스타일 설정 (기존과 동일) ---
 const THEME = {
   bg: '#F8FAFC', cardBg: '#FFFFFF', textPrimary: '#1E293B', textSecondary: '#64748B',
   accent: '#3B82F6', border: '#E2E8F0',
@@ -89,12 +88,18 @@ const GlobalStyles = () => (
             70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
         .animate-ok { animation: pulse-green-soft 2s infinite; }
         .animate-ng { animation: pulse-red-soft 2s infinite; }
+        .animate-float { animation: float 4s ease-in-out infinite; }
     `}</style>
 );
 
-// --- 3. 초기 데이터 ---
+// --- 3. 초기 데이터 (기존과 동일) ---
 const initialTopCards: CamData[] = [
   { id: 'CAM 02', title: 'Surface Check', status: '정상', icon: <Layers />, position: 'top-left', highlight: { top: 10, left: 5, width: 32, height: 18 } },
   { id: 'CAM 04', title: 'Dimension Check', status: '정상', icon: <Box />, position: 'top-center', highlight: { top: 5, left: 42, width: 16, height: 9 } },
@@ -109,9 +114,95 @@ const initialBottomCards: CamData[] = [
 
 // --- 4. 컴포넌트 구현 ---
 
-// [CHANGE] DashboardHeader에 totalStats prop 추가
-const DashboardHeader = ({ apiData, totalStats, layout }: { apiData: any, totalStats: TotalData | null, layout: any }) => {
-    // 판정 결과 로직
+// [NEW] 전체 화면 Empty State 컴포넌트
+const FullScreenEmptyState = ({ onNavigateHome }: { onNavigateHome: () => void }) => {
+    return (
+        <div style={{ 
+            position: 'fixed', 
+            top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 99999, // 최상위 레벨
+            backgroundColor: '#F8FAFC', // 대시보드 배경색과 동일하게 (불투명)
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            fontFamily: '"Inter", -apple-system, sans-serif'
+        }}>
+            {/* 상단 장식 라인 */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: `linear-gradient(90deg, ${THEME.accent}, #60A5FA)` }} />
+            
+            {/* 로고 표시 (선택사항) */}
+            <div style={{ position: 'absolute', top: '40px', left: '40px', display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.6 }}>
+                 <Monitor size={24} color={THEME.textSecondary} />
+                 <span style={{ fontSize: '20px', fontWeight: 800, color: THEME.textSecondary }}>Estify<span style={{color: THEME.textSecondary}}>Vision</span></span>
+            </div>
+
+            {/* 메인 아이콘 */}
+            <div className="animate-float" style={{ 
+                width: '140px', height: '140px', borderRadius: '50%', 
+                backgroundColor: '#EFF6FF', // Soft Blue
+                color: THEME.accent,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: '40px',
+                boxShadow: '0 20px 40px -10px rgba(59, 130, 246, 0.2)' // 부드러운 그림자
+            }}>
+                <ClipboardX size={64} strokeWidth={1.2} />
+            </div>
+
+            {/* 텍스트 영역 */}
+            <h2 style={{ 
+                fontSize: '36px', fontWeight: 800, color: THEME.textPrimary, margin: '0 0 20px 0', letterSpacing: '-0.5px'
+            }}>
+                금일 검사 데이터가 없습니다
+            </h2>
+            <p style={{ 
+                fontSize: '18px', color: THEME.textSecondary, lineHeight: '1.6', margin: '0 0 56px 0', 
+                textAlign: 'center', maxWidth: '600px', wordBreak: 'keep-all'
+            }}>
+                현재 시스템에 등록된 검사 기록이 확인되지 않습니다.<br/>
+                생산 라인이 가동 중인지 확인하거나, 잠시 후 다시 시도해 주세요.
+            </p>
+
+            {/* 버튼 영역 */}
+            <button 
+                onClick={onNavigateHome}
+                style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+                    backgroundColor: '#fff', 
+                    color: THEME.textPrimary,
+                    border: `1px solid ${THEME.border}`, 
+                    padding: '16px 40px', borderRadius: '16px', 
+                    fontWeight: 700, fontSize: '16px',
+                    cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(59, 130, 246, 0.15)';
+                    e.currentTarget.style.borderColor = THEME.accent;
+                    e.currentTarget.style.color = THEME.accent;
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)';
+                    e.currentTarget.style.borderColor = THEME.border;
+                    e.currentTarget.style.color = THEME.textPrimary;
+                }}
+            >
+                <Home size={20} />
+                메인 화면으로 이동
+            </button>
+            
+            <div style={{ position: 'absolute', bottom: '40px', fontSize: '14px', color: '#94A3B8' }}>
+                System Status: <span style={{ color: '#10B981', fontWeight: 600 }}>Standby</span>
+            </div>
+        </div>
+    );
+};
+
+// ... (DashboardHeader, InfoHeaderCell, InfoValueCell 등 기존 컴포넌트 유지) ...
+const DashboardHeader = ({ apiData, totalStats, layout, onNavigateHome }: { apiData: any, totalStats: any, layout: any, onNavigateHome: () => void }) => {
+    // ... (기존 판정 로직 동일) ...
     const resultStr = apiData?.RESULT || '';
     const isPass = resultStr === '정상' || resultStr.toUpperCase() === 'OK';
     const isFail = !isPass && !!resultStr;
@@ -138,12 +229,16 @@ const DashboardHeader = ({ apiData, totalStats, layout }: { apiData: any, totalS
 
     return (
         <div style={{ display: 'flex', gap: layout.gap, height: '100px', marginBottom: layout.gap, flexShrink: 0 }}>
-            {/* 1. 타이틀 & 로고 영역 */}
-            <div style={{ 
-                width: '240px', backgroundColor: THEME.cardBg, borderRadius: '16px', border: `1px solid ${THEME.border}`,
-                display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-            }}>
+            <div 
+                onClick={onNavigateHome}
+                style={{ 
+                    width: '240px', backgroundColor: THEME.cardBg, borderRadius: '16px', border: `1px solid ${THEME.border}`,
+                    display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)', cursor: 'pointer', transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = THEME.accent; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = THEME.border; }}
+            >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <Monitor size={24} color={THEME.accent} />
                     <span style={{ fontSize: '20px', fontWeight: 800, color: THEME.textPrimary }}>Estify<span style={{color:THEME.accent}}>Vision</span></span>
@@ -151,7 +246,6 @@ const DashboardHeader = ({ apiData, totalStats, layout }: { apiData: any, totalS
                 <span style={{ fontSize: '12px', color: THEME.textSecondary, fontWeight: 600 }}>Multi-Cam Inspection System</span>
             </div>
 
-            {/* 2. 판정 결과 박스 */}
             <div className={animClass} style={{
                 width: '280px', backgroundColor: THEME.cardBg, borderRadius: '16px', border: `1px solid ${THEME.border}`,
                 display: 'flex', alignItems: 'center', padding: '0 24px', gap: '20px', position: 'relative', overflow: 'hidden',
@@ -170,20 +264,17 @@ const DashboardHeader = ({ apiData, totalStats, layout }: { apiData: any, totalS
                 </div>
             </div>
 
-            {/* 3. 정보 테이블 */}
             <div style={{ 
                 flex: 1, backgroundColor: THEME.cardBg, borderRadius: '16px', border: `1px solid ${THEME.border}`,
                 display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
             }}>
                 <div style={{ display: 'flex', width: '100%', height: '40%', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.border}` }}>
                     <InfoHeaderCell text="검사 시간" />
-                    {/* [CHANGE] 생산 수량 -> 검사 수량 */}
                     <InfoHeaderCell text="검사 수량" />
                     <InfoHeaderCell text="현재 상태" isLast />
                 </div>
                 <div style={{ display: 'flex', width: '100%', height: '60%' }}>
                     <InfoValueCell text={apiData?.TIMEVALUE || '00:00:00'} />
-                    {/* [CHANGE] 수량 표시 방식 변경 (정상 / 전체) */}
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${THEME.border}` }}>
                         {totalStats ? (
                              <div style={{ fontSize: '18px', fontWeight: 700, color: THEME.textPrimary }}>
@@ -242,7 +333,7 @@ const SoundPermissionModal = ({ onConfirm }: { onConfirm: () => void }) => (
     </div>
 );
 
-const ImageModal = ({ data, onClose }: { data: CamData, onClose: () => void }) => {
+const ImageModal = ({ data, onClose }: { data: any, onClose: () => void }) => {
     const displayImage = data.specificImageUrl || GUIDE_IMAGE_URL;
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 10000, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
@@ -261,15 +352,15 @@ const ImageModal = ({ data, onClose }: { data: CamData, onClose: () => void }) =
 
 // 메인 대시보드
 const VisionDashboard = () => {
+  const router = useRouter();
+
   const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
   const [selectedCam, setSelectedCam] = useState<CamData | null>(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   
-  // API 데이터 상태
   const [rawApiData, setRawApiData] = useState<any>(null);
-  // [CHANGE] 전체 수량 정보 State 추가
-  const [totalStats, setTotalStats] = useState<TotalData | null>(null);
+  const [totalStats, setTotalStats] = useState<any>(null);
 
   const [topCards, setTopCards] = useState<CamData[]>(initialTopCards);
   const [bottomCards, setBottomCards] = useState<CamData[]>(initialBottomCards);
@@ -280,27 +371,21 @@ const VisionDashboard = () => {
         const json: ApiResponse = await response.json();
 
         if (json.success) {
-            // 1. 개별 검사 결과 파싱
             if (json.data.length > 0) {
                 const d = json.data[0];
-                setRawApiData(d); // 전체 데이터 저장 (헤더용)
-
+                setRawApiData(d);
                 const getStatus = (label: string): InspectionStatus => label === '정상' ? '정상' : '점검필요';
-
                 setTopCards([
                     { ...initialTopCards[0], status: getStatus(d.LABEL002), specificImageUrl: d.FILEPATH2 },
                     { ...initialTopCards[1], status: getStatus(d.LABEL004), specificImageUrl: d.FILEPATH4 },
                     { ...initialTopCards[2], status: getStatus(d.LABEL006), specificImageUrl: d.FILEPATH6 }
                 ]);
-
                 setBottomCards([
                     { ...initialBottomCards[0], status: getStatus(d.LABEL001), specificImageUrl: d.FILEPATH1 },
                     { ...initialBottomCards[1], status: getStatus(d.LABEL003), specificImageUrl: d.FILEPATH3 },
                     { ...initialBottomCards[2], status: getStatus(d.LABEL005), specificImageUrl: d.FILEPATH5 }
                 ]);
             }
-
-            // [CHANGE] 2. 전체 수량 정보 파싱
             if (json.total_data) {
                 setTotalStats({
                     total_count: json.total_data.total_count,
@@ -315,7 +400,10 @@ const VisionDashboard = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // 불량 감지 및 알림 로직
+  const handleNavigateHome = () => {
+      router.push('/'); 
+  };
+
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     if (isSoundEnabled && !showPermissionModal) {
@@ -340,7 +428,6 @@ const VisionDashboard = () => {
   const requestRef = useRef<number | null>(null);
   const [imageMetrics, setImageMetrics] = useState({ width: 0, height: 0, left: 0, top: 0 });
 
-  // 돋보기 로직 (기존 유지)
   const updateImageMetrics = useCallback(() => {
     if (!imageRef.current || !containerRef.current) return;
     const img = imageRef.current;
@@ -405,21 +492,28 @@ const VisionDashboard = () => {
         fontFamily: '"Inter", -apple-system, sans-serif', color: THEME.textPrimary, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' 
     }}>
       <GlobalStyles />
+      
+      {/* [CHANGED] 전체 화면 Empty State 컴포넌트 사용 */}
+      {totalStats && totalStats.total_count === 0 && (
+          <FullScreenEmptyState onNavigateHome={handleNavigateHome} />
+      )}
+
       {showPermissionModal && <SoundPermissionModal onConfirm={() => { setShowPermissionModal(false); setIsSoundEnabled(true); playBeep(); }} />}
       {selectedCam && <ImageModal data={selectedCam} onClose={() => setSelectedCam(null)} />}
 
-      {/* [NEW] 1. 상단 현황판 (totalStats prop 전달) */}
-      <DashboardHeader apiData={rawApiData} totalStats={totalStats} layout={layout} />
+      <DashboardHeader 
+        apiData={rawApiData} 
+        totalStats={totalStats} 
+        layout={layout} 
+        onNavigateHome={handleNavigateHome}
+      />
 
-      {/* 2. 메인 그리드 */}
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
         
-        {/* 상단 카드 Row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: layout.gap, height: layout.cardHeight, flexShrink: 0, position: 'relative', zIndex: 5 }}>
           {topCards.map((card) => <StatusCard key={card.id} data={card} layout={layout} onClick={() => setSelectedCam(card)} />)}
         </div>
 
-        {/* 중앙 이미지 및 렌즈 영역 */}
         <div ref={containerRef} style={{ position: 'relative', flex: 1.3, width: '100%', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'default', zIndex: 1, marginTop: layout.overlap, marginBottom: layout.overlap }} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
           <img ref={imageRef} src={GUIDE_IMAGE_URL} alt="Guide" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', display: 'block', cursor: 'none' }} onLoad={updateImageMetrics} onError={(e) => e.currentTarget.style.display = 'none'} />
           <div ref={targetBoxRef} style={styles.targetBox} />
@@ -428,13 +522,11 @@ const VisionDashboard = () => {
           </div>
         </div>
 
-        {/* 하단 카드 Row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: layout.gap, height: layout.cardHeight, flexShrink: 0, position: 'relative', zIndex: 5 }}>
           {bottomCards.map((card) => <StatusCard key={card.id} data={card} layout={layout} onClick={() => setSelectedCam(card)} />)}
         </div>
       </div>
 
-      {/* 우측 하단 소리 버튼 및 심플 위젯 */}
       <div style={{ position: 'absolute', bottom: '32px', right: '32px', display: 'flex', gap: '12px', zIndex: 100 }}>
         <div style={{ backgroundColor: 'rgba(255,255,255,0.9)', padding: '12px 20px', borderRadius: '12px', border: `1px solid ${THEME.border}`, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
             <Eye size={16} /> <span style={{fontSize: '14px', fontWeight: 600}}>Live Mode (x{ZOOM_LEVEL})</span>
@@ -451,7 +543,6 @@ const VisionDashboard = () => {
   );
 };
 
-// 개별 카메라 카드
 const StatusCard = ({ data, layout, onClick }: { data: CamData, layout: any, onClick?: () => void }) => {
   const hasSpecificImage = !!data.specificImageUrl;
   const imageStyle: React.CSSProperties = hasSpecificImage ? {
@@ -478,12 +569,11 @@ const StatusCard = ({ data, layout, onClick }: { data: CamData, layout: any, onC
   );
 };
 
-const Badge = ({ status, fontSize }: { status: InspectionStatus, fontSize: string }) => {
+const Badge = ({ status, fontSize }: { status: string, fontSize: string }) => {
   const colors = status === '정상' ? { bg: THEME.status.ok.bg, text: THEME.status.ok.text } : { bg: THEME.status.ng.bg, text: THEME.status.ng.text };
   return <span style={{ padding: '2px 8px', borderRadius: '10px', fontWeight: 700, backgroundColor: colors.bg, color: colors.text, fontSize }}>{status}</span>;
 };
 
-// Styles for zoom lens
 const styles: { [key: string]: React.CSSProperties } = {
   scopeLens: { position: 'absolute', top: 0, left: 0, width: `${SCOPE_SIZE}px`, height: `${SCOPE_SIZE}px`, borderRadius: '50%', border: `2px solid ${THEME.accent}`, backgroundColor: '#fff', backgroundRepeat: 'no-repeat', backgroundSize: `${ZOOM_LEVEL * 100}%`, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', pointerEvents: 'none', zIndex: 50, opacity: 0, transform: 'scale(0.8)', transition: 'opacity 0.25s, transform 0.25s', willChange: 'transform, opacity' },
   reticleH: { position: 'absolute', top: '50%', left: '15%', width: '70%', height: '1px', backgroundColor: THEME.accent, opacity: 0.5 },

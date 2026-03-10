@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation'; // [NEW] 라우터 추가
 import { 
     Layers, ZoomIn, X, RefreshCw, Monitor, Clock, 
     CheckCircle2, XCircle, Volume2, VolumeX, Siren,
-    FileText, ChevronRight, Info, Scan, AlertTriangle // [FIX] AlertTriangle 추가 완료
+    FileText, ChevronRight, Info, Scan, AlertTriangle,
+    ClipboardX, Home // [NEW] 아이콘 추가
 } from 'lucide-react';
 
 // ─── [CONFIG] 설정 및 테마 ───
@@ -83,11 +85,17 @@ const GlobalStyles = () => (
             100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4), inset 0 0 0 2px rgba(220, 38, 38, 0.1); }
         }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        
+        /* [NEW] 둥둥 떠다니는 애니메이션 추가 */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
         .animate-ok { animation: pulse-green-soft 2s infinite; }
         .animate-ng { animation: pulse-red-soft 2s infinite; }
         .animate-spin { animation: spin 2s linear infinite; }
         .inspection-box { animation: pulse-red-border 2s infinite ease-in-out; }
+        .animate-float { animation: float 4s ease-in-out infinite; }
 
         .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -175,6 +183,92 @@ const InspectionOverlay = ({ isVisible }: { isVisible: boolean }) => {
 
 // ─── [UI COMPONENTS] ───
 
+// [NEW] 전체 화면 Empty State 컴포넌트
+const FullScreenEmptyState = ({ onNavigateHome }: { onNavigateHome: () => void }) => {
+    return (
+        <div style={{ 
+            position: 'fixed', 
+            top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 99999, // 최상위 레벨
+            backgroundColor: '#F8FAFC', // 대시보드 배경색과 동일하게
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            fontFamily: '"Inter", -apple-system, sans-serif'
+        }}>
+            {/* 상단 장식 라인 */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: `linear-gradient(90deg, ${theme.accent}, #60A5FA)` }} />
+            
+            {/* 로고 표시 */}
+            <div style={{ position: 'absolute', top: '40px', left: '40px', display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.6 }}>
+                 <Monitor size={24} color={theme.textSecondary} />
+                 <span style={{ fontSize: '20px', fontWeight: 800, color: theme.textSecondary }}>Estify<span style={{color: theme.textSecondary}}>Vision</span></span>
+            </div>
+
+            {/* 메인 아이콘 */}
+            <div className="animate-float" style={{ 
+                width: '140px', height: '140px', borderRadius: '50%', 
+                backgroundColor: '#EFF6FF', // Soft Blue
+                color: theme.accent,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: '40px',
+                boxShadow: '0 20px 40px -10px rgba(59, 130, 246, 0.2)'
+            }}>
+                <ClipboardX size={64} strokeWidth={1.2} />
+            </div>
+
+            {/* 텍스트 영역 */}
+            <h2 style={{ 
+                fontSize: '36px', fontWeight: 800, color: theme.textPrimary, margin: '0 0 20px 0', letterSpacing: '-0.5px'
+            }}>
+                금일 검사 데이터가 없습니다
+            </h2>
+            <p style={{ 
+                fontSize: '18px', color: theme.textSecondary, lineHeight: '1.6', margin: '0 0 56px 0', 
+                textAlign: 'center', maxWidth: '600px', wordBreak: 'keep-all'
+            }}>
+                현재 시스템에 등록된 검사 기록이 확인되지 않습니다.<br/>
+                생산 라인이 가동 중인지 확인하거나, 잠시 후 다시 시도해 주세요.
+            </p>
+
+            {/* 버튼 영역 */}
+            <button 
+                onClick={onNavigateHome}
+                style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+                    backgroundColor: '#fff', 
+                    color: theme.textPrimary,
+                    border: `1px solid ${theme.border}`, 
+                    padding: '16px 40px', borderRadius: '16px', 
+                    fontWeight: 700, fontSize: '16px',
+                    cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(59, 130, 246, 0.15)';
+                    e.currentTarget.style.borderColor = theme.accent;
+                    e.currentTarget.style.color = theme.accent;
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)';
+                    e.currentTarget.style.borderColor = theme.border;
+                    e.currentTarget.style.color = theme.textPrimary;
+                }}
+            >
+                <Home size={20} />
+                메인 화면으로 이동
+            </button>
+            
+            <div style={{ position: 'absolute', bottom: '40px', fontSize: '14px', color: '#94A3B8' }}>
+                System Status: <span style={{ color: '#10B981', fontWeight: 600 }}>Standby</span>
+            </div>
+        </div>
+    );
+};
+
 const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => void }) => (
     <button
         onClick={onClick}
@@ -192,7 +286,8 @@ const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => v
     </button>
 );
 
-const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }: { layout: any, data: ApiData | null, totalStats: TotalData | null, isSoundOn: boolean, onToggleSound: () => void }) => {
+// [CHANGE] onNavigateHome prop 추가
+const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound, onNavigateHome }: { layout: any, data: ApiData | null, totalStats: TotalData | null, isSoundOn: boolean, onToggleSound: () => void, onNavigateHome: () => void }) => {
     const resultVal = data?.RESULT || '';
     const isPass = resultVal === "정상" || resultVal.toUpperCase() === "OK";
     const isFail = !isPass && !!resultVal;
@@ -223,12 +318,19 @@ const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }:
 
     return (
         <div style={{ display: 'flex', gap: layout.gap, height: layout.headerHeight, marginBottom: layout.gap, flexShrink: 0 }}>
-            {/* Logo */}
-            <div style={{ 
-                width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
-                display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
-                boxShadow: theme.shadow
-            }}>
+            {/* Logo & Sound Control */}
+            <div 
+                onClick={onNavigateHome} // [CHANGE] 클릭 시 홈으로 이동
+                style={{ 
+                    width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
+                    display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
+                    boxShadow: theme.shadow,
+                    cursor: 'pointer', // 클릭 가능 표시
+                    transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = theme.accent; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = theme.border; }}
+            >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Layers size={28} color={theme.accent} />
@@ -237,7 +339,9 @@ const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }:
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '13px', color: theme.textSecondary, fontWeight: 600 }}>필름부착확인</span>
-                    <SoundControlButton isOn={isSoundOn} onClick={onToggleSound} />
+                    <div onClick={(e) => e.stopPropagation()}> {/* 버튼 클릭 시 헤더 클릭 전파 방지 */}
+                        <SoundControlButton isOn={isSoundOn} onClick={onToggleSound} />
+                    </div>
                 </div>
             </div>
 
@@ -413,6 +517,8 @@ const LogItem = ({ log }: { log: SystemLog }) => {
 // ─── [MAIN COMPONENT] ───
 
 export default function FilmAttachmentCheck() {
+    const router = useRouter(); // [NEW] 라우터 초기화
+
     const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [apiData, setApiData] = useState<ApiData | null>(null);
@@ -426,6 +532,11 @@ export default function FilmAttachmentCheck() {
     const [showPermissionModal, setShowPermissionModal] = useState(false);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // [NEW] 메인으로 이동 핸들러
+    const handleNavigateHome = () => {
+        router.push('/');
+    };
 
     // 초기 로그 생성
     useEffect(() => {
@@ -513,10 +624,23 @@ export default function FilmAttachmentCheck() {
             fontFamily: '"Inter", -apple-system, sans-serif', width: '100%', height: 'calc(100vh - 64px)', padding: layout.padding
         }}>
             <GlobalStyles />
+
+            {/* [NEW] 데이터 없음 모달 조건부 렌더링 */}
+            {totalStats && totalStats.total_count === 0 && (
+                <FullScreenEmptyState onNavigateHome={handleNavigateHome} />
+            )}
+
             {showPermissionModal && <SoundPermissionModal onConfirm={() => { setAudioAllowed(true); setShowPermissionModal(false); }} />}
             <ImageModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Film Attachment Detail" imgUrl={apiData?.FILEPATH1 || ''} />
 
-            <DashboardHeader layout={layout} data={apiData} totalStats={totalStats} isSoundOn={audioAllowed} onToggleSound={() => setAudioAllowed(!audioAllowed)} />
+            <DashboardHeader 
+                layout={layout} 
+                data={apiData} 
+                totalStats={totalStats} 
+                isSoundOn={audioAllowed} 
+                onToggleSound={() => setAudioAllowed(!audioAllowed)} 
+                onNavigateHome={handleNavigateHome} // [CHANGE] prop 전달
+            />
 
             {/* 메인 영역 분할: 이미지(3) vs 로그(1) */}
             <div style={{ flex: 1, display: 'flex', gap: layout.gap, minHeight: 0 }}>

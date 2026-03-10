@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation'; // [NEW] 라우터 추가
 import { 
     Monitor, Clock, CheckCircle2, XCircle, 
-    ZoomIn, Volume2, VolumeX, Siren, X 
+    ZoomIn, Volume2, VolumeX, Siren, X,
+    ClipboardX, Home // [NEW] 아이콘 추가
 } from 'lucide-react';
 
 // ─── [CONFIG] 설정 및 테마 ───
@@ -30,7 +32,6 @@ interface ApiData {
     LABEL004: string;
 }
 
-// [CHANGE] 새로운 데이터 구조를 위한 인터페이스 추가
 interface TotalData {
     total_count: number;
     normal_count: number;
@@ -85,12 +86,105 @@ const GlobalStyles = () => (
             70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
+        /* [NEW] 둥둥 떠다니는 애니메이션 추가 */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
         .animate-ok { animation: pulse-green-soft 2s infinite; }
         .animate-ng { animation: pulse-red-soft 2s infinite; }
+        .animate-float { animation: float 4s ease-in-out infinite; }
     `}</style>
 );
 
 // ─── [UI COMPONENTS] ───
+
+// [NEW] 전체 화면 Empty State 컴포넌트
+const FullScreenEmptyState = ({ onNavigateHome }: { onNavigateHome: () => void }) => {
+    return (
+        <div style={{ 
+            position: 'fixed', 
+            top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 99999, // 최상위 레벨
+            backgroundColor: '#F8FAFC', // 대시보드 배경색과 동일하게
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            fontFamily: '"Inter", -apple-system, sans-serif'
+        }}>
+            {/* 상단 장식 라인 */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: `linear-gradient(90deg, ${theme.accent}, #60A5FA)` }} />
+            
+            {/* 로고 표시 */}
+            <div style={{ position: 'absolute', top: '40px', left: '40px', display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.6 }}>
+                 <Monitor size={24} color={theme.textSecondary} />
+                 <span style={{ fontSize: '20px', fontWeight: 800, color: theme.textSecondary }}>Estify<span style={{color: theme.textSecondary}}>Vision</span></span>
+            </div>
+
+            {/* 메인 아이콘 */}
+            <div className="animate-float" style={{ 
+                width: '140px', height: '140px', borderRadius: '50%', 
+                backgroundColor: '#EFF6FF', // Soft Blue
+                color: theme.accent,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: '40px',
+                boxShadow: '0 20px 40px -10px rgba(59, 130, 246, 0.2)'
+            }}>
+                <ClipboardX size={64} strokeWidth={1.2} />
+            </div>
+
+            {/* 텍스트 영역 */}
+            <h2 style={{ 
+                fontSize: '36px', fontWeight: 800, color: theme.textPrimary, margin: '0 0 20px 0', letterSpacing: '-0.5px'
+            }}>
+                금일 검사 데이터가 없습니다
+            </h2>
+            <p style={{ 
+                fontSize: '18px', color: theme.textSecondary, lineHeight: '1.6', margin: '0 0 56px 0', 
+                textAlign: 'center', maxWidth: '600px', wordBreak: 'keep-all'
+            }}>
+                현재 시스템에 등록된 검사 기록이 확인되지 않습니다.<br/>
+                생산 라인이 가동 중인지 확인하거나, 잠시 후 다시 시도해 주세요.
+            </p>
+
+            {/* 버튼 영역 */}
+            <button 
+                onClick={onNavigateHome}
+                style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+                    backgroundColor: '#fff', 
+                    color: theme.textPrimary,
+                    border: `1px solid ${theme.border}`, 
+                    padding: '16px 40px', borderRadius: '16px', 
+                    fontWeight: 700, fontSize: '16px',
+                    cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(59, 130, 246, 0.15)';
+                    e.currentTarget.style.borderColor = theme.accent;
+                    e.currentTarget.style.color = theme.accent;
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)';
+                    e.currentTarget.style.borderColor = theme.border;
+                    e.currentTarget.style.color = theme.textPrimary;
+                }}
+            >
+                <Home size={20} />
+                메인 화면으로 이동
+            </button>
+            
+            <div style={{ position: 'absolute', bottom: '40px', fontSize: '14px', color: '#94A3B8' }}>
+                System Status: <span style={{ color: '#10B981', fontWeight: 600 }}>Standby</span>
+            </div>
+        </div>
+    );
+};
 
 // 1. [헤더] 사운드 제어 버튼
 const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => void }) => {
@@ -115,8 +209,8 @@ const SoundControlButton = ({ isOn, onClick }: { isOn: boolean, onClick: () => v
 };
 
 // 2. [헤더] 대시보드 헤더
-// [CHANGE] totalStats prop 추가
-const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }: { layout: any, data: ApiData | null, totalStats: TotalData | null, isSoundOn: boolean, onToggleSound: () => void }) => {
+// [CHANGE] onNavigateHome prop 추가
+const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound, onNavigateHome }: { layout: any, data: ApiData | null, totalStats: TotalData | null, isSoundOn: boolean, onToggleSound: () => void, onNavigateHome: () => void }) => {
     // 판정 결과 로직
     const resultStr = data?.RESULT || '';
     const isPass = resultStr === '정상' || resultStr.toUpperCase() === 'OK';
@@ -142,7 +236,6 @@ const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }:
         animClass = "animate-ng";
     }
 
-    // 데이터 안전 참조
     const timeValue = data?.TIMEVALUE || '00:00:00';
     const modelValue = data?.CDGITEM || '-';
     const woValue = data?.WO || '-';
@@ -150,11 +243,18 @@ const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }:
     return (
         <div style={{ display: 'flex', gap: layout.gap, height: layout.headerHeight, marginBottom: layout.gap, flexShrink: 0 }}>
             {/* 1. 타이틀 & 로고 & 사운드 버튼 */}
-            <div style={{ 
-                width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
-                display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
-                boxShadow: theme.shadow
-            }}>
+            <div 
+                onClick={onNavigateHome} // [CHANGE] 클릭 시 홈으로 이동
+                style={{ 
+                    width: '320px', backgroundColor: theme.cardBg, borderRadius: '16px', border: `1px solid ${theme.border}`,
+                    display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px',
+                    boxShadow: theme.shadow,
+                    cursor: 'pointer', // 클릭 가능 표시
+                    transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = theme.accent; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = theme.border; }}
+            >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Monitor size={28} color={theme.accent} />
@@ -163,7 +263,9 @@ const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }:
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '13px', color: theme.textSecondary, fontWeight: 600 }}>유리틈새검사</span>
-                    <SoundControlButton isOn={isSoundOn} onClick={onToggleSound} />
+                    <div onClick={(e) => e.stopPropagation()}> {/* 버튼 클릭 시 헤더 클릭 이벤트 전파 방지 */}
+                        <SoundControlButton isOn={isSoundOn} onClick={onToggleSound} />
+                    </div>
                 </div>
             </div>
 
@@ -194,7 +296,6 @@ const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }:
                 {/* 헤더 Row */}
                 <div style={{ display: 'flex', width: '100%', height: '40%', backgroundColor: '#F8FAFC', borderBottom: `1px solid ${theme.border}` }}>
                     <InfoHeaderCell text="검사 시간" />
-                    {/* [CHANGE] 생산 수량 -> 검사 수량 */}
                     <InfoHeaderCell text="검사 수량" />
                     <InfoHeaderCell text="모델명 / WO" />
                     <InfoHeaderCell text="현재 상태" isLast />
@@ -202,7 +303,6 @@ const DashboardHeader = ({ layout, data, totalStats, isSoundOn, onToggleSound }:
                 {/* 값 Row */}
                 <div style={{ display: 'flex', width: '100%', height: '60%' }}>
                     <InfoValueCell text={timeValue} />
-                    {/* [CHANGE] 수량 표시 방식 변경 (정상 / 전체) */}
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: `1px solid ${theme.border}` }}>
                         {totalStats ? (
                              <div style={{ fontSize: '18px', fontWeight: 700, color: theme.textPrimary }}>
@@ -324,10 +424,11 @@ const ImageModal = ({ isOpen, onClose, title, imgUrl }: { isOpen: boolean, onClo
 // ─── [MAIN COMPONENT] ───
 
 export default function GlassGapInspection() {
+    const router = useRouter(); // [NEW] 라우터 초기화
+
     const [screenMode, setScreenMode] = useState<ScreenMode>('FHD');
     const [modalInfo, setModalInfo] = useState<{ isOpen: boolean, title: string, imgUrl: string } | null>(null);
     const [apiData, setApiData] = useState<ApiData | null>(null);
-    // [CHANGE] 전체 수량 정보 State 추가
     const [totalStats, setTotalStats] = useState<TotalData | null>(null);
 
     const [isDefectMode, setIsDefectMode] = useState(false); 
@@ -336,6 +437,11 @@ export default function GlassGapInspection() {
 
     const audioCtxRef = useRef<AudioContext | null>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // [NEW] 메인으로 이동 핸들러
+    const handleNavigateHome = () => {
+        router.push('/');
+    };
 
     useEffect(() => {
         const handleResize = () => setScreenMode(window.innerWidth > 2200 ? 'QHD' : 'FHD');
@@ -361,7 +467,7 @@ export default function GlassGapInspection() {
                     }
                 }
 
-                // 2. [CHANGE] 전체 수량/정상 수량 데이터 파싱
+                // 2. 전체 수량/정상 수량 데이터 파싱
                 if (json.success && json.total_data) {
                     setTotalStats({
                         total_count: json.total_data.total_count,
@@ -452,16 +558,23 @@ export default function GlassGapInspection() {
             fontFamily: '"Inter", -apple-system, sans-serif', width: '100%', height: 'calc(100vh - 64px)', padding: layout.padding
         }}>
             <GlobalStyles />
+
+            {/* [NEW] 데이터 없음 모달 조건부 렌더링 */}
+            {totalStats && totalStats.total_count === 0 && (
+                <FullScreenEmptyState onNavigateHome={handleNavigateHome} />
+            )}
+
             {showPermissionModal && <SoundPermissionModal onConfirm={handlePermissionConfirm} />}
             {modalInfo && <ImageModal isOpen={modalInfo.isOpen} onClose={() => setModalInfo(prev => prev ? { ...prev, isOpen: false } : null)} title={modalInfo.title} imgUrl={modalInfo.imgUrl} />}
 
-            {/* [CHANGE] totalStats prop 전달 */}
+            {/* [CHANGE] onNavigateHome prop 전달 */}
             <DashboardHeader 
                 layout={layout} 
                 data={apiData} 
                 totalStats={totalStats} 
                 isSoundOn={audioAllowed} 
-                onToggleSound={toggleSound} 
+                onToggleSound={toggleSound}
+                onNavigateHome={handleNavigateHome}
             />
 
             <div style={{ flex: 1, display: 'flex', gap: layout.gap, minHeight: 0 }}>

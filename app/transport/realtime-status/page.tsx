@@ -653,11 +653,6 @@ export default function LocalMapPage() {
           targetIds={targetIds}
       />
 
-      {/* <DummyToggleBtn onClick={() => setIsDummyMode(!isDummyMode)} $active={isDummyMode}>
-        {isDummyMode ? <StopCircle size={20} /> : <PlayCircle size={20} />}
-        {isDummyMode ? "Stop Test" : "Test Mode"}
-      </DummyToggleBtn> */}
-
     </Container>
   );
 }
@@ -899,25 +894,5 @@ const ModalContent = styled.div`
   @keyframes blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
-  }
-`;
-
-const DummyToggleBtn = styled.button<{ $active: boolean }>`
-  position: absolute; bottom: 24px; right: 24px; 
-  z-index: 2000;
-  display: flex; align-items: center; gap: 8px;
-  padding: 12px 20px;
-  background: ${props => props.$active ? '#3b82f6' : 'white'};
-  color: ${props => props.$active ? 'white' : '#475569'};
-  border: 1px solid ${props => props.$active ? '#2563eb' : '#e2e8f0'};
-  border-radius: 99px;
-  font-size: 14px; font-weight: 700;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
   }
 `;

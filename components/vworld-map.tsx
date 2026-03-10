@@ -199,7 +199,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
     };
   }, []);
 
-  // 2. 마커 & 팝업 & 경로 업데이트 (무한 렌더링 방지 로직 적용)
+  // 2. 마커 & 팝업 & 경로 업데이트 (스태킹 로직 적용)
   useEffect(() => {
     const markerSource = markerSourceRef.current;
     const remainingRouteSource = remainingRouteSourceRef.current;
@@ -228,12 +228,37 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
       }
     });
 
+    // 🟢 [핵심 개선] 차량 간 거리(진행도)를 비교하여 겹침을 방지하는 스태킹 계산
+    const activeCars = markers.filter(m => !m.isFacility && m.isFocused).map((m, index) => {
+        const progress = Math.max(0, Math.min(1, m.progress || 0));
+        const isLgStart = (m.startLat || 0) > 35.18;
+        return {
+            id: m.id || index,
+            absoluteProgress: isLgStart ? progress : (1 - progress) // 동일선상의 절대 진행도
+        };
+    }).sort((a, b) => a.absoluteProgress - b.absoluteProgress);
+
+    const stackIndexes: Record<string, number> = {};
+    activeCars.forEach((car, i) => {
+        if (i === 0) {
+            stackIndexes[car.id] = 0;
+            return;
+        }
+        const prevCar = activeCars[i - 1];
+        // 진행도 차이가 4%(약 0.04) 이내로 가까우면 팝업을 위로 쌓아올림
+        if (Math.abs(car.absoluteProgress - prevCar.absoluteProgress) < 0.04) {
+            stackIndexes[car.id] = stackIndexes[prevCar.id] + 1;
+        } else {
+            stackIndexes[car.id] = 0;
+        }
+    });
+
     markers.filter(car => !car.isFacility).forEach((car, index) => {
       let carPos: Coordinate;
       const isTarget = car.isFocused; 
       const isLgStart = (car.startLat || 0) > 35.18;
-      
       const progress = Math.max(0, Math.min(1, car.progress || 0));
+      const carId = car.id || index;
 
       if (typeof car.progress === 'number') {
         if (isLgStart) {
@@ -250,8 +275,8 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
             const startIndex = Math.floor((flatCoords.length - 1) * progress);
             remainingCoords = [carPos, ...flatCoords.slice(startIndex)];
           } else {
-             const endIndex = Math.floor((flatCoords.length - 1) * (1 - progress));
-             remainingCoords = [...flatCoords.slice(0, endIndex), carPos];
+            const endIndex = Math.floor((flatCoords.length - 1) * (1 - progress));
+            remainingCoords = [...flatCoords.slice(0, endIndex), carPos];
           }
 
           if (remainingCoords.length > 1) {
@@ -260,50 +285,48 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
             remainingRouteSource.addFeature(remainingFeature);
           }
 
-          // 🟢 [남은 시간 자동 계산 로직] ----------------------
-          // 1. 전체 경로 길이 (미터)
+          // 🟢 [남은 시간 자동 계산 로직] (기존 동일)
           const totalLengthMeters = routeGeom.getLength(); 
-          
-          // 2. 남은 거리 (미터) = 전체 * (1 - 진행률)
           const remainingMeters = totalLengthMeters * (1 - progress);
           const remainingKm = remainingMeters / 1000;
-
-          // 3. 평균 속도 가정 (60km/h) 및 시간 산출
           const avgSpeedKmH = 60; 
           const remainingHoursTotal = remainingKm / avgSpeedKmH;
           const remainingMinutesTotal = Math.round(remainingHoursTotal * 60);
 
-          // 4. 문자열 포맷팅 (0시간 00분)
           const hours = Math.floor(remainingMinutesTotal / 60);
           const minutes = remainingMinutesTotal % 60;
           
-          let computedRemainingTimeStr = "";
-          if (hours > 0) {
-            computedRemainingTimeStr = `${hours}시간 ${minutes}분`;
-          } else {
-            computedRemainingTimeStr = `${minutes}분`;
-          }
-          
-          // 만약 데이터에 0%나 100%에 가까우면 예외 처리
+          let computedRemainingTimeStr = hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
           if (remainingMinutesTotal <= 1) computedRemainingTimeStr = "도착 임박";
-          // --------------------------------------------------
 
-          const overlayId = `popup-${car.id || index}`;
+          // 🟢 [팝업 오프셋 및 UI 점선 동적 생성]
+          const sIndex = stackIndexes[carId] || 0;
+          const POPUP_HEIGHT = 135; // 팝업 박스의 여백 포함 높이
+          const yOffset = -35 - (sIndex * POPUP_HEIGHT); // 겹칠수록 위로 상승
+
+          // 겹쳐서 위로 올라간 팝업에 대해 점선 꼬리(Tail) 연결
+          const tailHtml = sIndex > 0 
+              ? `<div style="position: absolute; bottom: -${sIndex * POPUP_HEIGHT}px; left: calc(50% - 1px); width: 0; height: ${(sIndex * POPUP_HEIGHT) - 8}px; border-left: 2px dashed rgba(59, 130, 246, 0.5); z-index: -1;"></div>` 
+              : '';
+
+          const overlayId = `popup-${carId}`;
           let overlay = map.getOverlayById(overlayId);
 
+          // 팝업 컨테이너 디자인을 약간 더 슬림하게(컴팩트하게) 다듬었습니다.
           const popupContent = `
-            <div style="z-index: 99999999;background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(8px); padding: 12px 16px; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; min-width: 200px; font-family: 'Pretendard', sans-serif; pointer-events: none;">
+            <div style="z-index: ${99999 - sIndex}; position: relative; background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(8px); padding: 10px 14px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); border: 1px solid #e2e8f0; min-width: 180px; font-family: 'Pretendard', sans-serif; pointer-events: none;">
+              ${tailHtml}
               <div style="position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 8px solid rgba(255,255,255,0.95);"></div>
               
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9;">
                 <div style="display:flex; align-items:center; gap:6px;">
                   <div style="width:8px; height:8px; background:#22c55e; border-radius:50%; box-shadow:0 0 5px #22c55e;"></div>
-                  <span style="font-size: 15px; font-weight: 800; color: #1e293b;">${car.vehicleNo || car.title || '차량정보 없음'}</span>
+                  <span style="font-size: 14px; font-weight: 800; color: #1e293b;">${car.vehicleNo || car.title || '차량정보 없음'}</span>
                 </div>
-                <span style="font-size: 11px; font-weight: 700; color: #3b82f6; background: #eff6ff; padding: 3px 8px; border-radius: 6px;">배송중</span>
+                <span style="font-size: 10px; font-weight: 700; color: #3b82f6; background: #eff6ff; padding: 3px 6px; border-radius: 6px;">배송중</span>
               </div>
 
-              <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
                 <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b;">
                     <span>기사명</span>
                     <span style="font-weight: 700; color: #334155;">${car.driver || '-'}</span>
@@ -314,17 +337,18 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
                     <span style="font-weight: 700; color: #EF4444;">${computedRemainingTimeStr}</span>
                 </div>
 
-                <div style="background: #f8fafc; padding: 8px; border-radius: 8px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="background: #f8fafc; padding: 6px 8px; border-radius: 8px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
                   <span style="font-size: 11px; font-weight: 600; color: #64748b;">도착 예정</span>
-                  <span style="font-size: 14px; font-weight: 800; color: #3b82f6;">${car.eta || '이동 중'}</span>
+                  <span style="font-size: 13px; font-weight: 800; color: #3b82f6;">${car.eta || '이동 중'}</span>
                 </div>
               </div>
             </div>`;
 
           if (overlay) {
             overlay.setPosition(carPos);
+            overlay.setOffset([0, yOffset]); // 덮어씌울 때 오프셋도 동기화
             if (overlay.getElement()) {
-               overlay.getElement()!.innerHTML = popupContent;
+              overlay.getElement()!.innerHTML = popupContent;
             }
           } else {
             const popupEl = document.createElement('div');
@@ -334,7 +358,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
               element: popupEl,
               position: carPos,
               positioning: 'bottom-center',
-              offset: [0, -35], 
+              offset: [0, yOffset], // 스태킹 적용
               stopEvent: false,
             });
             map.addOverlay(newOverlay);
@@ -344,6 +368,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
         carPos = routeGeom.getFirstCoordinate();
       }
 
+      // ... (아래 마커 아이콘 설정 부분은 기존과 동일하게 유지)
       const carFeature = new Feature({ geometry: new Point(carPos) });
       
       if (isTarget && car.imageUrl) {
@@ -378,7 +403,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
 
   return (
     <>
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.0.0/ol.css" />
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.0.0/ol.css"  />
       <div ref={mapElement} style={{ width: "100%", height: "100%", background: "#f8fafc" }} />
     </>
   );

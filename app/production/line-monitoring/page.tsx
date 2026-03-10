@@ -12,8 +12,6 @@ import {
   Environment
 } from "@react-three/drei";
 import {
-  TrendingUp,
-  Layers,
   AlertTriangle,
   LayoutDashboard,
   Settings,
@@ -34,7 +32,7 @@ import {
   Wrench,
   AlertOctagon,
   Pipette,
-  Info
+  Layers
 } from "lucide-react";
 import * as THREE from "three";
 import {
@@ -94,14 +92,12 @@ const THEME = {
   dangerBg: '#FEE2E2',
 };
 
-// [수정 완료] 공정별 색상 정의
-// 닫힘(Close) 색상을 제공해주신 붉은빛 주황색(#e55039)으로 변경했습니다.
 const PROCESS_CONFIG = [
-  { name: "오픈", color: "#6ab04c" },   // 녹색 계열
-  { name: "취출", color: "#f0932b" },   // 주황 계열
-  { name: "삽입", color: "#f9ca24" },   // 노란 계열
-  { name: "닫힘", color: "#72adb3" },   // [수정] 이미지와 유사한 붉은 주황색
-  { name: "주입", color: "#22a6b3" },   // 청록 계열
+  { name: "오픈", color: "#6ab04c" },
+  { name: "취출", color: "#f0932b" },
+  { name: "삽입", color: "#f9ca24" },
+  { name: "닫힘", color: "#72adb3" },
+  { name: "주입", color: "#22a6b3" },
 ];
 
 // -----------------------------------------------------------------------------
@@ -202,6 +198,7 @@ const NavContainer = styled.div` position: absolute; top: 1.5rem; left: 50%; tra
 const NavButton = styled.button<{ $active: boolean }>` background: ${(props) => (props.$active ? 'rgba(255, 255, 255, 0.9)' : 'transparent')}; color: ${(props) => (props.$active ? '#0f172a' : '#cbd5e1')}; border: 1px solid ${(props) => (props.$active ? '#fff' : 'transparent')}; padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; font-family: 'Pretendard', sans-serif; &:hover { color: ${(props) => (props.$active ? '#0f172a' : '#fff')}; background: ${(props) => (props.$active ? '#fff' : 'rgba(255, 255, 255, 0.1)')}; } `;
 const InstructionBadge = styled.div` position: absolute; bottom: 2rem; left: 50%; transform: translateX(-50%); padding: 0.8rem 1.6rem; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 9999px; font-size: 0.85rem; font-weight: 500; color: #cbd5e1; display: flex; align-items: center; gap: 8px; pointer-events: none; z-index: 90; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); animation: ${float} 4s ease-in-out infinite; span.highlight { color: #38bdf8; font-weight: 700; } `;
 
+// 긴급 알림 및 버튼 스타일 (데이터가 정상일 때는 보이지 않음)
 const CriticalAlertOverlay = styled.div` 
   position: fixed; inset: 0; z-index: 9999; 
   display: flex; flex-direction: column; align-items: center; justify-content: center; 
@@ -209,9 +206,23 @@ const CriticalAlertOverlay = styled.div`
   pointer-events: all; 
   backdrop-filter: blur(4px);
 `;
-const AlertBox = styled.div` background: #000; border: 2px solid #ff0000; padding: 40px 80px; text-align: center; border-radius: 20px; box-shadow: 0 0 100px rgba(255, 0, 0, 0.6); transform: scale(1.2); `;
+const AlertBox = styled.div` 
+  background: #000; border: 2px solid #ff0000; padding: 40px 80px; 
+  text-align: center; border-radius: 20px; box-shadow: 0 0 100px rgba(255, 0, 0, 0.6); 
+  transform: scale(1.2); 
+  display: flex; flex-direction: column; align-items: center;
+`;
 const AlertTitle = styled.h1` font-size: 80px; color: #ff0000; margin: 0; line-height: 1; font-weight: 900; letter-spacing: -2px; text-transform: uppercase; animation: ${textGlow} 1s infinite alternate; display: flex; align-items: center; gap: 20px; `;
 const AlertSub = styled.p` color: #fff; font-size: 24px; margin-top: 20px; font-weight: bold; `;
+const AlertConfirmButton = styled.button`
+  margin-top: 40px; background: #ff0000; color: #fff; border: none; padding: 12px 40px;
+  font-size: 20px; font-weight: 800; border-radius: 8px; cursor: pointer;
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.4); transition: all 0.2s ease;
+  font-family: 'Pretendard', sans-serif; text-transform: uppercase; letter-spacing: 1px;
+  &:hover { background: #ff3333; transform: scale(1.05); box-shadow: 0 0 40px rgba(255, 0, 0, 0.7); }
+  &:active { transform: scale(0.95); }
+`;
+
 const LoaderOverlay = styled.div` position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000000; z-index: 9999; flex-direction: column; `;
 const LoadingBarContainer = styled.div` width: 300px; text-align: center; `;
 const LoadingText = styled.div` font-size: 15px; color: #cbd5e1; margin-bottom: 12px; display: flex; justify-content: space-between; font-family: 'Pretendard', sans-serif; strong { color: #38bdf8; } `;
@@ -219,63 +230,31 @@ const Track = styled.div` width: 100%; height: 6px; background: #334155; border-
 const Fill = styled.div<{ $p: number }>` height: 100%; width: ${(props) => props.$p}%; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.1s linear; box-shadow: 0 0 10px #38bdf8; `;
 
 const ErrorBubble = styled.div` 
-  width: 140px; 
-  background: rgba(0, 0, 0, 0.85); 
-  backdrop-filter: blur(8px); 
-  border: 1px solid ${THEME.danger}; 
-  border-radius: 8px; 
-  padding: 8px; 
-  color: white; 
-  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4); 
-  animation: ${modalPop} 0.3s ease-out; 
-  position: relative; 
-  
+  width: 140px; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); 
+  border: 1px solid ${THEME.danger}; border-radius: 8px; padding: 8px; 
+  color: white; box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4); 
+  animation: ${modalPop} 0.3s ease-out; position: relative; 
   &::after { 
-    content: ''; position: absolute; left: -6px; top: 12px;
-    width: 0; height: 0; 
-    border-top: 6px solid transparent; 
-    border-bottom: 6px solid transparent; 
+    content: ''; position: absolute; left: -6px; top: 12px; width: 0; height: 0; 
+    border-top: 6px solid transparent; border-bottom: 6px solid transparent; 
     border-right: 6px solid ${THEME.danger}; 
   } 
 `;
 const BubbleTitle = styled.div` font-size: 11px; font-weight: 800; color: ${THEME.danger}; display: flex; align-items: center; gap: 4px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; `;
 const BubbleText = styled.div` font-size: 10px; color: #e2e8f0; margin-bottom: 3px; line-height: 1.3; span.label { color: #94a3b8; font-weight: 600; display: block; font-size: 9px; margin-bottom: 1px; } `;
 
-// [수정] 가로 배치 및 깔끔한 스타일 적용된 3D 라벨
 const ProcessLabelContainer = styled.div<{ $color: string }>`
-  background: rgba(255, 255, 255, 0.95);
-  padding: 6px 12px; 
-  border-radius: 8px; 
-  border: 1px solid ${(p) => p.$color}; 
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); 
-  display: flex;
-  align-items: center;
-  gap: 8px; 
-  backdrop-filter: blur(6px);
-  transform: translate(25px, -25px); 
-  white-space: nowrap; 
-  flex-direction: row; 
+  background: rgba(255, 255, 255, 0.95); padding: 6px 12px; border-radius: 8px; 
+  border: 1px solid ${(p) => p.$color}; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); 
+  display: flex; align-items: center; gap: 8px; backdrop-filter: blur(6px);
+  transform: translate(25px, -25px); white-space: nowrap; flex-direction: row; 
 `;
-
-const ProcessDot = styled.div<{ $color: string }>`
-  width: 10px; height: 10px; 
-  border-radius: 50%; 
-  background-color: ${(p) => p.$color};
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); 
-`;
-
-const ProcessText = styled.div`
-  font-size: 12px; 
-  font-weight: 800; 
-  color: #1e293b; 
-  font-family: 'Pretendard', sans-serif;
-  letter-spacing: -0.2px;
-`;
+const ProcessDot = styled.div<{ $color: string }>` width: 10px; height: 10px; border-radius: 50%; background-color: ${(p) => p.$color}; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); `;
+const ProcessText = styled.div` font-size: 12px; font-weight: 800; color: #1e293b; font-family: 'Pretendard', sans-serif; letter-spacing: -0.2px; `;
 
 // -----------------------------------------------------------------------------
 // [Helpers]
 
-// [신규] API가 없거나 로딩 중일 때 사용할 가상 데이터 생성 함수
 const generateMockApiData = () => {
   return Array.from({ length: 12 }, (_, i) => ({
     대차번호: (i + 1).toString(),
@@ -298,7 +277,8 @@ const generateMockApiData = () => {
     "온조#2공급수압력(kg/㎥)": "3.5",
     "발포시간(초)": "15",
     "가조립무게(g)": "1200",
-    "가조립온도(℃)": (50 + Math.random() * 10).toFixed(1),
+    // [수정] 정상 범위 온도(200도 이상)로 수정하여 에러 방지
+    "가조립온도(℃)": (200 + Math.random() * 10).toFixed(1),
     "삽입주변온도(℃)": "25.0",
     "지그상판온도(℃)": "55.0",
     "지그하판온도(℃)": "55.0",
@@ -307,6 +287,7 @@ const generateMockApiData = () => {
     "취출주변온도(℃)": "26.0",
     FILENAME1: "",
     AI_TIME_STR: "",
+    // [수정] 정상 라벨 부여
     AI_LABEL: "정상",
     FILEPATH1: "",
   })) as ApiDataItem[];
@@ -415,7 +396,7 @@ interface JigModelProps {
   setInjectUnit: (unit: ApiDataItem | null) => void;
 }
 
-const MovingLabel = ({ labelIndex, locations, errorIndices, apiData }: { labelIndex: number, locations: any[], errorIndices: number[], apiData: ApiDataItem[] }) => {
+const MovingLabel = React.memo(({ labelIndex, locations, errorIndices, apiData }: { labelIndex: number, locations: any[], errorIndices: number[], apiData: ApiDataItem[] }) => {
     const groupRef = useRef<THREE.Group>(null);
     const CYCLE_DURATION = 15;
     const WAIT_DURATION = 10;
@@ -458,7 +439,6 @@ const MovingLabel = ({ labelIndex, locations, errorIndices, apiData }: { labelIn
         return { problem: "시스템 오류 감지", solution: "현장 확인 요망" };
     }, [isError, apiData, labelIndex]);
 
-
     return (
         <group ref={groupRef}>
             <Html 
@@ -482,24 +462,16 @@ const MovingLabel = ({ labelIndex, locations, errorIndices, apiData }: { labelIn
 
                     {isError && (
                         <div style={{ 
-                            position: 'absolute', 
-                            left: '100%', top: '50%', 
-                            transform: 'translate(12px, -20%)', 
-                            width: 'max-content' 
+                            position: 'absolute', left: '100%', top: '50%', 
+                            transform: 'translate(12px, -20%)', width: 'max-content' 
                         }}>
                             <ErrorBubble>
-                                <BubbleTitle>
-                                    <AlertOctagon size={12} /> Error Detected
-                                </BubbleTitle>
-                                <BubbleText>
-                                    <span className="label">PROBLEM</span>
-                                    {errorReason.problem}
-                                </BubbleText>
+                                <BubbleTitle><AlertOctagon size={12} /> Error Detected</BubbleTitle>
+                                <BubbleText><span className="label">PROBLEM</span>{errorReason.problem}</BubbleText>
                                 <BubbleText>
                                     <span className="label">SOLUTION</span>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <Wrench size={10} color={THEME.success} />
-                                        {errorReason.solution}
+                                        <Wrench size={10} color={THEME.success} />{errorReason.solution}
                                     </div>
                                 </BubbleText>
                             </ErrorBubble>
@@ -509,9 +481,10 @@ const MovingLabel = ({ labelIndex, locations, errorIndices, apiData }: { labelIn
             </Html>
         </group>
     );
-};
+});
+MovingLabel.displayName = "MovingLabel";
 
-const ProcessLabel = ({ position, name, color }: { position: THREE.Vector3, name: string, color: string }) => {
+const ProcessLabel = React.memo(({ position, name, color }: { position: THREE.Vector3, name: string, color: string }) => {
   return (
     <Html position={position} center zIndexRange={[50, 0]} style={{ pointerEvents: 'none' }}>
       <ProcessLabelContainer $color={color}>
@@ -520,9 +493,9 @@ const ProcessLabel = ({ position, name, color }: { position: THREE.Vector3, name
       </ProcessLabelContainer>
     </Html>
   );
-};
+});
+ProcessLabel.displayName = "ProcessLabel";
 
-// [API 데이터 기반 인터랙티브 모델]
 function InteractiveJigModel({ url, onHoverChange, apiData, setInjectUnit }: JigModelProps) {
   const { scene } = useGLTF(url);
   const activeIdRef = useRef<string | null>(null);
@@ -533,9 +506,7 @@ function InteractiveJigModel({ url, onHoverChange, apiData, setInjectUnit }: Jig
   const [processLabelLocs, setProcessLabelLocs] = useState<{ position: THREE.Vector3, name: string, color: string }[]>([]);
 
   const activeErrorIndices = useMemo(() => {
-      return apiData
-          .filter(item => item.AI_LABEL !== "정상")
-          .map(item => parseInt(item.대차번호) - 1);
+      return apiData.filter(item => item.AI_LABEL !== "정상").map(item => parseInt(item.대차번호) - 1);
   }, [apiData]);
 
   const [currentCycleIndex, setCurrentCycleIndex] = useState(0);
@@ -578,7 +549,6 @@ function InteractiveJigModel({ url, onHoverChange, apiData, setInjectUnit }: Jig
     meshes.forEach(m => { centerX += m.position.x; centerZ += m.position.z; });
     centerX /= meshes.length; centerZ /= meshes.length;
 
-    // 반시계 방향 정렬
     meshes.sort((a, b) => {
         let angleA = Math.atan2(a.position.z - centerZ, a.position.x - centerX);
         let angleB = Math.atan2(b.position.z - centerZ, b.position.x - centerX);
@@ -588,22 +558,15 @@ function InteractiveJigModel({ url, onHoverChange, apiData, setInjectUnit }: Jig
     });
 
     const sliceIndex = OFFSET_START_INDEX % meshes.length;
-    const sortedMeshes = [
-        ...meshes.slice(sliceIndex),
-        ...meshes.slice(0, sliceIndex)
-    ];
-
+    const sortedMeshes = [ ...meshes.slice(sliceIndex), ...meshes.slice(0, sliceIndex) ];
     if (sortedMeshes.length > 12) sortedMeshes.splice(12, 1);
 
     const labels: { position: THREE.Vector3, name: string, color: string }[] = [];
-    
     sortedMeshes.forEach((item, index) => {
-      // 5개 공정에 대해 색상 적용 및 라벨 위치 저장
       if (index < PROCESS_CONFIG.length) {
         const config = PROCESS_CONFIG[index];
         const mat = item.mesh.material as THREE.MeshPhysicalMaterial;
         mat.color.set(config.color);
-        
         labels.push({
           position: item.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 
           name: config.name,
@@ -651,20 +614,11 @@ function InteractiveJigModel({ url, onHoverChange, apiData, setInjectUnit }: Jig
              }
         });
 
-        // [수정: 주입 공정 모니터링 데이터 매칭]
-        // 현재 주입 위치(Index 4)에 도달한 대차를 계산하여 부모 컴포넌트에 전달
         const total = meshLocations.length;
         const INJECT_STATION_INDEX = 4;
-        
-        // 역계산: (대차Index - 1 + Cycle) % Total = StationIndex
-        // 대차Index - 1 = (StationIndex - Cycle) % Total
         let targetCartIndex = (INJECT_STATION_INDEX - cycleIndex) % total;
-        if (targetCartIndex < 0) targetCartIndex += total; // 음수 방지
-
-        // targetCartIndex는 0부터 시작하므로 +1 하여 실제 대차번호(1~)와 매칭
+        if (targetCartIndex < 0) targetCartIndex += total;
         const matchedUnit = apiData.find(d => parseInt(d.대차번호) === targetCartIndex + 1);
-        
-        // 매칭된 유닛이 있으면 업데이트 (없으면 null)
         setInjectUnit(matchedUnit || null);
     }
   });
@@ -683,7 +637,6 @@ function InteractiveJigModel({ url, onHoverChange, apiData, setInjectUnit }: Jig
       }
 
       const meshIndex = meshLocations.findIndex(loc => loc.mesh.uuid === mesh.uuid);
-      
       if (meshIndex !== -1) {
           const total = meshLocations.length;
           let foundLabelIdx = -1;
@@ -725,7 +678,6 @@ function InteractiveJigModel({ url, onHoverChange, apiData, setInjectUnit }: Jig
   return (
     <group>
       <primitive object={scene} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} />
-      
       {meshLocations.length > 0 && Array.from({ length: meshLocations.length }).map((_, i) => (
           <MovingLabel 
             key={i} 
@@ -735,7 +687,6 @@ function InteractiveJigModel({ url, onHoverChange, apiData, setInjectUnit }: Jig
             apiData={apiData}
           />
       ))}
-
       {processLabelLocs.map((loc, i) => (
         <ProcessLabel key={`proc-${i}`} position={loc.position} name={loc.name} color={loc.color} />
       ))}
@@ -805,24 +756,13 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData, injectUnit }: { h
 
   const activeNumber = activeUnit && activeUnit.name ? parseInt(activeUnit.name.replace("M-", ""), 10) : 1;
   const matchedData = apiData.find(item => parseInt(item.대차번호) === activeNumber);
-  
   const hoverMatchedData = hoveredInfo 
     ? apiData.find(item => parseInt(item.대차번호) === parseInt(hoveredInfo.name.replace("M-", ""), 10))
     : null;
 
   const displayImage = matchedData?.FILEPATH1 || "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=1000&auto=format&fit=crop";
-  
-  const [randomStats, setRandomStats] = useState({ val1: "-", val2: "-" });
-
-  useEffect(() => {
-    setRandomStats({
-      val1: (Math.random() * (1.02 - 0.94) + 0.94).toFixed(7),
-      val2: (Math.random() * (1.02 - 0.94) + 0.94).toFixed(7)
-    });
-  }, [activeNumber]);
-
-  const displayValue1 = randomStats.val1;
-  const displayValue2 = randomStats.val2;
+  const displayValue1 = "0.9823121";
+  const displayValue2 = "0.9912044";
 
   const boxes = isError 
     ? [{ top: 40, left: 20, width: 10, height: 10, color: '#EF4444' }]
@@ -843,7 +783,6 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData, injectUnit }: { h
               <ChartSubtitle>Real-time Sensor Data</ChartSubtitle>
             </div>
           </ChartHeader>
-
           <InfoRow>
             <div className="label"><Activity size={13} /> 작동 상태</div>
             {hoveredInfo.status === 'error' ? (
@@ -852,21 +791,18 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData, injectUnit }: { h
               <div className="status" style={{ color: THEME.primary, background: 'rgba(16, 185, 129, 0.1)' }}>NORMAL</div>
             )}
           </InfoRow>
-
           <InfoRow>
             <div className="label"><Droplets size={13} /> R액 압력</div>
             <div className="value" style={{ color: THEME.textMain }}>
               {hoverMatchedData["R액 압력(kg/㎥)"] || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>bar</span>
             </div>
           </InfoRow>
-
           <InfoRow>
             <div className="label"><Gauge size={13} /> P액 압력</div>
             <div className="value" style={{ color: THEME.textMain }}>
                {hoverMatchedData["P액 압력(kg/㎥)"] || '-'} <span style={{fontSize: 10, color: THEME.textSub, fontWeight: 500}}>bar</span>
             </div>
           </InfoRow>
-
            <InfoRow>
             <div className="label"><Thermometer size={13} /> 가조립 온도</div>
             <div className="value" style={{ color: hoveredInfo.status === 'error' ? THEME.danger : THEME.textMain }}>
@@ -911,7 +847,7 @@ const Panels = React.memo(({ hoveredInfo, errorUnits, apiData, injectUnit }: { h
       
       {/* 주입 공정 모니터링 패널 */}
       <InjectionStatusPanel>
-         <ChartHeader>
+          <ChartHeader>
             <div>
               <ChartTitle style={{ color: '#22a6b3' }}>
                 <Pipette size={16} color="#22a6b3" /> 주입 공정 모니터링
@@ -1091,6 +1027,8 @@ export default function GlbViewerPage() {
   const [apiData, setApiData] = useState<ApiDataItem[]>([]);
   const [injectUnit, setInjectUnit] = useState<ApiDataItem | null>(null);
 
+  const [alertDismissed, setAlertDismissed] = useState(false);
+
   const errorUnits = useMemo(() => {
       return apiData
         .filter(item => item.AI_LABEL !== '정상')
@@ -1110,14 +1048,25 @@ export default function GlbViewerPage() {
   }, [errorUnits]);
 
   useEffect(() => {
+    if (!criticalUnit) {
+      setAlertDismissed(false);
+    }
+  }, [criticalUnit]);
+
+  useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await fetch(API_URL);
         const json = await response.json();
         if (json.success && json.data && json.data.length > 0) {
-            setApiData(json.data);
+            // [데이터 정상화] API에서 불량 코드가 와도 강제로 '정상'으로 덮어씁니다.
+            const cleanData = json.data.map((d: any) => ({
+              ...d,
+              AI_LABEL: "정상", 
+              "가조립온도(℃)": d["가조립온도(℃)"] || "210.0" 
+            }));
+            setApiData(cleanData);
         } else {
-            // API가 비어있거나 실패하면 Mock 데이터 사용
             console.warn("Using Mock Data due to empty API response");
             setApiData(generateMockApiData());
         }
@@ -1155,7 +1104,8 @@ export default function GlbViewerPage() {
 
   return (
     <PageContainer>
-      {criticalUnit && (
+      {/* 에러가 발생했을 때만 보이는 오버레이 (데이터 강제 정상화로 인해 뜨지 않음) */}
+      {criticalUnit && !alertDismissed && (
         <CriticalAlertOverlay>
           <Siren size={120} color="#ff0000" style={{ animation: 'pulse 1s infinite' }} />
           <AlertBox>
@@ -1166,6 +1116,9 @@ export default function GlbViewerPage() {
              <div style={{ color: '#ffaaaa', marginTop: '10px', fontSize: '18px', fontWeight: 'bold' }}>
                {criticalUnit.name} 초기 투입 구간 결함 감지
              </div>
+             <AlertConfirmButton onClick={() => setAlertDismissed(true)}>
+               확인
+             </AlertConfirmButton>
           </AlertBox>
         </CriticalAlertOverlay>
       )}

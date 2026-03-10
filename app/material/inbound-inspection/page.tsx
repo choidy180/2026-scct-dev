@@ -339,9 +339,9 @@ export default function DashboardPage() {
 
   // 최초 로드 시 혹은 수동 트리거 시 스캔 시작
   useEffect(() => {
-     if (!connectedIp) {
-         scanAndLockIp();
-     }
+    if (!connectedIp) {
+      scanAndLockIp();
+    }
   }, [scanAndLockIp, connectedIp]);
 
   const handleRetryScan = () => {
@@ -653,18 +653,18 @@ export default function DashboardPage() {
                         /* 2. 연결된 IP가 없을 때 (스캔 중 화면 or 실패 화면) */
                             <StyledErrorState>
                                 {isScanning ? (
-                                    <>
-                                        <RefreshCw className="spin" size={40} color="#3b82f6" />
-                                        <h3 style={{marginTop: 16, color: '#93c5fd'}}>SCANNING...</h3>
-                                        <p style={{marginTop: 8, color: '#64748b'}}>{scanMessage}</p>
-                                    </>
+                                  <>
+                                    <RefreshCw className="spin" size={40} color="#3b82f6" />
+                                    <h3 style={{marginTop: 16, color: '#93c5fd'}}>SCANNING...</h3>
+                                    <p style={{marginTop: 8, color: '#64748b'}}>{scanMessage}</p>
+                                  </>
                                 ) : (
-                                    <>
-                                        <Signal size={40} color="#64748b" />
-                                        <h3 style={{marginTop: 16, color: '#94a3b8'}}>NO SIGNAL</h3>
-                                        <p style={{marginTop: 8, color: '#64748b'}}>{scanMessage || "연결 가능한 카메라가 없습니다."}</p>
-                                        <PinkButton onClick={handleRetryScan} style={{marginTop: 16}}>재시도</PinkButton>
-                                    </>
+                                  <>
+                                    <Signal size={40} color="#64748b" />
+                                    <h3 style={{marginTop: 16, color: '#94a3b8'}}>NO SIGNAL</h3>
+                                    <p style={{marginTop: 8, color: '#64748b'}}>{scanMessage || "연결 가능한 카메라가 없습니다."}</p>
+                                    <PinkButton onClick={handleRetryScan} style={{marginTop: 16}}>재시도</PinkButton>
+                                  </>
                                 )}
                             </StyledErrorState>
                         )}
