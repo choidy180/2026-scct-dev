@@ -406,28 +406,29 @@ const WorkDetailItem = styled.div`
 `;
 
 const WorkLabel = styled.span`
-  font-size: 14px;
-  color: #94A3B8;
+  font-size: 18px;
+  color: #474a4f;
   display: flex;
+  font-weight: 600;
   align-items: center;
   gap: 4px;
 `;
 
 const WorkValue = styled.span`
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
   color: #334155;
 `;
 
 const ProgressContainer = styled.div`
-  margin-top: 14px;
+  margin-top: 24px;
 `;
 
 const ProgressLabelRow = styled.div`
   display: flex;
   justify-content: space-between;
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: 18px;
   font-weight: 600;
   color: ${theme.textSub};
 `;
@@ -1022,14 +1023,6 @@ const SmartFactoryDashboard: React.FC = () => {
                 </WorkInfoTitleRow>
 
                 <WorkGrid>
-                  <WorkDetailItem>
-                    <WorkLabel><FiUser size={10}/> 작업자</WorkLabel>
-                    <WorkValue>{wkData.NmEmplo}</WorkValue>
-                  </WorkDetailItem>
-                  <WorkDetailItem>
-                    <WorkLabel><FiTarget size={10}/> 공정명</WorkLabel>
-                    <WorkValue>{wkData.NmProce}</WorkValue>
-                  </WorkDetailItem>
                   <WorkDetailItem>
                     <WorkLabel><FiCalendar size={10}/> 계획 시작</WorkLabel>
                     <WorkValue>{formatTime(wkData.PlnSTime)}</WorkValue>
