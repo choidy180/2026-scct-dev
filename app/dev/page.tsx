@@ -2434,5 +2434,5 @@ const ToastBody = styled.div`
   margin-top: 4px;
   color: #94a3b8;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.5; 
 `;
