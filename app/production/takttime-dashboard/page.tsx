@@ -49,9 +49,10 @@ const REFRESH_RATE = 5000;
 
 // [EDIT] 영상 링크 및 라인 정의 수정
 const VIDEO_PATHS = {
-  A: "http://1.254.24.170:24828/api/DX_API000031?videoName=223.mp4",   // 꼬모냉장고 (구 발포)
-  B: "http://1.254.24.170:24828/api/DX_API000031?videoName=224.mp4",   // 와인셀러 (구 총조립1)
-  C: "http://1.254.24.170:24828/api/DX_API000031?videoName=225.mp4", // 얼음정수기 (구 총조립2)
+  A: "http://192.168.2.147:8134",  // 꼬모냉장고 (구 발포)
+  B: "http://192.168.2.147:8135",  // 와인셀러 (구 총조립1)
+  C: "http://192.168.2.147:8136",  // 얼음정수기 (구 총조립2)
+  D: 'http://192.168.2.147:8087'
 };
 
 // [EDIT] View 모드별 KPI 데이터
@@ -630,7 +631,7 @@ export default function ProcessDashboard() {
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={'http://1.254.24.170:24828/api/DX_API000031?videoName=225.mp4'} />
+                          <VideoPlayer src={VIDEO_PATHS.C} />
                           <div className="label">총조립2라인</div>
                         </VideoBox>
                         <ChartWrapper>
@@ -656,7 +657,7 @@ export default function ProcessDashboard() {
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={'http://1.254.24.170:24828/api/DX_API000031?videoName=225_2.mp4'} />
+                          <VideoPlayer src={VIDEO_PATHS.D} />
                           <div className="label">총조립2라인</div>
                         </VideoBox>
                         <ChartWrapper>
