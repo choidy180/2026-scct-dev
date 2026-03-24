@@ -148,7 +148,7 @@ const HeaderRight = styled.div`
 
 const MainGrid = styled.div`
   display: grid;
-  grid-template-columns: 1.2fr 1.4fr 1fr; 
+  grid-template-columns: 1.3fr 1.5fr 0.7fr;
   gap: 20px;
   flex: 1;
   min-height: 0;
@@ -944,7 +944,7 @@ const SmartFactoryDashboard: React.FC = () => {
               
               <StyledVideo 
                 autoPlay muted loop playsInline 
-                src="http://1.254.24.170:24828/api/DX_API000031?videoName=207.mp4" 
+                src="http://192.168.2.147:8132" 
               />
 
               {cam207Data && (
@@ -968,7 +968,7 @@ const SmartFactoryDashboard: React.FC = () => {
               
               <StyledVideo 
                 autoPlay muted loop playsInline 
-                src="http://1.254.24.170:24828/api/DX_API000031?videoName=218.mp4" 
+                src="http://192.168.2.147:8133" 
               />
 
               {cam218Data && (
