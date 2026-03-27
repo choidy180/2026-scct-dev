@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
 import styled, { createGlobalStyle } from "styled-components";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
@@ -23,7 +23,7 @@ import {
   FileText,
   X,
   Refrigerator, 
-  Settings,     
+  Settings,    
   Layers,       
   Cpu,
   ClipboardList,
@@ -36,7 +36,6 @@ import {
   ChevronDown,
   Check,
   WifiOff,
-  // [EDIT] 새로운 아이콘 추가 (와인, 물/얼음)
   Wine,
   GlassWater
 } from "lucide-react";
@@ -47,12 +46,11 @@ const TARGET_TAKT = 45.0;
 const CHART_Y_MAX_LIMIT = 100;
 const REFRESH_RATE = 5000;
 
-// [EDIT] 영상 링크 및 라인 정의 수정
-const VIDEO_PATHS = {
-  A: "http://192.168.2.147:8134",  // 꼬모냉장고 (구 발포)
-  B: "http://192.168.2.147:8135",  // 와인셀러 (구 총조립1)
-  C: "http://192.168.2.147:8136",  // 얼음정수기 (구 총조립2)
-  D: 'http://192.168.2.147:8087'
+// [EDIT] 이미지 참고하여 웹소켓 스트리밍 링크 정의
+const WS_PATHS = {
+  A: "ws://192.168.2.147:8134", // 발포라인
+  B: "ws://192.168.2.147:8135", // 총조립1라인
+  C: "ws://192.168.2.147:8136", // 총조립2라인
 };
 
 // [EDIT] View 모드별 KPI 데이터
@@ -115,32 +113,25 @@ const GlobalStyle = createGlobalStyle`
 const LayoutContainer = styled.div`display: flex; width: 100vw; height: calc(100vh - 64px); background-color: ${COLORS.bgPage};`;
 
 const Sidebar = styled.div`
-  width: 110px; // 버튼 크기에 맞춰 약간 확장
+  width: 110px; 
   background: ${COLORS.bgCard}; border-right: 1px solid ${COLORS.grid}; 
   display: flex; flex-direction: column; align-items: center; padding-top: 32px; gap: 24px; z-index: 20;
   box-shadow: 4px 0 24px rgba(0,0,0,0.02);
 `;
 
-// [EDIT] 버튼 스타일 모던하게 전면 수정
 const NavItem = styled.button<{ $active: boolean }>`
   width: 80px; height: 80px; 
   border-radius: 20px; 
-  
-  // 기본: 흰색 배경, Active: 흰색 배경 + 파란색 테두리
   border: 2px solid ${(props) => (props.$active ? COLORS.primary : "transparent")};
   background: #FFFFFF;
   color: ${(props) => (props.$active ? COLORS.primaryDark : COLORS.textSub)};
-  
   cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; 
   transition: all 0.2s ease-in-out;
   position: relative; overflow: hidden;
-
-  // 부드러운 그림자 추가
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 
   &:hover { 
     transform: translateY(-2px);
-    // 호버 시 배경색 및 그림자 강조
     background: ${(props) => props.$active ? "#EFF6FF" : "#F8FAFC"};
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
     color: ${COLORS.primary};
@@ -160,7 +151,6 @@ const NavItem = styled.button<{ $active: boolean }>`
     color: ${(props) => (props.$active ? COLORS.primaryDark : COLORS.textMain)};
   }
 
-  // 아이콘 색상 및 크기 조정
   svg {
     transition: all 0.2s ease;
     color: ${(props) => (props.$active ? COLORS.primary : COLORS.textSub)};
@@ -198,27 +188,33 @@ const VideoBox = styled.div<{ $isLarge?: boolean }>`
   display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; flex-shrink: 0;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
 
-  // [EDIT] 2. 비디오 라벨 개선: 왼쪽 아래 반투명 검은 박스 적용
   .label { 
     position: absolute; 
-    bottom: 12px; // 하단 여백
-    left: 12px;   // 좌측 여백
-    
-    // 반투명 검은색 배경 및 스타일링
+    bottom: 12px; 
+    left: 12px; 
     background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(4px); // (선택사항) 블러 효과로 가시성 추가 확보
+    backdrop-filter: blur(4px); 
     color: white; 
     font-size: 0.85rem; 
     padding: 8px 16px; 
     font-weight: 700; 
     border-radius: 8px;
-    
     white-space: nowrap; 
     max-width: calc(100% - 24px);
     overflow: hidden;
     text-overflow: ellipsis;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
+`;
+
+// [NEW] 웹소켓 렌더링용 img 태그
+const StyledWebsocketImg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.8;
+  transform: scale(1.15);
+  background-color: #000;
 `;
 
 const ChartWrapper = styled.div`flex: 1; height: 100%; position: relative; min-width: 0; display: flex; flex-direction: column;`;
@@ -401,7 +397,6 @@ const LoadingText = styled.div`
 `;
 const SubText = styled.div`font-size: 0.85rem; color: ${COLORS.textSub}; margin-top: 4px; font-weight: 500;`;
 
-// [EDIT] 데이터 없음(No Data) 컨테이너 스타일 추가
 const NoDataContainer = styled.div`
   width: 100%; height: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -418,7 +413,7 @@ const modalVariants: Variants = {
   exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } },
 };
 
-// [Helper Components]
+// --- [Helper Components] ---
 const CustomBarLabel = memo((props: any) => {
   const { x, y, width, value } = props;
   const valNum = Number(value);
@@ -430,16 +425,41 @@ const CustomBarLabel = memo((props: any) => {
   );
 });
 
-const VideoPlayer = memo(({ src }: { src: string }) => {
-    return (
-        <>
-            <video src={src} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.15)' }} />
-        </>
-    )
-}, (prev, next) => prev.src === next.src);
+// [NEW] WebSocket Video Component
+const WsVideoStream = memo(({ wsUrl }: { wsUrl: string }) => {
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'blob'; 
+
+    ws.onmessage = (event) => {
+      if (!imgRef.current) return;
+      
+      if (typeof event.data === 'string') {
+        imgRef.current.src = event.data.startsWith('data:image') 
+          ? event.data 
+          : `data:image/jpeg;base64,${event.data}`;
+      } 
+      else {
+        const url = URL.createObjectURL(event.data);
+        imgRef.current.src = url;
+        imgRef.current.onload = () => {
+          URL.revokeObjectURL(url);
+        };
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [wsUrl]);
+
+  return <StyledWebsocketImg ref={imgRef} alt="Live Stream" />;
+}, (prev, next) => prev.wsUrl === next.wsUrl);
+
 
 const MonitorChart = memo(({ data }: { data: CycleData[] }) => {
-  // [EDIT] 데이터가 없을 경우 (밤, 비가동) 안내 UI 표시
   if (!data || data.length === 0) {
       return (
           <NoDataContainer>
@@ -541,7 +561,6 @@ export default function ProcessDashboard() {
   }, []);
 
   const getSlicedData = (lineData: CycleData[]) => {
-      const sliceCount = Math.floor(lineData.length * 0.5); 
       return lineData.slice(-10);
   };
 
@@ -576,7 +595,6 @@ export default function ProcessDashboard() {
       <GlobalStyle />
       <LayoutContainer>
         <Sidebar>
-          {/* [EDIT] 버튼 텍스트 및 아이콘 수정 */}
           <NavItem $active={viewMode === 1} onClick={() => handleViewChange(1)}>
             <Refrigerator size={24} strokeWidth={2} /><span>꼬모<br/>냉장고</span>
           </NavItem>
@@ -614,14 +632,13 @@ export default function ProcessDashboard() {
 
           <DashboardBody>
             <ChartSection>
-                {/* [EDIT] 원래 코드처럼 비디오 갯수 유지 (View 1, 2는 2개씩 / View 3은 3개) */}
-                
+                {/* View 1: 꼬모냉장고(A) 및 와인셀러(B) */}
                 {viewMode === 1 && (
                   <ViewContainer key="view-1">
-                      {/* View 1: 꼬모냉장고(A) 및 와인셀러(B) */}
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.A} />
+                          {/* 웹소켓 연동 (발포라인) */}
+                          <WsVideoStream wsUrl={WS_PATHS.A} />
                           <div className="label">발포라인</div>
                         </VideoBox>
                         <ChartWrapper>
@@ -631,7 +648,8 @@ export default function ProcessDashboard() {
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.C} />
+                          {/* 웹소켓 연동 (총조립2라인) */}
+                          <WsVideoStream wsUrl={WS_PATHS.C} />
                           <div className="label">총조립2라인</div>
                         </VideoBox>
                         <ChartWrapper>
@@ -642,22 +660,24 @@ export default function ProcessDashboard() {
                   </ViewContainer>
                 )}
 
+                {/* View 2: 와인셀러(B) 및 얼음정수기(C) */}
                 {viewMode === 2 && (
                   <ViewContainer key="view-2">
-                      {/* View 2: 와인셀러(B) 및 얼음정수기(C) */}
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.A} />
-                          <div className="label">발포라인</div>
+                          {/* 웹소켓 연동 (총조립1라인) */}
+                          <WsVideoStream wsUrl={WS_PATHS.B} />
+                          <div className="label">총조립1라인</div>
                         </VideoBox>
                         <ChartWrapper>
                           <ProcessLabel><Activity size={12}/>공정 CT 분석</ProcessLabel>
-                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.A} /></div>
+                          <div style={{flex:1, marginTop: 8}}><MonitorChart data={displayData.B} /></div>
                         </ChartWrapper>
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={true}>
-                          <VideoPlayer src={VIDEO_PATHS.D} />
+                          {/* 웹소켓 연동 (총조립2라인) */}
+                          <WsVideoStream wsUrl={WS_PATHS.C} />
                           <div className="label">총조립2라인</div>
                         </VideoBox>
                         <ChartWrapper>
@@ -668,12 +688,12 @@ export default function ProcessDashboard() {
                   </ViewContainer>
                 )}
 
+                {/* View 3: 전체 보기 (A, B, C) */}
                 {viewMode === 3 && (
                   <ViewContainer key="view-3">
-                      {/* View 3: 전체 보기 (A, B, C) */}
                       <MultiChartCard>
                         <VideoBox $isLarge={false}>
-                          <VideoPlayer src={VIDEO_PATHS.A} />
+                          <WsVideoStream wsUrl={WS_PATHS.A} />
                           <div className="label">발포라인</div>
                         </VideoBox>
                         <ChartWrapper>
@@ -683,7 +703,7 @@ export default function ProcessDashboard() {
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={false}>
-                          <VideoPlayer src={VIDEO_PATHS.B} />
+                          <WsVideoStream wsUrl={WS_PATHS.B} />
                           <div className="label">총조립1라인</div>
                         </VideoBox>
                         <ChartWrapper>
@@ -693,7 +713,7 @@ export default function ProcessDashboard() {
                       </MultiChartCard>
                       <MultiChartCard>
                         <VideoBox $isLarge={false}>
-                          <VideoPlayer src={VIDEO_PATHS.C} />
+                          <WsVideoStream wsUrl={WS_PATHS.C} />
                           <div className="label">총조립2라인</div>
                         </VideoBox>
                         <ChartWrapper>
@@ -731,7 +751,7 @@ export default function ProcessDashboard() {
               </KpiStack>
 
               <WideKpiCard $height={viewMode === 3 ? 200 : 160}>
-                  {/* View 1: 2행 (A, B) */}
+                  {/* View 1: 2행 (A, C) */}
                   {viewMode === 1 && (
                     <TaktGrid $rows={2}>
                       <TaktBox $isSingle={false}>
@@ -740,7 +760,7 @@ export default function ProcessDashboard() {
                       </TaktBox>
                       <TaktBox $isSingle={false}>
                         <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 총조립2라인</span>
-                        <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
+                        <div className="val-group"><span className="takt-val">{avgTakts.C}s</span></div>
                       </TaktBox>
                     </TaktGrid>
                   )}
@@ -748,7 +768,7 @@ export default function ProcessDashboard() {
                   {viewMode === 2 && (
                     <TaktGrid $rows={2}>
                       <TaktBox $isSingle={false}>
-                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 발포라인</span>
+                        <span className="line-name"><div style={{width:8,height:8,borderRadius:'50%',background:COLORS.borderBlue}}/> 총조립1라인</span>
                         <div className="val-group"><span className="takt-val">{avgTakts.B}s</span></div>
                       </TaktBox>
                       <TaktBox $isSingle={false}>
