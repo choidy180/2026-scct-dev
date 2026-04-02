@@ -596,6 +596,7 @@ const ActionGuideBox = styled.div`
   }
 `;
 
+<<<<<<< HEAD
 const InvisibleTrigger = styled.div`
   position: absolute;
   width: 220px;
@@ -812,4 +813,11 @@ const Tag = styled.span`
     font-size: 12px;
     padding: 4px 8px;
   }
+=======
+const ToastBody = styled.div`
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5; 
+>>>>>>> 06824471af20e9afffbd12ced3ef1c2cc802f4ca
 `;
