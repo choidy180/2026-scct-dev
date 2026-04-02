@@ -698,12 +698,12 @@ export default function FinalDashboard() {
   const [scrollTop, setScrollTop] = useState(0);
 
   // [설정] 비디오 URL
-  const VIDEO_URL = "http://1.254.24.170:24828/api/DX_API000031?videoName=G_STOCK.mp4"; 
+  const VIDEO_URL = "http://192.168.2.147:24828/api/DX_API000031?videoName=G_STOCK.mp4"; 
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch('http://1.254.24.170:24828/api/DX_API000014');
+        const res = await fetch('http://192.168.2.147:24828/api/DX_API000014');
         const json: ApiResponse = await res.json();
         const newMap: SlotDataMap = {};
         Object.values(json).forEach((zone) => {

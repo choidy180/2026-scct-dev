@@ -453,7 +453,7 @@ export default function GlassGapInspection() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await fetch('http://1.254.24.170:24828/api/DX_API000023');
+                const response = await fetch('http://192.168.2.147:24828/api/DX_API000023');
                 const json = await response.json();
                 
                 // 1. 검사 상세 데이터 파싱
@@ -516,7 +516,7 @@ export default function GlassGapInspection() {
 
     const toggleSound = () => setAudioAllowed(prev => !prev);
     const layout = LAYOUT_CONFIGS[screenMode];
-    const guideImgUrl = "http://1.254.24.170:24828/images/DX_API000102/guide_img.png";
+    const guideImgUrl = "http://192.168.2.147:24828/images/DX_API000102/guide_img.png";
 
     const CornerCard = ({ title, status, imgUrl }: { title: string, status: string, imgUrl: string }) => {
         const isOk = status === '정상';

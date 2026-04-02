@@ -74,7 +74,7 @@ const MOTOR_DATA = [
 const JIG_MODEL_PATH = "/models/final_final_final.glb";
 const FLOOR_MODEL_PATH = "/models/final_final_final_final.glb";
 const FACTORY_BG_IMAGE = "/images/gmt_back.png"; 
-const API_URL = "http://1.254.24.170:24828/api/DX_API000024";
+const API_URL = "http://192.168.2.147:24828/api/DX_API000024";
 
 const THEME = {
   primary: "#10b981",

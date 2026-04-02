@@ -7,8 +7,8 @@ import { Scan, CheckCircle, AlertCircle, Activity, Box, Layers, Monitor, Cpu, Ey
 // --- 1. 상수 및 타입 (기존과 동일) ---
 const SCOPE_SIZE = 250;
 const ZOOM_LEVEL = 6;
-const API_URL = "http://1.254.24.170:24828/api/DX_API000025";
-const GUIDE_IMAGE_URL = "http://1.254.24.170:24828/images/DX_API000102/guide_2.jpg";
+const API_URL = "http://192.168.2.147:24828/api/DX_API000025";
+const GUIDE_IMAGE_URL = "http://192.168.2.147:24828/images/DX_API000102/guide_2.jpg";
 
 type InspectionStatus = '정상' | '점검필요' | '에러';
 type CropPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';

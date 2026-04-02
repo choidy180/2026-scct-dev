@@ -23,7 +23,7 @@ const GlobalStyle = createGlobalStyle`
     padding: 0;
     background-color: #F1F5F9;
     color: #1E293B;
-    overflow: hidden;
+    overflow: hidden; /* ✨ 브라우저 전체 스크롤 차단 */
   }
   
   ::-webkit-scrollbar { width: 6px; }
@@ -42,58 +42,16 @@ const theme = {
   radius: '16px',
   shadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
   fixedGreen: '#4ADE80',
-  accent: '#6366F1' // 작업정보 강조용
+  accent: '#6366F1'
 };
 
 // --- API Interfaces ---
-interface SlotDetail {
-  slot_id: number;
-  occupied: boolean;
-  entry_time: string | null;
-}
-
-interface CameraData {
-  total: number;
-  occupied: number;
-  empty_idxs: number[];
-  slots_detail: SlotDetail[];
-}
-
-// [NEW] 작업 데이터 인터페이스
-interface WorkingData {
-  NoWkOrd: string;      // 작업지시번호
-  PrjName: string;      // 프로젝트명
-  ItemName: string;     // 품목명
-  OrdQty: number;       // 지시수량
-  ProdQty: number;      // 생산수량
-  NmEmplo: string;      // 작업자명
-  NmWrkState: string;   // 상태 (완료, 진행 등)
-  NmProce: string;      // 공정명
-  PlnSTime: string;     // 계획시작
-  PlnETime: string;     // 계획종료
-  WrkGongSu: number;    // 공수
-}
-
-// [UPDATED] API 전체 응답 구조
-interface ApiResult {
-  success: boolean;
-  recent_time: string;
-  working_data: WorkingData;
-  camData: {
-    [key: string]: CameraData;
-  };
-}
-
-interface FlattenedSlotItem extends SlotDetail {
-  camId: string;
-}
-
-interface LogItemType extends FlattenedSlotItem {
-  logType: 'start' | 'end';
-  timestampObj: Date;
-  workOrderNo: string;
-  productionQty: number;
-}
+interface SlotDetail { slot_id: number; occupied: boolean; entry_time: string | null; }
+interface CameraData { total: number; occupied: number; empty_idxs: number[]; slots_detail: SlotDetail[]; }
+interface WorkingData { NoWkOrd: string; PrjName: string; ItemName: string; OrdQty: number; ProdQty: number; NmEmplo: string; NmWrkState: string; NmProce: string; PlnSTime: string; PlnETime: string; WrkGongSu: number; }
+interface ApiResult { success: boolean; recent_time: string; working_data: WorkingData; camData: { [key: string]: CameraData; }; }
+interface FlattenedSlotItem extends SlotDetail { camId: string; }
+interface LogItemType extends FlattenedSlotItem { logType: 'start' | 'end'; timestampObj: Date; workOrderNo: string; productionQty: number; }
 
 // --- Animation Keyframes ---
 const fadeIn = keyframes`
@@ -101,28 +59,31 @@ const fadeIn = keyframes`
   to { opacity: 1; transform: translateY(0); }
 `;
 
-// --- Styled Components ---
+// --- Styled Components (✨ 수정됨) ---
 
 const DashboardContainer = styled.div`
   width: 100%;
-  height: calc(100vh - 64px);
-  padding: 20px 24px;
+  /* ✨ 요청하신 상단 nav바 60px 제외 높이 고정 */
+  height: calc(100vh - 60px); 
+  max-height: calc(100vh - 60px);
+  padding: 16px 20px; /* 공간 확보를 위해 패딩 살짝 축소 */
   display: flex;
   flex-direction: column;
   background-color: ${theme.bg};
+  overflow: hidden;
 `;
 
 const Header = styled.header`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 50px;
+  height: 40px; /* 공간 확보를 위해 살짝 축소 */
   margin-bottom: 16px;
   flex-shrink: 0;
 `;
 
 const MainTitle = styled.h1`
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   color: ${theme.textMain};
   margin: 0;
@@ -149,9 +110,10 @@ const HeaderRight = styled.div`
 const MainGrid = styled.div`
   display: grid;
   grid-template-columns: 1.2fr 1.4fr 1fr; 
-  gap: 20px;
+  gap: 16px; /* 20px -> 16px 축소 */
   flex: 1;
-  min-height: 0;
+  min-height: 0; /* ✨ 내부 요소가 화면을 뚫고 나가지 않게 하는 핵심 */
+  height: 100%;
 `;
 
 const Card = styled.div`
@@ -162,8 +124,7 @@ const Card = styled.div`
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  height: 100%;
-  position: relative;
+  min-height: 0; /* ✨ 카드가 컨텐츠 크기대로 무한정 늘어나는 것을 방지 */
 `;
 
 // --- Video Styles ---
@@ -171,7 +132,7 @@ const VideoColumn = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
-  height: 100%;
+  min-height: 0; /* ✨ 필수 */
 `;
 
 const VideoWrapper = styled(Card)`
@@ -179,6 +140,7 @@ const VideoWrapper = styled(Card)`
   position: relative;
   background: #0f172a;
   border: none;
+  min-height: 0; /* ✨ 필수 */
 `;
 
 const StyledVideo = styled.video`
@@ -187,6 +149,15 @@ const StyledVideo = styled.video`
   object-fit: cover;
   opacity: 0.8;
   transform: scale(1.12);
+`;
+
+const StyledWebsocketImg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.8;
+  transform: scale(1.12);
+  background-color: #000;
 `;
 
 const VideoOverlayTop = styled.div`
@@ -295,6 +266,7 @@ const ListHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0; /* ✨ 축소 방지 */
 `;
 
 const ListTitle = styled.h2`
@@ -335,7 +307,6 @@ const ToggleBtn = styled.button<{ $active: boolean }>`
   }
 `;
 
-// --- [NEW] Working Info Styles ---
 const WorkInfoCard = styled.div`
   margin: 16px 20px 0 20px;
   background: white;
@@ -344,6 +315,7 @@ const WorkInfoCard = styled.div`
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.02);
   animation: ${fadeIn} 0.5s ease-out;
+  flex-shrink: 0; /* ✨ 축소 방지 */
 `;
 
 const WorkInfoTitleRow = styled.div`
@@ -406,29 +378,28 @@ const WorkDetailItem = styled.div`
 `;
 
 const WorkLabel = styled.span`
-  font-size: 18px;
-  color: #474a4f;
+  font-size: 14px;
+  color: #94A3B8;
   display: flex;
-  font-weight: 600;
   align-items: center;
   gap: 4px;
 `;
 
 const WorkValue = styled.span`
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   color: #334155;
 `;
 
 const ProgressContainer = styled.div`
-  margin-top: 24px;
+  margin-top: 14px;
 `;
 
 const ProgressLabelRow = styled.div`
   display: flex;
   justify-content: space-between;
   margin-bottom: 6px;
-  font-size: 18px;
+  font-size: 12px;
   font-weight: 600;
   color: ${theme.textSub};
 `;
@@ -461,12 +432,14 @@ const NoticeBanner = styled.div`
   align-items: center;
   gap: 8px;
   border: 1px solid #FDE68A;
+  flex-shrink: 0; /* ✨ 축소 방지 */
 `;
 
 const ListScrollArea = styled.div`
   padding: 16px 20px;
   overflow-y: auto;
-  flex: 1;
+  flex: 1; /* ✨ 남은 공간 꽉 채우기 */
+  min-height: 0; /* ✨ 스크롤 동작 필수값 */
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -653,6 +626,7 @@ const ChatHeader = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 `;
 
 const ChatBody = styled.div`
@@ -660,6 +634,7 @@ const ChatBody = styled.div`
   background: #F8FAFC;
   padding: 16px;
   overflow-y: auto;
+  min-height: 0; /* ✨ 스크롤 동작 필수값 */
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -686,6 +661,7 @@ const InputArea = styled.form`
   border-top: 1px solid #F1F5F9;
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 
   button {
     display: flex;
@@ -706,51 +682,57 @@ const Input = styled.input`
   &:focus { background: #E2E8F0; }
 `;
 
-// --- Mock Data (Updated to new structure) ---
+
+// --- [NEW] WebSocket Video Component ---
+const WsVideoStream = ({ wsUrl }: { wsUrl: string }) => {
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'blob'; 
+
+    ws.onmessage = (event) => {
+      if (!imgRef.current) return;
+      
+      if (typeof event.data === 'string') {
+        imgRef.current.src = event.data.startsWith('data:image') 
+          ? event.data 
+          : `data:image/jpeg;base64,${event.data}`;
+      } else {
+        const url = URL.createObjectURL(event.data);
+        imgRef.current.src = url;
+        imgRef.current.onload = () => {
+          URL.revokeObjectURL(url);
+        };
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [wsUrl]);
+
+  return <StyledWebsocketImg ref={imgRef} alt="Live Stream" />;
+};
+
+
+// --- Mock Data ---
 const MOCK_DATA: ApiResult = {
   "success": true,
   "recent_time": "2026-01-21T14:58:09.000Z",
   "working_data": {
     "NoWkOrd": "WO26012000019",
-    "IdWkOrd": "WO26012000019",
-    "DtWkOrd": "2026-01-21",
-    "PlnSTime": "2026-01-21 09:12:00",
-    "PlnETime": "2026-01-21 15:40:00",
-    "PrjCode": "MP-20004",
     "PrjName": "M-Next3 DID",
-    "ItemCode": "ADD76419629",
     "ItemName": "Door Foam Assembly,Ref.(DID)",
-    "CdGItem": "ADD76419629",
-    "NmGItem": "Door Foam Assembly,Ref.(DID)",
-    "DrwNumb": "ADD764196",
     "OrdQty": 535,
     "ProdQty": 535,
-    "GoodQty": 535,
-    "BadQty": 0,
-    "RemQty": 0,
-    "PackQty": "18",
-    "CdEmpol": "GMT1651",
     "NmEmplo": "박태용",
-    "WrkState": "E",
     "NmWrkState": "완료",
-    "CdEquip": "YMC009",
-    "NmEquip": "GR5-프레임도아",
-    "CdProce": "PRC007",
     "NmProce": "총조립",
-    "OrdType2": "388",
-    "OrdType3": "A1",
-    "ExpTime": 43.5,
+    "PlnSTime": "2026-01-21 09:12:00",
+    "PlnETime": "2026-01-21 15:40:00",
     "WrkGongSu": 9,
-    "WrkRate": null,
-    "WrkCnt": 2,
-    "BigOper": "조립",
-    "OrderNo": null,
-    "NumSort": 2,
-    "Remarks": "",
-    "WrkSTime": "2026-01-21 09:28:26",
-    "WrkETime": "2026-01-21 16:35:34",
-    "Update_Time": "2026-01-21T16:35:34.053Z"
-  } as any, // as any to suppress loose mock data types vs strict interface if needed
+  } as any, 
   "camData": {
     "207": {
       "total": 7,
@@ -798,7 +780,7 @@ const SmartFactoryDashboard: React.FC = () => {
     setMounted(true);
     const fetchData = async () => {
       try {
-        const res = await fetch('http://1.254.24.170:24828/api/DX_API000018');
+        const res = await fetch('http://192.168.2.147:24828/api/DX_API000018');
         if (!res.ok) throw new Error('Fetch error');
         const data = await res.json();
         setApiData(data);
@@ -836,11 +818,9 @@ const SmartFactoryDashboard: React.FC = () => {
     }
   };
 
-  // --- Data Logic (Updated for camData) ---
   const allSlots: FlattenedSlotItem[] = useMemo(() => {
     if (!apiData || !apiData.camData) return [];
 
-    // 1. 데이터 평탄화 (기존 로직)
     const list = Object.entries(apiData.camData).flatMap(([key, data]) => {
       const details = data?.slots_detail || [];
       return details.map(slot => ({
@@ -849,22 +829,17 @@ const SmartFactoryDashboard: React.FC = () => {
       }));
     });
 
-    // 2. [수정] 정렬 로직 추가 (작업중인 슬롯 우선)
     return list.sort((a, b) => {
-      // (1) 작업중(occupied: true)인 것이 우선
       if (a.occupied !== b.occupied) {
         return a.occupied ? -1 : 1;
       }
-      // (2) 상태가 같다면 공정 번호(camId) 순 정렬
       if (a.camId !== b.camId) {
         return a.camId.localeCompare(b.camId);
       }
-      // (3) 공정도 같다면 슬롯 번호(slot_id) 순 정렬
       return a.slot_id - b.slot_id;
     });
   }, [apiData]);
 
-  // Log Data Logic (Hydration Safe)
   const mixedLogData = useMemo(() => {
     if (allSlots.length === 0) return [];
 
@@ -904,13 +879,11 @@ const SmartFactoryDashboard: React.FC = () => {
     );
   }, [allSlots, apiData]);
 
-  // [UPDATED] Cam Data References
   const cam207Data = apiData?.camData ? apiData.camData["207"] : null;
   const cam207Ratio = cam207Data ? cam207Data.occupied / cam207Data.total : 0;
   const cam218Data = apiData?.camData ? apiData.camData["218"] : null;
   const cam218Ratio = cam218Data ? cam218Data.occupied / cam218Data.total : 0;
   
-  // [NEW] Working Data
   const wkData = apiData?.working_data;
   const progressPercent = wkData ? Math.min((wkData.ProdQty / wkData.OrdQty) * 100, 100) : 0;
 
@@ -937,15 +910,11 @@ const SmartFactoryDashboard: React.FC = () => {
           <VideoColumn>
             <VideoWrapper>
               <VideoOverlayTop>
-                {/* [UPDATED] Video Label Changed */}
                 <CamTag><FiVideo /> GR5 가조립 자재 #1</CamTag>
                 <FiMoreHorizontal color="white" />
               </VideoOverlayTop>
               
-              <StyledVideo 
-                autoPlay muted loop playsInline 
-                src="http://1.254.24.170:24828/api/DX_API000031?videoName=207.mp4" 
-              />
+              <WsVideoStream wsUrl="ws://192.168.2.147:8132" />
 
               {cam207Data && (
                 <MiniDashboardOverlay>
@@ -966,10 +935,7 @@ const SmartFactoryDashboard: React.FC = () => {
                 <FiMoreHorizontal color="white" />
               </VideoOverlayTop>
               
-              <StyledVideo 
-                autoPlay muted loop playsInline 
-                src="http://1.254.24.170:24828/api/DX_API000031?videoName=218.mp4" 
-              />
+              <WsVideoStream wsUrl="ws://192.168.2.147:8133" />
 
               {cam218Data && (
                 <MiniDashboardOverlay>
@@ -1009,7 +975,6 @@ const SmartFactoryDashboard: React.FC = () => {
               </ViewToggle>
             </ListHeader>
             
-            {/* [NEW] Working Data UI - Detailed & Korean */}
             {wkData && (
               <WorkInfoCard>
                 <WorkInfoTitleRow>
@@ -1023,6 +988,14 @@ const SmartFactoryDashboard: React.FC = () => {
                 </WorkInfoTitleRow>
 
                 <WorkGrid>
+                  <WorkDetailItem>
+                    <WorkLabel><FiUser size={10}/> 작업자</WorkLabel>
+                    <WorkValue>{wkData.NmEmplo}</WorkValue>
+                  </WorkDetailItem>
+                  <WorkDetailItem>
+                    <WorkLabel><FiTarget size={10}/> 공정명</WorkLabel>
+                    <WorkValue>{wkData.NmProce}</WorkValue>
+                  </WorkDetailItem>
                   <WorkDetailItem>
                     <WorkLabel><FiCalendar size={10}/> 계획 시작</WorkLabel>
                     <WorkValue>{formatTime(wkData.PlnSTime)}</WorkValue>
@@ -1055,7 +1028,6 @@ const SmartFactoryDashboard: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><FiLoader className="spin" /></div>
               ) : (
                 <>
-                  {/* VIEW 1: Slot List Mode */}
                   {viewMode === 'list' && (
                     <ContentWrapper>
                       {allSlots.length > 0 ? (
@@ -1088,7 +1060,6 @@ const SmartFactoryDashboard: React.FC = () => {
                     </ContentWrapper>
                   )}
 
-                  {/* VIEW 2: Log Mode (Extended Info) */}
                   {viewMode === 'log' && (
                     <ContentWrapper>
                       {mixedLogData.length > 0 ? (

@@ -403,7 +403,7 @@ export default function VWorldMap({ markers = [], focusedTitle, onEtaUpdate }: V
 
   return (
     <>
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.0.0/ol.css"  />
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.0.0/ol.css" />
       <div ref={mapElement} style={{ width: "100%", height: "100%", background: "#f8fafc" }} />
     </>
   );

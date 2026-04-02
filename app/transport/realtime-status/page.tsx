@@ -142,7 +142,7 @@ const useVehicleSimulation = () => {
         await new Promise(r => setTimeout(r, 500)); 
       } else {
         try {
-          const res = await axios.get('http://1.254.24.170:24828/api/DX_API000002');
+          const res = await axios.get('http://192.168.2.147:24828/api/DX_API000002');
           const data: ApiVehicleData[] = res.data;
           const now = Date.now();
           mappedVehicles = data.map((item) => {

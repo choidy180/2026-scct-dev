@@ -23,9 +23,9 @@ import { LuMaximize, LuMinimize } from "react-icons/lu";
 
 // --- Constants ---
 const PORT = 8080;
-const API_URL_VEHICLE = "http://1.254.24.170:24828/api/DX_API000020";
-const API_URL_INVOICE = "http://1.254.24.170:24828/api/V_PurchaseIn";
-const API_URL_MATERIAL_LIST = "http://1.254.24.170:24828/api/DX_API000034";
+const API_URL_VEHICLE = "http://192.168.2.147:24828/api/DX_API000020";
+const API_URL_INVOICE = "http://192.168.2.147:24828/api/V_PurchaseIn";
+const API_URL_MATERIAL_LIST = "http://192.168.2.147:24828/api/DX_API000034";
 
 // --- Types ---
 interface VehicleSlotDetail {

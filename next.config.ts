@@ -10,16 +10,25 @@ const nextConfig: NextConfig = {
   compiler: {
     styledComponents: true,
   },
-  
+   
   images: {
     remotePatterns: [
       {
         protocol: "http",
-        hostname: "1.254.24.170",
+        hostname: "192.168.2.147",
         port: "24828",
         pathname: "/images/**",
       },
     ],
+  },
+ webpack: (config, { dev, isServer }) => {
+    if (dev && !isServer) {
+      config.watchOptions = {
+        poll: 1000, // 1초마다 파일 변경 확인 (윈도우 도커 필수)
+        aggregateTimeout: 300,
+      };
+    }
+    return config;
   },
 };
 

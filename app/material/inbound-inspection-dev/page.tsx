@@ -23,9 +23,9 @@ import { LuMaximize, LuMinimize } from "react-icons/lu";
 
 // --- Constants ---
 const PORT = 8080;
-const API_URL_VEHICLE = "http://1.254.24.170:24828/api/DX_API000020";
-const API_URL_INVOICE = "http://1.254.24.170:24828/api/V_PurchaseIn";
-const API_URL_MATERIAL_LIST = "http://1.254.24.170:24828/api/DX_API000028";
+const API_URL_VEHICLE = "http://192.168.2.147:24828/api/DX_API000020";
+const API_URL_INVOICE = "http://192.168.2.147:24828/api/V_PurchaseIn";
+const API_URL_MATERIAL_LIST = "http://192.168.2.147:24828/api/DX_API000028";
 
 // --- Types ---
 interface VehicleSlotDetail {
@@ -663,7 +663,7 @@ export default function DashboardPage() {
                       <>
                         <VehicleImagePlaceholder>
                           <img 
-                            src={'http://1.254.24.170:24828/images/VISION_AREA/TRUCK_173-D1_16_1159_20260119_094845.jpg'} 
+                            src={'http://192.168.2.147:24828/images/VISION_AREA/TRUCK_173-D1_16_1159_20260119_094845.jpg'} 
                             alt="Vehicle" 
                             style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px 8px 0 0' }} 
                             onError={(e) => { e.currentTarget.style.display = 'none'; }} 
